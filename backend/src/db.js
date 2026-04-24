@@ -1,5 +1,8 @@
+const dns = require('dns');
 const { Pool } = require('pg');
 require('dotenv').config();
+
+dns.setDefaultResultOrder('ipv4first');
 
 const pool = new Pool({
   host: process.env.PGHOST || 'db.aslmrkilqfiotlvpabbo.supabase.co',
