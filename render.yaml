@@ -6,7 +6,7 @@ services:
     rootDir: backend
     buildCommand: |
       npm install
-      cd ../frontend && npm install && npm run build
+      cd ../frontend && npm install --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
