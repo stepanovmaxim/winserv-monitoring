@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: winserv-monitoring
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: |
+      npm install
+      cd ../frontend && npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: PGHOST
+        sync: false
+      - key: PGPORT
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
