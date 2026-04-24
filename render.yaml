@@ -13,15 +13,7 @@ services:
         value: production
       - key: PORT
         value: "3000"
-      - key: PGHOST
-        sync: false
-      - key: PGPORT
-        sync: false
-      - key: PGDATABASE
-        sync: false
-      - key: PGUSER
-        sync: false
-      - key: PGPASSWORD
+      - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
         generateValue: true

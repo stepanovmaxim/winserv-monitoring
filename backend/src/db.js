@@ -1,25 +1,12 @@
-const dns = require('dns');
 const { Pool } = require('pg');
 require('dotenv').config();
 
-dns.setDefaultResultOrder('ipv4first');
-
-const host = process.env.PGHOST || 'db.aslmrkilqfiotlvpabbo.supabase.co';
-const port = parseInt(process.env.PGPORT || '5432');
-const dbName = process.env.PGDATABASE || 'postgres';
-const user = process.env.PGUSER || 'postgres';
-const pass = process.env.PGPASSWORD || 'M.9-7eDz,@hbwv9';
-
-console.log(`Connecting to PostgreSQL: ${user}@${host}:${port}/${dbName}`);
+const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/postgres';
+console.log('Connecting to PostgreSQL...');
 
 const pool = new Pool({
-  host,
-  port,
-  database: dbName,
-  user,
-  password: pass,
+  connectionString,
   ssl: { rejectUnauthorized: false },
-  family: 4,
   max: 10,
   idleTimeoutMillis: 30000,
 });
