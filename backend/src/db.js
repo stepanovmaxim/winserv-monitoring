@@ -5,10 +5,10 @@ require('dotenv').config();
 dns.setDefaultResultOrder('ipv4first');
 
 const pool = new Pool({
-  host: process.env.PGHOST || 'db.aslmrkilqfiotlvpabbo.supabase.co',
-  port: parseInt(process.env.PGPORT || '5432'),
+  host: process.env.PGHOST || 'aws-0-eu-central-1.pooler.supabase.com',
+  port: parseInt(process.env.PGPORT || '6543'),
   database: process.env.PGDATABASE || 'postgres',
-  user: process.env.PGUSER || 'postgres',
+  user: process.env.PGUSER || 'postgres.aslmrkilqfiotlvpabbo',
   password: process.env.PGPASSWORD || 'M.9-7eDz,@hbwv9',
   ssl: { rejectUnauthorized: false },
   family: 4,
