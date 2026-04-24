@@ -4,12 +4,20 @@ require('dotenv').config();
 
 dns.setDefaultResultOrder('ipv4first');
 
+const host = process.env.PGHOST || 'db.aslmrkilqfiotlvpabbo.supabase.co';
+const port = parseInt(process.env.PGPORT || '5432');
+const dbName = process.env.PGDATABASE || 'postgres';
+const user = process.env.PGUSER || 'postgres';
+const pass = process.env.PGPASSWORD || 'M.9-7eDz,@hbwv9';
+
+console.log(`Connecting to PostgreSQL: ${user}@${host}:${port}/${dbName}`);
+
 const pool = new Pool({
-  host: process.env.PGHOST || 'aws-0-eu-central-1.pooler.supabase.com',
-  port: parseInt(process.env.PGPORT || '6543'),
-  database: process.env.PGDATABASE || 'postgres',
-  user: process.env.PGUSER || 'postgres.aslmrkilqfiotlvpabbo',
-  password: process.env.PGPASSWORD || 'M.9-7eDz,@hbwv9',
+  host,
+  port,
+  database: dbName,
+  user,
+  password: pass,
   ssl: { rejectUnauthorized: false },
   family: 4,
   max: 10,
