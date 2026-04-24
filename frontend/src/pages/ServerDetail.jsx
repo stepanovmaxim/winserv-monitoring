@@ -35,7 +35,10 @@ export default function ServerDetail() {
   }
 
   async function loadScript() {
-    const res = await fetch(`/api/agent/script/${id}`);
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/agent/script/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const text = await res.text();
     setScriptContent(text);
     setShowScript(true);

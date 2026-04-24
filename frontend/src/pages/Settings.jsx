@@ -36,7 +36,10 @@ export default function Settings() {
   }
 
   async function loadAgentScripts() {
-    const res = await fetch('/api/agent/script');
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/agent/script', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const text = await res.text();
     setAgentScripts(text);
     setShowAgent(!showAgent);
