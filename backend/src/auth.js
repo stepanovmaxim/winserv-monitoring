@@ -8,11 +8,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'Stepanov.maxim@gmail.com';
 
 if (process.env.GOOGLE_CLIENT_ID) {
+  const publicUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const callbackURL = publicUrl.replace(/\/$/, '') + '/api/auth/google/callback';
+  console.log('Google OAuth callback URL:', callbackURL);
+
   passport.use(new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: '/api/auth/google/callback',
+      callbackURL,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {

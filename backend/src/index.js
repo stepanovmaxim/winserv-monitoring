@@ -16,6 +16,7 @@ const telegramRoutes = require('./routes/telegram');
 const agentRoutes = require('./routes/agent');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'Stepanov.maxim@gmail.com';
