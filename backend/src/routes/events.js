@@ -46,6 +46,22 @@ router.post('/', async (req, res) => {
     return res.status(401).json({ error: 'Valid token or registration_key required' });
   }
 
+  if (h && h.includes('.')) {
+    const server = await db.queryOne('SELECT group_id FROM servers WHERE id = $1', [serverId]);
+    if (server && !server.group_id) {
+      const domain = h.substring(h.indexOf('.') + 1);
+      let group = await db.queryOne('SELECT id FROM server_groups WHERE name = $1', [domain]);
+      if (!group) {
+        const gr = await db.query(
+          'INSERT INTO server_groups (name, description) VALUES ($1, $2) RETURNING id',
+          [domain, 'Auto-created: servers in ' + domain]
+        );
+        group = gr.rows[0];
+      }
+      await db.query('UPDATE servers SET group_id = $1 WHERE id = $2 AND group_id IS NULL', [group.id, serverId]);
+    }
+  }
+
   for (const ev of events) {
     await db.query(
       `INSERT INTO system_events (server_id, event_source, event_id, level, message, recorded_at)

@@ -19,6 +19,9 @@ $EventsUrl = "$ServerUrl/api/events"
 $RegKey = "${regKey}"
 $ConfigFile = "$env:ProgramData\\WinServAgent\\config.json"
 
+$FullHostname = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { "$FullHostname.$env:USERDNSDOMAIN" }
+if (-not $FullHostname -or $FullHostname -notmatch '\.') { $FullHostname = $FullHostname }
+
 function Get-SystemMetrics {
   $cpu = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
 
@@ -78,7 +81,7 @@ if (Test-Path $ConfigFile) {
 $metricsObj = Get-SystemMetrics
 
 if ($Token) {
-  $body = @{token=$Token;hostname=$env:COMPUTERNAME;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
+  $body = @{token=$Token;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
   try {
     $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
     if ($response.token) {
@@ -95,7 +98,7 @@ if ($Token) {
 }
 
 if (-not $Token) {
-  $body = @{registration_key=$RegKey;hostname=$env:COMPUTERNAME;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
+  $body = @{registration_key=$RegKey;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
   try {
     $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
     if ($response.token) {
@@ -103,7 +106,7 @@ if (-not $Token) {
       $dir = Split-Path $ConfigFile -Parent
       if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
       @{token=$Token} | ConvertTo-Json | Set-Content $ConfigFile -Force
-      Write-Host "Registered: $($env:COMPUTERNAME)"
+      Write-Host "Registered: $($FullHostname)"
     }
   } catch { Write-Warning "Registration: $_" }
 }
@@ -111,7 +114,7 @@ if (-not $Token) {
 if ($Token) {
   $events = Get-CriticalEvents
   if ($events.Count -gt 0) {
-    $eventsBody = @{token=$Token;hostname=$env:COMPUTERNAME;events=$events} | ConvertTo-Json -Depth 6
+    $eventsBody = @{token=$Token;hostname=$FullHostname;events=$events} | ConvertTo-Json -Depth 6
     try { Invoke-RestMethod -Uri $EventsUrl -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes($eventsBody)) -ContentType "application/json; charset=utf-8" -TimeoutSec 20 } catch { Write-Warning "Events: $_" }
   }
 }

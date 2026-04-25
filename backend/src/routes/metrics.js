@@ -52,6 +52,20 @@ router.post('/', async (req, res) => {
     await db.query('UPDATE servers SET os_info = $1 WHERE id = $2', [os_info, serverId]);
   }
 
+  const currentHostname = h || server.hostname;
+  if (currentHostname && currentHostname.includes('.') && !server.group_id) {
+    const domain = currentHostname.substring(currentHostname.indexOf('.') + 1);
+    let group = await db.queryOne('SELECT id FROM server_groups WHERE name = $1', [domain]);
+    if (!group) {
+      const gr = await db.query(
+        'INSERT INTO server_groups (name, description) VALUES ($1, $2) RETURNING id',
+        [domain, 'Auto-created: servers in ' + domain]
+      );
+      group = gr.rows[0];
+    }
+    await db.query('UPDATE servers SET group_id = $1 WHERE id = $2 AND group_id IS NULL', [group.id, serverId]);
+  }
+
   if (metrics) {
     if (typeof metrics === 'string') {
       try { metrics = JSON.parse(metrics); } catch { metrics = null; }
