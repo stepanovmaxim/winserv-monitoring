@@ -40,6 +40,7 @@ async function initSchema() {
       disk_total_gb DOUBLE PRECISION,
       disk_used_gb DOUBLE PRECISION,
       disk_free_gb DOUBLE PRECISION,
+      disks_json TEXT DEFAULT '[]',
       uptime_seconds BIGINT,
       collected_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -78,6 +79,8 @@ async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+
+  await db.exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disks_json TEXT DEFAULT '[]'`);
 
   console.log('PostgreSQL schema initialized');
 }

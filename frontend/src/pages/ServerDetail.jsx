@@ -49,12 +49,13 @@ export default function ServerDetail() {
 
   const chartData = metrics.map(m => ({
     time: new Date(m.collected_at).toLocaleTimeString(),
-    cpu: Math.round(m.cpu_usage),
-    mem: m.memory_total_mb > 0 ? Math.round((m.memory_used_mb / m.memory_total_mb) * 100) : 0,
-    disk: m.disk_total_gb > 0 ? Math.round((m.disk_used_gb / m.disk_total_gb) * 100) : 0,
+    cpu: m.cpu_usage != null ? Math.round(Number(m.cpu_usage)) : 0,
+    mem: m.memory_total_mb > 0 ? Math.round((Number(m.memory_used_mb) / Number(m.memory_total_mb)) * 100) : 0,
+    disk: m.disk_total_gb > 0 ? Math.round((Number(m.disk_used_gb) / Number(m.disk_total_gb)) * 100) : 0,
   }));
 
   const latest = metrics[metrics.length - 1] || {};
+  const latestDisks = Array.isArray(latest.disks_json) ? latest.disks_json : [];
 
   return (
     <div>
@@ -81,23 +82,36 @@ export default function ServerDetail() {
         <div className="card">
           <div className="metric-label">CPU</div>
           <div className="metric-value">{latest.cpu_usage != null ? `${Number(latest.cpu_usage).toFixed(1)}%` : '-'}</div>
-          <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${latest.cpu_usage || 0}%`, background: latest.cpu_usage > 90 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+          <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${Number(latest.cpu_usage) || 0}%`, background: Number(latest.cpu_usage) > 90 ? 'var(--danger)' : 'var(--primary)' }} /></div>
         </div>
         <div className="card">
           <div className="metric-label">Memory</div>
           <div className="metric-value">{latest.memory_used_mb != null ? `${Number(latest.memory_used_mb).toFixed(0)} / ${Number(latest.memory_total_mb).toFixed(0)} MB` : '-'}</div>
           {latest.memory_total_mb > 0 && (
-            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(latest.memory_used_mb / latest.memory_total_mb) * 100}%`, background: (latest.memory_used_mb / latest.memory_total_mb) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latest.memory_used_mb) / Number(latest.memory_total_mb)) * 100}%`, background: (Number(latest.memory_used_mb) / Number(latest.memory_total_mb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
           )}
         </div>
         <div className="card">
-          <div className="metric-label">Disk</div>
-          <div className="metric-value">{latest.disk_used_gb != null ? `${Number(latest.disk_used_gb).toFixed(0)} / ${Number(latest.disk_total_gb).toFixed(0)} GB` : '-'}</div>
+          <div className="metric-label">Disk Total</div>
+          <div className="metric-value" style={{ fontSize: 22 }}>{latest.disk_used_gb != null ? `${Number(latest.disk_used_gb).toFixed(0)} / ${Number(latest.disk_total_gb).toFixed(0)} GB` : '-'}</div>
           {latest.disk_total_gb > 0 && (
-            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(latest.disk_used_gb / latest.disk_total_gb) * 100}%`, background: (latest.disk_used_gb / latest.disk_total_gb) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latest.disk_used_gb) / Number(latest.disk_total_gb)) * 100}%`, background: (Number(latest.disk_used_gb) / Number(latest.disk_total_gb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
           )}
         </div>
       </div>
+
+      {latestDisks.length > 0 && (
+        <div className="grid grid-4" style={{ marginBottom: 24 }}>
+          {latestDisks.map((d, i) => (
+            <div className="card" key={i}>
+              <div className="metric-label">Disk {d.drive}</div>
+              <div className="metric-value" style={{ fontSize: 18 }}>{Number(d.free_gb).toFixed(1)} GB free</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{Number(d.used_gb).toFixed(1)} / {Number(d.total_gb).toFixed(1)} GB</div>
+              <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${d.total_gb > 0 ? (d.used_gb / d.total_gb) * 100 : 0}%`, background: d.total_gb > 0 && (d.used_gb / d.total_gb) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="tabs">
         <button className={`tab ${tab === 'metrics' ? 'active' : ''}`} onClick={() => setTab('metrics')}>Metrics</button>
