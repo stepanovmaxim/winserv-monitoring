@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 
 export default function Servers() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [servers, setServers] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [selectedGroup, setSelectedGroup] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState(searchParams.get('group_id') || '');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ hostname: '', ip_address: '', group_id: '', os_info: '' });

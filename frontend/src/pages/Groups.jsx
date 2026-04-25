@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 export default function Groups() {
@@ -62,7 +63,7 @@ export default function Groups() {
             <tbody>
               {groups.map(g => (
                 <tr key={g.id}>
-                  <td><strong>{g.name}</strong></td>
+                  <td><Link to={`/servers?group_id=${g.id}`}><strong>{g.name}</strong></Link></td>
                   <td style={{ color: 'var(--text-muted)' }}>{g.description || '-'}</td>
                   <td>{g.server_count}</td>
                   <td>

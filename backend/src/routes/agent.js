@@ -58,14 +58,29 @@ function Get-SystemMetrics {
 }
 
 function Get-CriticalEvents {
-  $since = (Get-Date).AddMinutes(-10)
-  $events = Get-WinEvent -FilterHashtable @{LogName='System';Level=1,2;StartTime=$since} -MaxEvents 100 -ErrorAction SilentlyContinue
+  $since = (Get-Date).AddMinutes(-30)
+  $events = $null
+  try {
+    $events = Get-WinEvent -FilterHashtable @{LogName='System';Level=1,2;StartTime=$since} -MaxEvents 100 -ErrorAction Stop
+  } catch {
+    try {
+      $events = Get-EventLog -LogName System -EntryType Error -After $since -Newest 100 -ErrorAction Stop
+    } catch {
+      Write-Host "EventLog: cannot read System log (may need admin rights)"
+      return @()
+    }
+  }
   if (-not $events) { return @() }
   $result = @()
   foreach ($e in $events) {
-    $msg = if ($e.Message.Length -gt 2000) { $e.Message.Substring(0, 2000) } else { $e.Message }
-    $result += @{source=$e.ProviderName;event_id=$e.Id;level=$e.LevelDisplayName;message=$msg;recorded_at=$e.TimeCreated.ToString('yyyy-MM-ddTHH:mm:ss')}
+    $source = if ($e.ProviderName) { $e.ProviderName } else { $e.Source }
+    $eid = if ($e.Id) { $e.Id } else { $e.EventID }
+    $lvl = if ($e.LevelDisplayName) { $e.LevelDisplayName } else { 'Error' }
+    $msg = if ($e.Message) { if ($e.Message.Length -gt 2000) { $e.Message.Substring(0, 2000) } else { $e.Message } } else { '' }
+    $time = if ($e.TimeCreated) { $e.TimeCreated.ToString('yyyy-MM-ddTHH:mm:ss') } else { $e.TimeGenerated.ToString('yyyy-MM-ddTHH:mm:ss') }
+    $result += @{source=$source;event_id=$eid;level=$lvl;message=$msg;recorded_at=$time}
   }
+  Write-Host "Events collected: $($result.Count)"
   return $result
 }
 
