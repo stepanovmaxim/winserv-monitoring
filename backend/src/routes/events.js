@@ -1,32 +1,48 @@
 const express = require('express');
 const db = require('../db');
+const { v4: uuidv4 } = require('uuid');
 
+const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
 
 router.post('/', async (req, res) => {
-  const { token, events } = req.body;
-
-  if (!token) return res.status(401).json({ error: 'Agent token required' });
-
-  const agentRecord = await db.queryOne('SELECT * FROM agent_tokens WHERE token = $1', [token]);
-  if (!agentRecord) return res.status(401).json({ error: 'Invalid agent token' });
+  const { token, registration_key, hostname, events } = req.body;
+  const h = hostname || req.body.host || '';
 
   if (!events || !Array.isArray(events)) {
     return res.status(400).json({ error: 'events array required' });
+  }
+
+  let serverId = null;
+
+  if (token) {
+    const agentRecord = await db.queryOne('SELECT * FROM agent_tokens WHERE token = $1', [token]);
+    if (agentRecord) serverId = agentRecord.server_id;
+  }
+
+  if (!serverId && registration_key === REGISTRATION_KEY && h) {
+    let server = await db.queryOne('SELECT * FROM servers WHERE hostname = $1', [h]);
+    if (!server) {
+      const result = await db.query(
+        'INSERT INTO servers (hostname, status) VALUES ($1, $2) RETURNING id',
+        [h, 'online']
+      );
+      server = { id: result.rows[0].id };
+      const newToken = uuidv4();
+      await db.query('INSERT INTO agent_tokens (server_id, token) VALUES ($1, $2) ON CONFLICT DO NOTHING', [server.id, newToken]);
+    }
+    serverId = server.id;
+  }
+
+  if (!serverId) {
+    return res.status(401).json({ error: 'Valid token or registration_key required' });
   }
 
   for (const ev of events) {
     await db.query(
       `INSERT INTO system_events (server_id, event_source, event_id, level, message, recorded_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        agentRecord.server_id,
-        ev.source || '',
-        ev.event_id || 0,
-        ev.level || 'Error',
-        ev.message || '',
-        ev.recorded_at || null
-      ]
+      [serverId, ev.source || '', ev.event_id || 0, ev.level || 'Error', ev.message || '', ev.recorded_at || null]
     );
   }
 
