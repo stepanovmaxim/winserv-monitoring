@@ -9,7 +9,7 @@ function generateUniversalScript(serverUrl, regKey) {
 # ====================================================================
 # Auto-registers on first run. One script for all servers.
 # Save to C:\\winserv-agent\\agent.ps1 and schedule:
-#   schtasks /create /tn "WinServAgent" /tr "powershell.exe -ExecutionPolicy Bypass -File C:\\winserv-agent\\agent.ps1" /sc minute /mo 5 /ru SYSTEM
+#   schtasks /create /tn "WinServAgent" /tr "powershell.exe -ExecutionPolicy Bypass -File C:\\winserv-agent\\agent.ps1" /sc minute /mo 1 /ru SYSTEM
 # ====================================================================
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 

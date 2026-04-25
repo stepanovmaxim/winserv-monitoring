@@ -69,6 +69,14 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`WinServ Monitoring API running on port ${PORT}`);
   });
+
+  setInterval(async () => {
+    try {
+      await db.query(
+        "UPDATE servers SET status = 'offline' WHERE status = 'online' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '2 minutes')"
+      );
+    } catch {}
+  }, 30000);
 }
 
 start().catch(err => {
