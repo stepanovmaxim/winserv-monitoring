@@ -80,7 +80,7 @@ $metricsObj = Get-SystemMetrics
 if ($Token) {
   $body = @{token=$Token;hostname=$env:COMPUTERNAME;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
   try {
-    $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8" -TimeoutSec 15
+    $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
     if ($response.token) {
       $Token = $response.token
       $dir = Split-Path $ConfigFile -Parent
@@ -97,7 +97,7 @@ if ($Token) {
 if (-not $Token) {
   $body = @{registration_key=$RegKey;hostname=$env:COMPUTERNAME;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
   try {
-    $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8" -TimeoutSec 15
+    $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
     if ($response.token) {
       $Token = $response.token
       $dir = Split-Path $ConfigFile -Parent

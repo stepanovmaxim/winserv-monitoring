@@ -6,11 +6,19 @@ const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change
 const router = express.Router();
 
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname, events } = req.body;
+  const { token, registration_key, hostname } = req.body;
+  let { events } = req.body;
   const h = hostname || req.body.host || '';
 
-  if (!events || !Array.isArray(events)) {
-    return res.status(400).json({ error: 'events array required' });
+  if (typeof events === 'string') {
+    try { events = JSON.parse(events); } catch { events = []; }
+  }
+  if (!Array.isArray(events)) {
+    events = [];
+  }
+
+  if (events.length === 0) {
+    return res.json({ success: true, count: 0 });
   }
 
   let serverId = null;

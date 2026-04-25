@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 export default function Dashboard() {
@@ -54,7 +55,7 @@ export default function Dashboard() {
               {servers.map(s => (
                 <tr key={s.id}>
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
-                  <td><a href={`/servers/${s.id}`} onClick={e => { e.preventDefault(); window.location.hash = `#/servers/${s.id}`; }}>{s.hostname}</a></td>
+                  <td><Link to={`/servers/${s.id}`}>{s.hostname}</Link></td>
                   <td>{s.group_name || '-'}</td>
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
                   <td>{s.last_mem_used != null ? `${Number(s.last_mem_used).toFixed(0)} / ${Number(s.last_mem_total).toFixed(0)} MB` : '-'}</td>
