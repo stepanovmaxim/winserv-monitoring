@@ -95,7 +95,13 @@ router.post('/', async (req, res) => {
     }
   }
 
+  const prev = await db.queryOne('SELECT status, hostname FROM servers WHERE id = $1', [serverId]);
   await db.query("UPDATE servers SET last_seen = NOW(), status = 'online' WHERE id = $1", [serverId]);
+
+  if (prev && prev.status === 'offline') {
+    const { sendTelegramMessage } = require('../services/telegram');
+    sendTelegramMessage(`<b>ONLINE</b>: ${prev.hostname} is back`).catch(() => {});
+  }
 
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
   res.json({ success: true, server_id: serverId, token: agentToken?.token || null });

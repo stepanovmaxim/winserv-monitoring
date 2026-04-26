@@ -49,18 +49,6 @@ async function checkOfflineServers() {
         sendTelegramMessage(`<b>OFFLINE</b>: ${s.hostname} — no contact for 2+ minutes`).catch(() => {});
       }
     }
-
-    const justOnline = await db.queryAll(
-      `UPDATE servers SET status = 'online'
-       WHERE status = 'offline' AND last_seen > NOW() - INTERVAL '1 minute'
-       RETURNING hostname`
-    );
-
-    if (config && config.notify_offline) {
-      for (const s of justOnline) {
-        sendTelegramMessage(`<b>ONLINE</b>: ${s.hostname} is back`).catch(() => {});
-      }
-    }
   } catch (err) {
     console.error('[Offline check]', err.message);
   }
