@@ -14,6 +14,7 @@ const metricsRoutes = require('./routes/metrics');
 const eventsRoutes = require('./routes/events');
 const telegramRoutes = require('./routes/telegram');
 const agentRoutes = require('./routes/agent');
+const { checkOfflineServers } = require('./services/alertService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -70,13 +71,7 @@ async function start() {
     console.log(`WinServ Monitoring API running on port ${PORT}`);
   });
 
-  setInterval(async () => {
-    try {
-      await db.query(
-        "UPDATE servers SET status = 'offline' WHERE status = 'online' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '2 minutes')"
-      );
-    } catch {}
-  }, 30000);
+  setInterval(checkOfflineServers, 30000);
 }
 
 start().catch(err => {
