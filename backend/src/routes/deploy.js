@@ -110,7 +110,7 @@ function generateDeployerLines(serverUrl, regKey) {
     '    if (-not (Test-Path $remotePath)) { New-Item -ItemType Directory -Path $remotePath -Force | Out-Null }',
     '    $AgentScript | Set-Content -Path "$remotePath\\agent.ps1" -Encoding UTF8 -Force',
     '    schtasks /delete /tn "WinServAgent" /s $ComputerName /f 2>$null',
-    '    schtasks /create /tn "WinServAgent" /s $ComputerName /ru SYSTEM /sc minute /mo 1 /tr "powershell.exe -ExecutionPolicy Bypass -File C:\\winserv-agent\\agent.ps1" /f',
+    '    schtasks /create /tn "WinServAgent" /s $ComputerName /ru SYSTEM /sc minute /mo 1 /tr "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -WindowStyle Hidden -File \`"C:\\winserv-agent\\agent.ps1\`"" /f',
     '    return "OK"',
     '  } catch { return "ERROR: $_" }',
     '}',
