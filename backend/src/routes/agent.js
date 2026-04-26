@@ -19,8 +19,8 @@ $EventsUrl = "$ServerUrl/api/events"
 $RegKey = "${regKey}"
 $ConfigFile = "$env:ProgramData\\WinServAgent\\config.json"
 
-$FullHostname = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { "$FullHostname.$env:USERDNSDOMAIN" }
-if (-not $FullHostname -or $FullHostname -notmatch '\.') { $FullHostname = $FullHostname }
+$FullHostname = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }
+if (-not $FullHostname -or $FullHostname -notmatch '\.') { $FullHostname = "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }
 
 function Get-SystemMetrics {
   $cpu = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
@@ -31,6 +31,18 @@ function Get-SystemMetrics {
   $memUsedMB = $memTotalMB - $memFreeMB
 
   $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue
+  $diskPerf = @{}
+  try {
+    Get-CimInstance Win32_PerfFormattedData_PerfDisk_LogicalDisk -ErrorAction Stop | Where-Object { $_.Name -match '^[A-Z]:$' } | ForEach-Object {
+      $diskPerf[$_.Name] = @{
+        read_bytes_sec = [math]::Round($_.DiskReadBytesPerSec, 0)
+        write_bytes_sec = [math]::Round($_.DiskWriteBytesPerSec, 0)
+        disk_time_pct = [math]::Round($_.PercentDiskTime, 1)
+        queue_length = [math]::Round($_.CurrentDiskQueueLength, 1)
+      }
+    }
+  } catch {}
+
   $diskArray = @()
   $diskTotalGB = 0; $diskUsedGB = 0; $diskFreeGB = 0
   foreach ($d in $disks) {
@@ -40,7 +52,15 @@ function Get-SystemMetrics {
     $diskTotalGB += $sizeGB
     $diskFreeGB += $freeGB
     $diskUsedGB += $usedGB
-    $diskArray += @{ drive = $d.DeviceID; total_gb = $sizeGB; used_gb = $usedGB; free_gb = $freeGB }
+    $perf = $diskPerf[$d.DeviceID]
+    $diskEntry = @{ drive = $d.DeviceID; total_gb = $sizeGB; used_gb = $usedGB; free_gb = $freeGB }
+    if ($perf) {
+      $diskEntry.read_bytes_sec = $perf.read_bytes_sec
+      $diskEntry.write_bytes_sec = $perf.write_bytes_sec
+      $diskEntry.disk_time_pct = $perf.disk_time_pct
+      $diskEntry.queue_length = $perf.queue_length
+    }
+    $diskArray += $diskEntry
   }
 
   $uptime = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalSeconds, 0)

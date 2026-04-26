@@ -101,13 +101,21 @@ export default function ServerDetail() {
       </div>
 
       {latestDisks.length > 0 && (
-        <div className="grid grid-4" style={{ marginBottom: 24 }}>
+        <div className="grid grid-3" style={{ marginBottom: 24 }}>
           {latestDisks.map((d, i) => (
             <div className="card" key={i}>
               <div className="metric-label">Disk {d.drive}</div>
-              <div className="metric-value" style={{ fontSize: 18 }}>{Number(d.free_gb).toFixed(1)} GB free</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{Number(d.used_gb).toFixed(1)} / {Number(d.total_gb).toFixed(1)} GB</div>
+              <div className="metric-value" style={{ fontSize: 18 }}>{Number(d.free_gb).toFixed(0)} GB free</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{Number(d.used_gb).toFixed(0)} / {Number(d.total_gb).toFixed(0)} GB</div>
               <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${d.total_gb > 0 ? (d.used_gb / d.total_gb) * 100 : 0}%`, background: d.total_gb > 0 && (d.used_gb / d.total_gb) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+              {d.read_bytes_sec != null && (
+                <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+                  <span>Read:</span><span style={{ color: 'var(--text)' }}>{(Number(d.read_bytes_sec) / 1048576).toFixed(1)} MB/s</span>
+                  <span>Write:</span><span style={{ color: 'var(--text)' }}>{(Number(d.write_bytes_sec) / 1048576).toFixed(1)} MB/s</span>
+                  <span>Busy:</span><span style={{ color: Number(d.disk_time_pct) > 80 ? 'var(--danger)' : 'var(--text)' }}>{Number(d.disk_time_pct).toFixed(0)}%</span>
+                  <span>Queue:</span><span style={{ color: 'var(--text)' }}>{Number(d.queue_length).toFixed(1)}</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
