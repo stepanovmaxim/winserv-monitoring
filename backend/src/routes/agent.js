@@ -5,19 +5,28 @@ const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 
 function generateUniversalScript(serverUrl, regKey) {
-  return `# WinServ Monitoring Agent v2.0
+  return `# WinServ Monitoring Agent v2.2
 # ====================================================================
 # Auto-registers on first run. One script for all servers.
 # Save to C:\\winserv-agent\\agent.ps1 and schedule:
 #   schtasks /create /tn "WinServAgent" /tr "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -WindowStyle Hidden -File \"C:\winserv-agent\agent.ps1\"" /sc minute /mo 1 /ru SYSTEM
 # ====================================================================
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
+$ErrorActionPreference = "Continue"
 $ServerUrl = "${serverUrl}"
 $MetricsUrl = "$ServerUrl/api/metrics"
 $EventsUrl = "$ServerUrl/api/events"
 $RegKey = "${regKey}"
 $ConfigFile = "$env:ProgramData\\WinServAgent\\config.json"
+$LogFile = "$env:ProgramData\\WinServAgent\\agent.log"
+
+function Write-Log($msg) {
+  $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+  "$ts $msg" | Out-File $LogFile -Append -Encoding UTF8
+}
+
+Write-Log "Agent started"
 
 $FullHostname = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }
 if (-not $FullHostname -or $FullHostname -notmatch '\.') { $FullHostname = "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }
@@ -111,71 +120,88 @@ function Get-CriticalEvents {
 }
 
 function Save-Token {
-  $dir = Split-Path $ConfigFile -Parent
-  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-  @{token=$Token} | ConvertTo-Json | Set-Content $ConfigFile -Force
+  try {
+    $dir = Split-Path $ConfigFile -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    @{token=$Token} | ConvertTo-Json | Set-Content $ConfigFile -Force
+  } catch { Write-Log "Save-Token error: $_" }
 }
-
-$osInfo = (Get-CimInstance Win32_OperatingSystem).Caption
-$ip = (Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin Dhcp -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress
-if (-not $ip) { $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' } | Select-Object -First 1).IPAddress }
-
-$Token = $null
-if (Test-Path $ConfigFile) {
-  try { $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json; $Token = $config.token } catch {}
-}
-
-$metricsObj = Get-SystemMetrics
 
 function Send-Body($url, $body) {
   try {
-    $response = Invoke-RestMethod -Uri $url -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
-    return $response
+    return Invoke-RestMethod -Uri $url -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
   } catch {
-    Write-Warning "$url : $_"
+    Write-Log "Send-Body $url : $_"
     return $null
   }
 }
 
-$Token = $null
-if (Test-Path $ConfigFile) {
-  try { $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json; $Token = $config.token } catch {}
-}
+# --- Main execution ---
+try {
+  Write-Log "Starting collection"
 
-$metricsObj = Get-SystemMetrics
+  try { $osInfo = (Get-CimInstance Win32_OperatingSystem).Caption } catch { $osInfo = "Windows" }
+  Write-Log "OS: $osInfo"
 
-if ($Token) {
-  $body = @{token=$Token;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
-  $response = Send-Body $MetricsUrl $body
-  if ($response) {
-    if ($response.token) { $Token = $response.token; Save-Token }
-    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Metrics OK"
-  } else {
-    $Token = $null
+  try {
+    $ip = (Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin Dhcp -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress
+    if (-not $ip) { $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' } | Select-Object -First 1).IPAddress }
+  } catch { $ip = "" }
+  Write-Log "IP: $ip"
+
+  $Token = $null
+  if (Test-Path $ConfigFile) {
+    try { $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json; $Token = $config.token } catch {}
   }
-}
+  Write-Log "Token loaded: $($Token -ne $null)"
 
-if (-not $Token) {
-  $body = @{registration_key=$RegKey;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
-  $response = Send-Body $MetricsUrl $body
-  if ($response -and $response.token) {
-    $Token = $response.token; Save-Token
-    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Registered: $FullHostname"
-  }
-}
+  try { $metricsObj = Get-SystemMetrics } catch { Write-Log "Metrics error: $_"; $metricsObj = $null }
+  Write-Log "Metrics collected: $($metricsObj -ne $null)"
 
-# Always collect and send events, regardless of metrics status
-$events = Get-CriticalEvents
-if ($events.Count -gt 0) {
-  if ($Token) {
-    $eventsBody = @{token=$Token;hostname=$FullHostname;events=$events} | ConvertTo-Json -Depth 6
-    $r = Send-Body $EventsUrl $eventsBody
-    if ($r) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Events sent: $($events.Count)" }
-  } else {
-    $eventsBody = @{registration_key=$RegKey;hostname=$FullHostname;events=$events} | ConvertTo-Json -Depth 6
-    $r = Send-Body $EventsUrl $eventsBody
-    if ($r) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Events sent (reg): $($events.Count)" }
+  if ($metricsObj) {
+    if ($Token) {
+      $body = @{token=$Token;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
+      $response = Send-Body $MetricsUrl $body
+      if ($response) {
+        if ($response.token) { $Token = $response.token; Save-Token }
+        Write-Log "Metrics sent with token"
+      } else {
+        $Token = $null
+        Write-Log "Metrics failed, will re-register"
+      }
+    }
+
+    if (-not $Token) {
+      $body = @{registration_key=$RegKey;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
+      $response = Send-Body $MetricsUrl $body
+      if ($response -and $response.token) {
+        $Token = $response.token; Save-Token
+        Write-Log "Registered: $FullHostname"
+      } else {
+        Write-Log "Registration failed"
+      }
+    }
   }
+
+  try { $events = Get-CriticalEvents } catch { Write-Log "Events collection error: $_"; $events = @() }
+  Write-Log "Events found: $($events.Count)"
+
+  if ($events.Count -gt 0) {
+    if ($Token) {
+      $eventsBody = @{token=$Token;hostname=$FullHostname;events=$events} | ConvertTo-Json -Depth 6
+      $r = Send-Body $EventsUrl $eventsBody
+      if ($r) { Write-Log "Events sent: $($events.Count)" }
+    } else {
+      $eventsBody = @{registration_key=$RegKey;hostname=$FullHostname;events=$events} | ConvertTo-Json -Depth 6
+      $r = Send-Body $EventsUrl $eventsBody
+      if ($r) { Write-Log "Events sent (reg): $($events.Count)" }
+    }
+  }
+
+  Write-Log "Agent completed successfully"
+} catch {
+  Write-Log "FATAL: $_"
+  throw
 }
 `;
 }
