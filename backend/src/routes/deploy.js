@@ -150,16 +150,55 @@ try {
 
 if ($allServers.Count -eq 0) { Write-Host "No servers found." -ForegroundColor Red; exit 1 }
 
-Write-Host ""
-Write-Host "Select servers to install (check = install, uncheck = skip):" -ForegroundColor Yellow
-$selected = $allServers | Select-Object @{N='Install';E={$true}}, Name, DNSHostName, OperatingSystem | Out-GridView -Title "Select servers for WinServ Agent" -OutputMode Multiple
-if (-not $selected) { Write-Host "Cancelled."; exit 0 }
+# --- Build indexed list ---
+$serverList = @()
+$checked = @{}
+for ($i=0; $i -lt $allServers.Count; $i++) {
+  $s = $allServers[$i]
+  $h = if ($s.DNSHostName) { $s.DNSHostName } else { $s.Name }
+  $checked["$i"] = $true
+  $serverList += @{idx=$i; hostname=$h; name=$s.Name; os=$s.OperatingSystem}
+}
+
+function Show-Menu {
+  Clear-Host
+  Write-Host "========================================" -ForegroundColor Cyan
+  Write-Host " Select servers for agent installation" -ForegroundColor Cyan
+  Write-Host " [A] All  [N] None  [D] Deploy  [Q] Quit" -ForegroundColor Cyan
+  Write-Host "========================================" -ForegroundColor Cyan
+  Write-Host ""
+  foreach ($s in $serverList) {
+    $mark = if ($checked["$($s.idx)"]) { "[x]" } else { "[ ]" }
+    $num = "{0:D2}" -f ($s.idx + 1)
+    Write-Host "  $mark $num`t$($s.hostname)" -NoNewline
+    Write-Host "`t$($s.os)" -ForegroundColor DarkGray
+  }
+  Write-Host ""
+  Write-Host "Enter number to toggle, or command letter: " -NoNewline
+}
+
+do {
+  Show-Menu
+  $key = Read-Host
+  if ($key -eq 'Q' -or $key -eq 'q') { exit 0 }
+  if ($key -eq 'A' -or $key -eq 'a') { foreach ($s in $serverList) { $checked["$($s.idx)"] = $true } }
+  if ($key -eq 'N' -or $key -eq 'n') { foreach ($s in $serverList) { $checked["$($s.idx)"] = $false } }
+  if ($key -match '^\d+$') {
+    $num = [int]$key - 1
+    if ($num -ge 0 -and $num -lt $serverList.Count) {
+      $checked["$num"] = -not $checked["$num"]
+    }
+  }
+} while ($key -ne 'D' -and $key -ne 'd')
+
+$selected = $serverList | Where-Object { $checked["$($_.idx)"] }
+if ($selected.Count -eq 0) { Write-Host "No servers selected."; exit 0 }
 
 Write-Host ""; Write-Host "Deploying to $($selected.Count) servers..." -ForegroundColor Yellow
 $results = @(); $i = 1
 
 foreach ($srv in $selected) {
-  $h = if ($srv.DNSHostName) { $srv.DNSHostName } else { $srv.Name }
+  $h = $srv.hostname
   Write-Host "  [$i/$($selected.Count)] $h " -NoNewline
   $ex = Get-RemoteVersion -ComputerName $h
   if ($ex) { Write-Host "(v$ex) " -NoNewline }
