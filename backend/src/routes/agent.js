@@ -22,6 +22,8 @@ $ConfigFile = "$env:ProgramData\\WinServAgent\\config.json"
 $LogFile = "$env:ProgramData\\WinServAgent\\agent.log"
 
 function Write-Log($msg) {
+  $dir = Split-Path $LogFile -Parent
+  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
   $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
   "$ts $msg" | Out-File $LogFile -Append -Encoding UTF8
 }
