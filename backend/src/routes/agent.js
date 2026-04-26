@@ -84,6 +84,12 @@ function Get-CriticalEvents {
   return $result
 }
 
+function Save-Token {
+  $dir = Split-Path $ConfigFile -Parent
+  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  @{token=$Token} | ConvertTo-Json | Set-Content $ConfigFile -Force
+}
+
 $osInfo = (Get-CimInstance Win32_OperatingSystem).Caption
 $ip = (Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin Dhcp -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress
 if (-not $ip) { $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' } | Select-Object -First 1).IPAddress }
@@ -95,42 +101,54 @@ if (Test-Path $ConfigFile) {
 
 $metricsObj = Get-SystemMetrics
 
+function Send-Body($url, $body) {
+  try {
+    $response = Invoke-RestMethod -Uri $url -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
+    return $response
+  } catch {
+    Write-Warning "$url : $_"
+    return $null
+  }
+}
+
+$Token = $null
+if (Test-Path $ConfigFile) {
+  try { $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json; $Token = $config.token } catch {}
+}
+
+$metricsObj = Get-SystemMetrics
+
 if ($Token) {
   $body = @{token=$Token;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
-  try {
-    $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
-    if ($response.token) {
-      $Token = $response.token
-      $dir = Split-Path $ConfigFile -Parent
-      if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-      @{token=$Token} | ConvertTo-Json | Set-Content $ConfigFile -Force
-    }
-    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Metrics sent"
-  } catch {
-    if ($_.Exception.Response.StatusCode.value__ -eq 401) { $Token = $null }
-    else { Write-Warning "Metrics: $_" }
+  $response = Send-Body $MetricsUrl $body
+  if ($response) {
+    if ($response.token) { $Token = $response.token; Save-Token }
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Metrics OK"
+  } else {
+    $Token = $null
   }
 }
 
 if (-not $Token) {
   $body = @{registration_key=$RegKey;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6
-  try {
-    $response = Invoke-RestMethod -Uri $MetricsUrl -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15
-    if ($response.token) {
-      $Token = $response.token
-      $dir = Split-Path $ConfigFile -Parent
-      if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-      @{token=$Token} | ConvertTo-Json | Set-Content $ConfigFile -Force
-      Write-Host "Registered: $($FullHostname)"
-    }
-  } catch { Write-Warning "Registration: $_" }
+  $response = Send-Body $MetricsUrl $body
+  if ($response -and $response.token) {
+    $Token = $response.token; Save-Token
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Registered: $FullHostname"
+  }
 }
 
-if ($Token) {
-  $events = Get-CriticalEvents
-  if ($events.Count -gt 0) {
+# Always collect and send events, regardless of metrics status
+$events = Get-CriticalEvents
+if ($events.Count -gt 0) {
+  if ($Token) {
     $eventsBody = @{token=$Token;hostname=$FullHostname;events=$events} | ConvertTo-Json -Depth 6
-    try { Invoke-RestMethod -Uri $EventsUrl -Method POST -Body ([System.Text.Encoding]::UTF8.GetBytes($eventsBody)) -ContentType "application/json; charset=utf-8" -TimeoutSec 20 } catch { Write-Warning "Events: $_" }
+    $r = Send-Body $EventsUrl $eventsBody
+    if ($r) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Events sent: $($events.Count)" }
+  } else {
+    $eventsBody = @{registration_key=$RegKey;hostname=$FullHostname;events=$events} | ConvertTo-Json -Depth 6
+    $r = Send-Body $EventsUrl $eventsBody
+    if ($r) { Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Events sent (reg): $($events.Count)" }
   }
 }
 `;
