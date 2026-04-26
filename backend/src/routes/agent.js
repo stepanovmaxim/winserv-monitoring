@@ -92,12 +92,12 @@ function Get-CriticalEvents {
   $since = (Get-Date).AddMinutes(-30)
   $events = $null
   try {
-    $events = Get-WinEvent -FilterHashtable @{LogName='System';Level=1,2;StartTime=$since} -MaxEvents 100 -ErrorAction Stop
+    $events = Get-WinEvent -FilterHashtable @{LogName='System';Level=1,2,3;StartTime=$since} -MaxEvents 200 -ErrorAction Stop
   } catch {
     try {
-      $events = Get-EventLog -LogName System -EntryType Error -After $since -Newest 100 -ErrorAction Stop
+      $events = Get-EventLog -LogName System -EntryType Error,Warning -After $since -Newest 200 -ErrorAction Stop
     } catch {
-      Write-Host "EventLog: cannot read System log (may need admin rights)"
+      Write-Log "EventLog: cannot read System log"'
       return @()
     }
   }
@@ -117,7 +117,7 @@ function Get-CriticalEvents {
     $time = if ($e.TimeCreated) { $e.TimeCreated.ToString('yyyy-MM-ddTHH:mm:ss') } else { $e.TimeGenerated.ToString('yyyy-MM-ddTHH:mm:ss') }
     $result += @{source=$source;event_id=$eid;level=$lvl;message=$msg;recorded_at=$time}
   }
-  Write-Host "Events collected: $($result.Count)"
+  Write-Log "Events collected: $($result.Count)"
   return $result
 }
 
