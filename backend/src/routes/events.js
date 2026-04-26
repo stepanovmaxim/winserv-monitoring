@@ -62,11 +62,21 @@ router.post('/', async (req, res) => {
     }
   }
 
+  const validLevels = ['Critical', 'Error', 'Warning', 'Information'];
+
   for (const ev of events) {
+    let lvl = ev.level || 'Error';
+    if (!validLevels.includes(lvl)) {
+      const lower = lvl.toLowerCase();
+      if (lower.includes('crit')) lvl = 'Critical';
+      else if (lower.includes('err') || lower.includes('ошиб')) lvl = 'Error';
+      else if (lower.includes('warn') || lower.includes('пред')) lvl = 'Warning';
+      else lvl = 'Error';
+    }
     await db.query(
       `INSERT INTO system_events (server_id, event_source, event_id, level, message, recorded_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [serverId, ev.source || '', ev.event_id || 0, ev.level || 'Error', ev.message || '', ev.recorded_at || null]
+      [serverId, ev.source || '', ev.event_id || 0, lvl, ev.message || '', ev.recorded_at || null]
     );
   }
 

@@ -75,8 +75,14 @@ function Get-CriticalEvents {
   foreach ($e in $events) {
     $source = if ($e.ProviderName) { $e.ProviderName } else { $e.Source }
     $eid = if ($e.Id) { $e.Id } else { $e.EventID }
-    $lvl = if ($e.LevelDisplayName) { $e.LevelDisplayName } else { 'Error' }
-    $msg = if ($e.Message) { if ($e.Message.Length -gt 2000) { $e.Message.Substring(0, 2000) } else { $e.Message } } else { '' }
+    $lvlNum = if ($e.Level) { $e.Level } else { 2 }
+    if ($lvlNum -le 1) { $lvl = 'Critical' }
+    elseif ($lvlNum -le 2) { $lvl = 'Error' }
+    elseif ($lvlNum -le 3) { $lvl = 'Warning' }
+    else { $lvl = 'Information' }
+    try {
+      $msg = if ($e.Message) { if ($e.Message.Length -gt 2000) { $e.Message.Substring(0, 2000) } else { $e.Message } } else { '' }
+    } catch { $msg = '' }
     $time = if ($e.TimeCreated) { $e.TimeCreated.ToString('yyyy-MM-ddTHH:mm:ss') } else { $e.TimeGenerated.ToString('yyyy-MM-ddTHH:mm:ss') }
     $result += @{source=$source;event_id=$eid;level=$lvl;message=$msg;recorded_at=$time}
   }
