@@ -219,3 +219,4 @@ router.get('/script/:serverId', requireAuth, requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.generateUniversalScript = generateUniversalScript;
