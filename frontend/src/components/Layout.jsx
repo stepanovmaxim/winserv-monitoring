@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -5,14 +6,19 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   function handleLogout() {
     logout();
     navigate('/login');
   }
 
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
   const link = (path, icon, label) => (
-    <Link to={path} className={`sidebar-link ${location.pathname === path ? 'active' : ''}`}>
+    <Link to={path} className={`sidebar-link ${location.pathname === path ? 'active' : ''}`} onClick={closeMenu}>
       <span className="icon">{icon}</span>
       {label}
     </Link>
@@ -20,7 +26,9 @@ export default function Layout() {
 
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
+      <div className={`overlay ${menuOpen ? 'show' : ''}`} onClick={closeMenu} />
+      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">WinServ Monitor</div>
         <nav className="sidebar-nav">
           {link('/', '📊', 'Dashboard')}
