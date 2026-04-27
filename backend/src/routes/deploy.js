@@ -42,7 +42,7 @@ function generateDeployerScript(serverUrl, regKey) {
     '    $AgentScript | Set-Content -Path "$remotePath\\agent.ps1" -Encoding UTF8 -Force',
     '    $tr = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -WindowStyle Hidden -File C:\\winserv-agent\\agent.ps1"',
     '    schtasks /delete /tn "WinServAgent" /s $ComputerName /f 2>$null',
-    '    schtasks /create /tn "WinServAgent" /s $ComputerName /ru SYSTEM /rl HIGHEST /sc minute /mo 1 /tr $tr /f',
+    '    schtasks /create /tn "WinServAgent" /s $ComputerName /ru "NT AUTHORITY\\SYSTEM" /rl HIGHEST /sc minute /mo 1 /tr $tr /f',
     '    return "OK"',
     '  } catch { return "ERROR: $_" }',
     '}',
