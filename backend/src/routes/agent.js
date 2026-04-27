@@ -12,6 +12,7 @@ function generateUniversalScript(serverUrl, regKey) {
 #   schtasks /create /tn "WinServAgent" /tr "C:\winserv-agent\run.cmd" /sc minute /mo 1 /ru "NT AUTHORITY\SYSTEM" /rl HIGHEST
 # ====================================================================
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 
 $ErrorActionPreference = "Continue"
 $ServerUrl = "${serverUrl}"
@@ -20,6 +21,9 @@ $EventsUrl = "$ServerUrl/api/events"
 $RegKey = "${regKey}"
 $ConfigFile = "$env:ProgramData\\WinServAgent\\config.json"
 $LogFile = "$env:ProgramData\\WinServAgent\\agent.log"
+
+# Heartbeat: write timestamp to prove script started
+try { Get-Date -Format 'yyyy-MM-dd HH:mm:ss' | Out-File "C:\\winserv-agent\\heartbeat.txt" -Encoding UTF8 } catch {}
 
 function Write-Log($msg) {
   $dir = Split-Path $LogFile -Parent
