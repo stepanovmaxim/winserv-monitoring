@@ -15,7 +15,14 @@ function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading">Loading...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (user.role === 'pending') return <div className="pending-message"><h2>Account pending approval</h2><p>Please wait for an administrator to approve your account.</p></div>;
+  if (user.role === 'pending') return (
+    <div className="pending-message">
+      <h2>Account pending approval</h2>
+      <p>Please wait for an administrator to approve your account.</p>
+      <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>{user.email}</p>
+      <button onClick={() => { localStorage.removeItem('token'); window.location.href = '/login'; }} style={{ marginTop: 16 }}>Switch account</button>
+    </div>
+  );
   return children;
 }
 
