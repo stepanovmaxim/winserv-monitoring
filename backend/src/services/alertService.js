@@ -1,6 +1,16 @@
 const db = require('../db');
 const { sendTelegramMessage } = require('./telegram');
 
+const COOLDOWN_MS = 15 * 60 * 1000;
+const lastAlert = new Map();
+
+function canAlert(key) {
+  const prev = lastAlert.get(key);
+  if (prev && Date.now() - prev < COOLDOWN_MS) return false;
+  lastAlert.set(key, Date.now());
+  return true;
+}
+
 async function checkAlerts(serverId, metrics) {
   const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
   if (!config) return;
@@ -11,13 +21,19 @@ async function checkAlerts(serverId, metrics) {
   const alerts = [];
 
   if (config.notify_cpu && metrics.cpu_usage != null && Number(metrics.cpu_usage) > 90) {
-    alerts.push(`<b>High CPU</b> on ${server.hostname}: ${Number(metrics.cpu_usage).toFixed(1)}%`);
+    const key = serverId + ':cpu';
+    if (canAlert(key)) {
+      alerts.push(`<b>High CPU</b> on ${server.hostname}: ${Number(metrics.cpu_usage).toFixed(1)}%`);
+    }
   }
 
   if (config.notify_disk && metrics.disk_total_gb > 0) {
     const diskPercent = (Number(metrics.disk_used_gb) / Number(metrics.disk_total_gb)) * 100;
     if (diskPercent > 90) {
-      alerts.push(`<b>Low disk</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free (${diskPercent.toFixed(1)}% used)`);
+      const key = serverId + ':disk';
+      if (canAlert(key)) {
+        alerts.push(`<b>Low disk</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free (${diskPercent.toFixed(1)}% used)`);
+      }
     }
   }
 
@@ -25,7 +41,10 @@ async function checkAlerts(serverId, metrics) {
     const memPercent = Number(metrics.memory_total_mb) > 0
       ? (Number(metrics.memory_used_mb) / Number(metrics.memory_total_mb)) * 100 : 0;
     if (memPercent > 95) {
-      alerts.push(`<b>High memory</b> on ${server.hostname}: ${memPercent.toFixed(1)}%`);
+      const key = serverId + ':mem';
+      if (canAlert(key)) {
+        alerts.push(`<b>High memory</b> on ${server.hostname}: ${memPercent.toFixed(1)}%`);
+      }
     }
   }
 
@@ -46,7 +65,10 @@ async function checkOfflineServers() {
 
     if (config && config.notify_offline) {
       for (const s of justOffline) {
-        sendTelegramMessage(`<b>OFFLINE</b>: ${s.hostname} — no contact for 2+ minutes`).catch(() => {});
+        const key = s.hostname + ':offline';
+        if (canAlert(key)) {
+          sendTelegramMessage(`<b>OFFLINE</b>: ${s.hostname} — no contact for 2+ minutes`).catch(() => {});
+        }
       }
     }
   } catch (err) {
