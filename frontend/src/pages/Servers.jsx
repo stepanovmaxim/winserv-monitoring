@@ -11,7 +11,8 @@ export default function Servers() {
   const [selectedGroup, setSelectedGroup] = useState(searchParams.get('group_id') || '');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ hostname: '', ip_address: '', group_id: '', os_info: '' });
+  const [editServer, setEditServer] = useState(null);
+  const [form, setForm] = useState({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '' });
   const [showToken, setShowToken] = useState(null);
 
   useEffect(() => { api.getGroups().then(setGroups); }, []);
@@ -21,13 +22,29 @@ export default function Servers() {
     api.getServers(selectedGroup || undefined).then(setServers).finally(() => setLoading(false));
   }, [selectedGroup]);
 
-  async function handleCreate(e) {
+  function openCreate() {
+    setEditServer(null);
+    setForm({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '' });
+    setShowModal(true);
+  }
+
+  function openEdit(s) {
+    setEditServer(s);
+    setForm({ hostname: s.hostname, description: s.description || '', ip_address: s.ip_address || '', group_id: s.group_id || '', os_info: s.os_info || '' });
+    setShowModal(true);
+  }
+
+  async function handleSave(e) {
     e.preventDefault();
-    const data = await api.createServer(form);
-    setServers(prev => [...prev, { ...form, id: data.id, status: 'unknown', group_name: groups.find(g => g.id == form.group_id)?.name }]);
-    setShowToken(data.token);
+    if (editServer) {
+      await api.updateServer(editServer.id, form);
+    } else {
+      const data = await api.createServer(form);
+      setShowToken(data.token);
+    }
     setShowModal(false);
-    setForm({ hostname: '', ip_address: '', group_id: '', os_info: '' });
+    setLoading(true);
+    api.getServers(selectedGroup || undefined).then(setServers).finally(() => setLoading(false));
   }
 
   async function handleDelete(id) {
@@ -47,7 +64,7 @@ export default function Servers() {
             <option value="">All Groups</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
-          {user?.role === 'admin' && <button onClick={() => setShowModal(true)}>+ Add Server</button>}
+          {user?.role === 'admin' && <button onClick={openCreate}>+ Add Server</button>}
         </div>
       </div>
 
@@ -64,19 +81,23 @@ export default function Servers() {
           <div className="empty"><div className="empty-icon">🖥</div><p>No servers yet. Add one to get started.</p></div>
         ) : (
           <table>
-            <thead><tr><th>Status</th><th>Hostname</th><th>Group</th><th>IP</th><th>OS</th><th>Last Seen</th><th></th></tr></thead>
+            <thead><tr><th>Status</th><th>Hostname</th><th>Group</th><th>Description</th><th>IP</th><th>OS</th><th>Last Seen</th><th></th></tr></thead>
             <tbody>
               {servers.map(s => (
                 <tr key={s.id}>
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
                   <td><Link to={`/servers/${s.id}`}>{s.hostname}</Link></td>
                   <td>{s.group_name || '-'}</td>
+                  <td style={{ color: 'var(--text-muted)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.description || '-'}</td>
                   <td>{s.ip_address || '-'}</td>
                   <td>{s.os_info || '-'}</td>
                   <td>{s.last_seen || 'Never'}</td>
                   <td>
                     {user?.role === 'admin' && (
-                      <button className="danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => handleDelete(s.id)}>Del</button>
+                      <>
+                        <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(s)}>Edit</button>
+                        <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => handleDelete(s.id)}>Del</button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -89,14 +110,15 @@ export default function Servers() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>Add Server</h2>
-            <form onSubmit={handleCreate}>
+            <h2>{editServer ? 'Edit Server' : 'Add Server'}</h2>
+            <form onSubmit={handleSave}>
               <div className="form-group"><label>Hostname *</label><input value={form.hostname} onChange={e => setForm({ ...form, hostname: e.target.value })} required /></div>
+              <div className="form-group"><label>Description</label><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Primary domain controller" /></div>
               <div className="form-group"><label>IP Address</label><input value={form.ip_address} onChange={e => setForm({ ...form, ip_address: e.target.value })} /></div>
               <div className="form-group"><label>Group</label><select value={form.group_id} onChange={e => setForm({ ...form, group_id: e.target.value })}><option value="">None</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
               <div className="form-group"><label>OS Info</label><input value={form.os_info} onChange={e => setForm({ ...form, os_info: e.target.value })} /></div>
               <div className="form-actions">
-                <button type="submit">Create</button>
+                <button type="submit">Save</button>
                 <button type="button" className="secondary" onClick={() => setShowModal(false)}>Cancel</button>
               </div>
             </form>

@@ -23,6 +23,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS servers (
       id SERIAL PRIMARY KEY,
       hostname TEXT NOT NULL,
+      description TEXT DEFAULT '',
       ip_address TEXT DEFAULT '',
       group_id INTEGER REFERENCES server_groups(id) ON DELETE SET NULL,
       os_info TEXT DEFAULT '',
@@ -81,6 +82,8 @@ async function initSchema() {
   `);
 
   await db.exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disks_json TEXT DEFAULT '[]'`);
+
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''`);
 
   console.log('PostgreSQL schema initialized');
 }

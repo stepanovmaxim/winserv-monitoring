@@ -34,8 +34,8 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   if (!hostname) return res.status(400).json({ error: 'hostname is required' });
 
   const result = await db.query(
-    'INSERT INTO servers (hostname, ip_address, group_id, os_info) VALUES ($1, $2, $3, $4) RETURNING id',
-    [hostname, ip_address || '', group_id || null, os_info || '']
+    'INSERT INTO servers (hostname, description, ip_address, group_id, os_info) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [hostname, req.body.description || '', ip_address || '', group_id || null, os_info || '']
   );
 
   const token = uuidv4();
@@ -45,17 +45,18 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const { hostname, ip_address, group_id, os_info } = req.body;
+  const { hostname, description, ip_address, group_id, os_info } = req.body;
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [req.params.id]);
   if (!server) return res.status(404).json({ error: 'Server not found' });
 
   await db.query(
-    'UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4 WHERE id = $5',
+    'UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5 WHERE id = $6',
     [
       hostname || server.hostname,
       ip_address !== undefined ? ip_address : server.ip_address,
       group_id !== undefined ? (group_id || null) : server.group_id,
       os_info !== undefined ? os_info : server.os_info,
+      description !== undefined ? description : server.description,
       req.params.id
     ]
   );
