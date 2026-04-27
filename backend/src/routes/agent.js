@@ -101,7 +101,7 @@ function Get-CriticalEvents {
     try {
       $events = Get-EventLog -LogName System -EntryType Error,Warning -After $since -Newest 200 -ErrorAction Stop
     } catch {
-      Write-Log "EventLog: cannot read System log"'
+      Write-Log "EventLog: cannot read System log"
       return @()
     }
   }
