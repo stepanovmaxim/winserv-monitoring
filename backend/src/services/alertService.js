@@ -1,14 +1,20 @@
 const db = require('../db');
 const { sendTelegramMessage } = require('./telegram');
 
-const COOLDOWN_MS = 15 * 60 * 1000;
-const lastAlert = new Map();
+const alertActive = new Map();
 
-function canAlert(key) {
-  const prev = lastAlert.get(key);
-  if (prev && Date.now() - prev < COOLDOWN_MS) return false;
-  lastAlert.set(key, Date.now());
-  return true;
+function checkThreshold(key, currentValue, threshold, isAbove) {
+  const wasAbove = alertActive.get(key) || false;
+  if (isAbove && !wasAbove) {
+    alertActive.set(key, true);
+    return 'triggered';
+  }
+  if (!isAbove && wasAbove) {
+    alertActive.set(key, false);
+    return 'recovered';
+  }
+  alertActive.set(key, isAbove);
+  return null;
 }
 
 async function checkAlerts(serverId, metrics) {
@@ -20,31 +26,34 @@ async function checkAlerts(serverId, metrics) {
 
   const alerts = [];
 
-  if (config.notify_cpu && metrics.cpu_usage != null && Number(metrics.cpu_usage) > 90) {
-    const key = serverId + ':cpu';
-    if (canAlert(key)) {
-      alerts.push(`<b>High CPU</b> on ${server.hostname}: ${Number(metrics.cpu_usage).toFixed(1)}%`);
+  if (config.notify_cpu && metrics.cpu_usage != null) {
+    const val = Number(metrics.cpu_usage);
+    const state = checkThreshold(serverId + ':cpu', val, 90, val > 90);
+    if (state === 'triggered') {
+      alerts.push(`<b>High CPU</b> on ${server.hostname}: ${val.toFixed(1)}%`);
+    } else if (state === 'recovered') {
+      alerts.push(`<b>CPU OK</b> on ${server.hostname}: ${val.toFixed(1)}%`);
     }
   }
 
   if (config.notify_disk && metrics.disk_total_gb > 0) {
-    const diskPercent = (Number(metrics.disk_used_gb) / Number(metrics.disk_total_gb)) * 100;
-    if (diskPercent > 90) {
-      const key = serverId + ':disk';
-      if (canAlert(key)) {
-        alerts.push(`<b>Low disk</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free (${diskPercent.toFixed(1)}% used)`);
-      }
+    const diskPct = (Number(metrics.disk_used_gb) / Number(metrics.disk_total_gb)) * 100;
+    const state = checkThreshold(serverId + ':disk', diskPct, 90, diskPct > 90);
+    if (state === 'triggered') {
+      alerts.push(`<b>Low disk</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free (${diskPct.toFixed(1)}%)`);
+    } else if (state === 'recovered') {
+      alerts.push(`<b>Disk OK</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free`);
     }
   }
 
   if (config.notify_errors) {
-    const memPercent = Number(metrics.memory_total_mb) > 0
+    const memPct = Number(metrics.memory_total_mb) > 0
       ? (Number(metrics.memory_used_mb) / Number(metrics.memory_total_mb)) * 100 : 0;
-    if (memPercent > 95) {
-      const key = serverId + ':mem';
-      if (canAlert(key)) {
-        alerts.push(`<b>High memory</b> on ${server.hostname}: ${memPercent.toFixed(1)}%`);
-      }
+    const state = checkThreshold(serverId + ':mem', memPct, 95, memPct > 95);
+    if (state === 'triggered') {
+      alerts.push(`<b>High memory</b> on ${server.hostname}: ${memPct.toFixed(1)}%`);
+    } else if (state === 'recovered') {
+      alerts.push(`<b>Memory OK</b> on ${server.hostname}: ${memPct.toFixed(1)}%`);
     }
   }
 
@@ -65,10 +74,7 @@ async function checkOfflineServers() {
 
     if (config && config.notify_offline) {
       for (const s of justOffline) {
-        const key = s.hostname + ':offline';
-        if (canAlert(key)) {
-          sendTelegramMessage(`<b>OFFLINE</b>: ${s.hostname} — no contact for 2+ minutes`).catch(() => {});
-        }
+        sendTelegramMessage(`<b>OFFLINE</b>: ${s.hostname} — no contact for 2+ minutes`).catch(() => {});
       }
     }
   } catch (err) {
