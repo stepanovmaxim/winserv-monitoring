@@ -27,7 +27,7 @@ async function checkAlerts(serverId, metrics) {
 
   if (config.notify_cpu && metrics.cpu_usage != null) {
     const val = Number(metrics.cpu_usage);
-    const state = checkThreshold(serverId + ':cpu', val, 90, 80);
+    const state = checkThreshold(serverId + ':cpu', val, 90, 70);
     if (state === 'triggered') {
       alerts.push(`<b>High CPU</b> on ${server.hostname}: ${val.toFixed(1)}%`);
     } else if (state === 'recovered') {
@@ -37,7 +37,7 @@ async function checkAlerts(serverId, metrics) {
 
   if (config.notify_disk && metrics.disk_total_gb > 0) {
     const diskPct = (Number(metrics.disk_used_gb) / Number(metrics.disk_total_gb)) * 100;
-    const state = checkThreshold(serverId + ':disk', diskPct, 90, 80);
+    const state = checkThreshold(serverId + ':disk', diskPct, 90, 70);
     if (state === 'triggered') {
       alerts.push(`<b>Low disk</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free (${diskPct.toFixed(1)}%)`);
     } else if (state === 'recovered') {
@@ -48,7 +48,7 @@ async function checkAlerts(serverId, metrics) {
   if (config.notify_errors) {
     const memPct = Number(metrics.memory_total_mb) > 0
       ? (Number(metrics.memory_used_mb) / Number(metrics.memory_total_mb)) * 100 : 0;
-    const state = checkThreshold(serverId + ':mem', memPct, 95, 90);
+    const state = checkThreshold(serverId + ':mem', memPct, 95, 85);
     if (state === 'triggered') {
       alerts.push(`<b>High memory</b> on ${server.hostname}: ${memPct.toFixed(1)}%`);
     } else if (state === 'recovered') {
