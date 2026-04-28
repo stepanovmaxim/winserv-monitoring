@@ -42,9 +42,6 @@ router.post('/', async (req, res) => {
 
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [serverId]);
 
-  if (h && server.hostname !== h) {
-    await db.query('UPDATE servers SET hostname = $1 WHERE id = $2', [h, serverId]);
-  }
   if (ip_address) {
     await db.query('UPDATE servers SET ip_address = $1 WHERE id = $2', [ip_address, serverId]);
   }
