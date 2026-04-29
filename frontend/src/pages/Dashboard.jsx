@@ -4,7 +4,7 @@ import { api } from '../api';
 
 export default function Dashboard() {
   const [servers, setServers] = useState([]);
-  const [stats, setStats] = useState({ total: 0, online: 0, offline: 0, warning: 0 });
+  const [stats, setStats] = useState({ total: 0, online: 0, offline: 0 });
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState('hostname');
   const [sortDir, setSortDir] = useState('asc');
@@ -16,7 +16,6 @@ export default function Dashboard() {
         total: data.length,
         online: data.filter(s => s.status === 'online').length,
         offline: data.filter(s => s.status === 'offline').length,
-        warning: data.filter(s => s.status === 'warning').length,
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -59,7 +58,7 @@ export default function Dashboard() {
     <div>
       <div className="page-header"><h1>Dashboard</h1></div>
 
-      <div className="grid grid-4" style={{ marginBottom: 24 }}>
+      <div className="grid grid-3" style={{ marginBottom: 24 }}>
         <div className="card">
           <div className="metric-value">{stats.total}</div>
           <div className="metric-label">Total Servers</div>
@@ -71,10 +70,6 @@ export default function Dashboard() {
         <div className="card">
           <div className="metric-value" style={{ color: 'var(--danger)' }}>{stats.offline}</div>
           <div className="metric-label">Offline</div>
-        </div>
-        <div className="card">
-          <div className="metric-value" style={{ color: 'var(--warning)' }}>{stats.warning}</div>
-          <div className="metric-label">Warnings</div>
         </div>
       </div>
 
