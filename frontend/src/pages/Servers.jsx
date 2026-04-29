@@ -37,12 +37,6 @@ export default function Servers() {
     setShowModal(true);
   }
 
-  function openEdit(s) {
-    setEditServer(s);
-    setForm({ hostname: s.hostname, description: s.description || '', ip_address: s.ip_address || '', group_id: s.group_id || '', os_info: s.os_info || '' });
-    setShowModal(true);
-  }
-
   async function handleSave(e) {
     e.preventDefault();
     if (editServer) {
