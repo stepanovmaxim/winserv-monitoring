@@ -12,6 +12,7 @@ export default function Servers() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editServer, setEditServer] = useState(null);
+  const [showToken, setShowToken] = useState(null);
   const [form, setForm] = useState({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
 
   useEffect(() => { api.getGroups().then(setGroups); }, []);
