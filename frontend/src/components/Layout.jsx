@@ -62,9 +62,7 @@ export default function Layout() {
       >
         <div className="sidebar-logo">WinServ Monitor</div>
         <nav className="sidebar-nav">
-          {link('/', '📊', 'Dashboard')}
           {link('/servers', '🖥', 'Servers')}
-          {link('/events', '⚠', 'Events')}
           {user?.role === 'admin' && link('/groups', '📁', 'Groups')}
           {user?.role === 'admin' && link('/deploy', '🚀', 'Deploy')}
           {user?.role === 'admin' && link('/settings', '⚙', 'Settings')}

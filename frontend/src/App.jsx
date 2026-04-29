@@ -1,11 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
 import Servers from './pages/Servers';
 import ServerDetail from './pages/ServerDetail';
 import Groups from './pages/Groups';
-import Events from './pages/Events';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Users from './pages/Users';
@@ -38,11 +36,10 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/auth-callback" element={<Login />} />
       <Route element={<Protected><Layout /></Protected>}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/servers" />} />
         <Route path="/servers" element={<Servers />} />
         <Route path="/servers/:id" element={<ServerDetail />} />
         <Route path="/groups" element={<AdminRoute><Groups /></AdminRoute>} />
-        <Route path="/events" element={<Events />} />
         <Route path="/settings" element={<AdminRoute><Settings /></AdminRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
         <Route path="/deploy" element={<AdminRoute><Deploy /></AdminRoute>} />

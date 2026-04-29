@@ -80,6 +80,21 @@ export default function Servers() {
         </div>
       )}
 
+      <div className="grid grid-3" style={{ marginBottom: 24 }}>
+        <div className="card">
+          <div className="metric-value">{servers.length}</div>
+          <div className="metric-label">Total Servers</div>
+        </div>
+        <div className="card">
+          <div className="metric-value" style={{ color: 'var(--success)' }}>{servers.filter(s => s.status === 'online').length}</div>
+          <div className="metric-label">Online</div>
+        </div>
+        <div className="card">
+          <div className="metric-value" style={{ color: 'var(--danger)' }}>{servers.filter(s => s.status === 'offline').length}</div>
+          <div className="metric-label">Offline</div>
+        </div>
+      </div>
+
       <div className="card">
         {servers.length === 0 ? (
           <div className="empty"><div className="empty-icon">🖥</div><p>No servers yet. Add one to get started.</p></div>
