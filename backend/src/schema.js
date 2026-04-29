@@ -28,6 +28,9 @@ async function initSchema() {
       group_id INTEGER REFERENCES server_groups(id) ON DELETE SET NULL,
       os_info TEXT DEFAULT '',
       status TEXT DEFAULT 'unknown' CHECK(status IN ('online','offline','warning','critical')),
+      notify_cpu INTEGER DEFAULT 1,
+      notify_memory INTEGER DEFAULT 1,
+      notify_disk INTEGER DEFAULT 1,
       last_seen TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -84,6 +87,9 @@ async function initSchema() {
   await db.exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disks_json TEXT DEFAULT '[]'`);
 
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS notify_cpu INTEGER DEFAULT 1`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS notify_memory INTEGER DEFAULT 1`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS notify_disk INTEGER DEFAULT 1`);
 
   console.log('PostgreSQL schema initialized');
 }

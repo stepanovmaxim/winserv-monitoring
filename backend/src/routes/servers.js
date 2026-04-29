@@ -45,18 +45,23 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const { hostname, description, ip_address, group_id, os_info } = req.body;
+  const { hostname, description, ip_address, group_id, os_info, notify_cpu, notify_memory, notify_disk } = req.body;
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [req.params.id]);
   if (!server) return res.status(404).json({ error: 'Server not found' });
 
+  const toBool = (v, def) => v !== undefined ? (v ? 1 : 0) : def;
+
   await db.query(
-    'UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5 WHERE id = $6',
+    'UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5, notify_cpu = $6, notify_memory = $7, notify_disk = $8 WHERE id = $9',
     [
       hostname || server.hostname,
       ip_address !== undefined ? ip_address : server.ip_address,
       group_id !== undefined ? (group_id || null) : server.group_id,
       os_info !== undefined ? os_info : server.os_info,
       description !== undefined ? description : server.description,
+      toBool(notify_cpu, server.notify_cpu),
+      toBool(notify_memory, server.notify_memory),
+      toBool(notify_disk, server.notify_disk),
       req.params.id
     ]
   );

@@ -25,7 +25,7 @@ async function checkAlerts(serverId, metrics) {
 
   const alerts = [];
 
-  if (config.notify_cpu && metrics.cpu_usage != null) {
+  if (config.notify_cpu && server.notify_cpu && metrics.cpu_usage != null) {
     const val = Number(metrics.cpu_usage);
     const state = checkThreshold(serverId + ':cpu', val, 90, 70);
     if (state === 'triggered') {
@@ -35,7 +35,7 @@ async function checkAlerts(serverId, metrics) {
     }
   }
 
-  if (config.notify_disk && metrics.disk_total_gb > 0) {
+  if (config.notify_disk && server.notify_disk && metrics.disk_total_gb > 0) {
     const diskPct = (Number(metrics.disk_used_gb) / Number(metrics.disk_total_gb)) * 100;
     const state = checkThreshold(serverId + ':disk', diskPct, 90, 70);
     if (state === 'triggered') {
@@ -45,7 +45,7 @@ async function checkAlerts(serverId, metrics) {
     }
   }
 
-  if (config.notify_errors) {
+  if (config.notify_errors && server.notify_memory) {
     const memPct = Number(metrics.memory_total_mb) > 0
       ? (Number(metrics.memory_used_mb) / Number(metrics.memory_total_mb)) * 100 : 0;
     const state = checkThreshold(serverId + ':mem', memPct, 95, 85);

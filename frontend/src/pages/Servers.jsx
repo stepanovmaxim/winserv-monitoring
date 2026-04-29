@@ -12,8 +12,7 @@ export default function Servers() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editServer, setEditServer] = useState(null);
-  const [form, setForm] = useState({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '' });
-  const [showToken, setShowToken] = useState(null);
+  const [form, setForm] = useState({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
 
   useEffect(() => { api.getGroups().then(setGroups); }, []);
 
@@ -24,7 +23,17 @@ export default function Servers() {
 
   function openCreate() {
     setEditServer(null);
-    setForm({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '' });
+    setForm({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
+    setShowModal(true);
+  }
+
+  function openEdit(s) {
+    setEditServer(s);
+    setForm({
+      hostname: s.hostname, description: s.description || '', ip_address: s.ip_address || '',
+      group_id: s.group_id || '', os_info: s.os_info || '',
+      notify_cpu: s.notify_cpu !== 0, notify_memory: s.notify_memory !== 0, notify_disk: s.notify_disk !== 0,
+    });
     setShowModal(true);
   }
 
@@ -117,6 +126,25 @@ export default function Servers() {
               <div className="form-group"><label>IP Address</label><input value={form.ip_address} onChange={e => setForm({ ...form, ip_address: e.target.value })} /></div>
               <div className="form-group"><label>Group</label><select value={form.group_id} onChange={e => setForm({ ...form, group_id: e.target.value })}><option value="">None</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
               <div className="form-group"><label>OS Info</label><input value={form.os_info} onChange={e => setForm({ ...form, os_info: e.target.value })} /></div>
+              {editServer && (
+                <>
+                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Alert Notifications</label>
+                  <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
+                    <div className="toggle-wrapper" onClick={() => setForm({ ...form, notify_cpu: !form.notify_cpu })}>
+                      <div className={`toggle ${form.notify_cpu ? 'on' : ''}`}><div className="toggle-knob" /></div>
+                      <label style={{ cursor: 'pointer' }}>CPU</label>
+                    </div>
+                    <div className="toggle-wrapper" onClick={() => setForm({ ...form, notify_memory: !form.notify_memory })}>
+                      <div className={`toggle ${form.notify_memory ? 'on' : ''}`}><div className="toggle-knob" /></div>
+                      <label style={{ cursor: 'pointer' }}>Memory</label>
+                    </div>
+                    <div className="toggle-wrapper" onClick={() => setForm({ ...form, notify_disk: !form.notify_disk })}>
+                      <div className={`toggle ${form.notify_disk ? 'on' : ''}`}><div className="toggle-knob" /></div>
+                      <label style={{ cursor: 'pointer' }}>Disk</label>
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="form-actions">
                 <button type="submit">Save</button>
                 <button type="button" className="secondary" onClick={() => setShowModal(false)}>Cancel</button>
