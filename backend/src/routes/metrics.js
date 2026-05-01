@@ -20,6 +20,9 @@ router.post('/', async (req, res) => {
 
   if (!serverId && registration_key === REGISTRATION_KEY && h) {
     let server = await db.queryOne('SELECT * FROM servers WHERE hostname = $1', [h]);
+    if (!server && ip_address) {
+      server = await db.queryOne("SELECT * FROM servers WHERE ip_address = $1 AND ip_address != ''", [ip_address]);
+    }
     if (!server) {
       const result = await db.query(
         'INSERT INTO servers (hostname, ip_address, os_info, status) VALUES ($1, $2, $3, $4) RETURNING id',
