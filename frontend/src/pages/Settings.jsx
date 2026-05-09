@@ -93,6 +93,7 @@ export default function Settings() {
               <label>Offline detection (minutes)</label>
               <input type="number" min="1" max="30" value={config.offline_minutes || 3} onChange={e => setConfig({ ...config, offline_minutes: e.target.value })} style={{ width: 100 }} />
             </div>
+          )}
           <div className="form-actions">
             <button type="submit" disabled={saving}>Save</button>
             <button type="button" className="secondary" onClick={handleTest}>Test Message</button>
