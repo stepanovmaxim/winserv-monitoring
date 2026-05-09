@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -88,6 +88,11 @@ export default function Settings() {
               </div>
             </div>
           )}
+          {config.enabled && (
+            <div className="form-group" style={{ marginTop: 16 }}>
+              <label>Offline detection (minutes)</label>
+              <input type="number" min="1" max="30" value={config.offline_minutes || 3} onChange={e => setConfig({ ...config, offline_minutes: e.target.value })} style={{ width: 100 }} />
+            </div>
           <div className="form-actions">
             <button type="submit" disabled={saving}>Save</button>
             <button type="button" className="secondary" onClick={handleTest}>Test Message</button>
