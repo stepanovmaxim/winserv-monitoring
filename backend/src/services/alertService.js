@@ -2,6 +2,8 @@ const db = require('../db');
 const { sendTelegramMessage } = require('./telegram');
 
 const alertActive = new Map();
+const serverStart = Date.now();
+const GRACE_MS = 2 * 60 * 1000;
 
 function checkThreshold(key, currentValue, triggerAt, recoverAt) {
   const wasAbove = alertActive.get(key) || false;
@@ -56,7 +58,7 @@ async function checkAlerts(serverId, metrics) {
     }
   }
 
-  if (alerts.length > 0) {
+  if (alerts.length > 0 && Date.now() - serverStart > GRACE_MS) {
     sendTelegramMessage(alerts.join('\n')).catch(err => console.error('[Alert]', err.message));
   }
 }
@@ -72,7 +74,7 @@ async function checkOfflineServers() {
        RETURNING hostname`
     );
 
-    if (config && config.notify_offline) {
+    if (config && config.notify_offline && Date.now() - serverStart > GRACE_MS) {
       for (const s of justOffline) {
         sendTelegramMessage(`<b>OFFLINE</b>: ${s.hostname} — no contact for ${minutes}+ minutes`).catch(() => {});
       }
