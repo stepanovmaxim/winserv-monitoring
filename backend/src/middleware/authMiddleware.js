@@ -21,7 +21,7 @@ function requireAdmin(req, res, next) {
 }
 
 function requireApproved(req, res, next) {
-  if (req.user?.role !== 'admin' && req.user?.role !== 'approved') {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'viewer') {
     return res.status(403).json({ error: 'Account not approved' });
   }
   next();

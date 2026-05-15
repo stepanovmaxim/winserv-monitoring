@@ -8,7 +8,7 @@ async function initSchema() {
       email TEXT UNIQUE NOT NULL,
       name TEXT,
       avatar_url TEXT,
-      role TEXT DEFAULT 'pending' CHECK(role IN ('admin','approved','pending')),
+      role TEXT DEFAULT 'pending' CHECK(role IN ('admin','viewer','pending')),
       created_at TIMESTAMPTZ DEFAULT NOW(),
       approved_at TIMESTAMPTZ
     );

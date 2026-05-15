@@ -27,11 +27,8 @@ export const api = {
   getUsers() {
     return request('/api/auth/users');
   },
-  approveUser(id) {
-    return request(`/api/auth/users/${id}/approve`, { method: 'PUT' });
-  },
-  rejectUser(id) {
-    return request(`/api/auth/users/${id}/reject`, { method: 'PUT' });
+  setUserRole(id, role) {
+    return request(`/api/auth/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
   },
 
   // Groups

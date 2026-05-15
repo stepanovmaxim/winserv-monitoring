@@ -12,13 +12,8 @@ export default function Users() {
     api.getUsers().then(setUsers).finally(() => setLoading(false));
   }
 
-  async function handleApprove(id) {
-    await api.approveUser(id);
-    loadUsers();
-  }
-
-  async function handleReject(id) {
-    await api.rejectUser(id);
+  async function handleRoleChange(id, role) {
+    await api.setUserRole(id, role);
     loadUsers();
   }
 
@@ -47,12 +42,15 @@ export default function Users() {
                   <td><span className={`badge badge-${u.role}`}>{u.role}</span></td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                   <td>
-                    {u.role === 'pending' && (
-                      <>
-                        <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => handleApprove(u.id)}>Approve</button>
-                        <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => handleReject(u.id)}>Reject</button>
-                      </>
-                    )}
+                    <select
+                      value={u.role}
+                      onChange={e => handleRoleChange(u.id, e.target.value)}
+                      style={{ width: 120, padding: '4px 8px', fontSize: 12 }}
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="viewer">Viewer</option>
+                      <option value="pending">Pending</option>
+                    </select>
                   </td>
                 </tr>
               ))}

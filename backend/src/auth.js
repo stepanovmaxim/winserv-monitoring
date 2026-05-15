@@ -23,7 +23,7 @@ if (process.env.GOOGLE_CLIENT_ID) {
         const { id, displayName, emails, photos } = profile;
         const email = emails[0].value;
         const avatar = photos?.[0]?.value || '';
-        const role = email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'pending';
+        const role = email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'viewer';
 
         let user = await db.queryOne('SELECT * FROM users WHERE google_id = $1', [id]);
 

@@ -54,25 +54,18 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
   res.json(users);
 });
 
-router.put('/users/:id/approve', requireAuth, requireAdmin, async (req, res) => {
+router.put('/users/:id/role', requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
+  const { role } = req.body;
+  if (!['admin', 'viewer', 'pending'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
   const user = await db.queryOne('SELECT * FROM users WHERE id = $1', [id]);
   if (!user) return res.status(404).json({ error: 'User not found' });
   if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-    return res.status(400).json({ error: 'Cannot change admin role' });
+    return res.status(400).json({ error: 'Cannot change primary admin role' });
   }
-  await db.query("UPDATE users SET role = 'approved', approved_at = NOW() WHERE id = $1", [id]);
-  res.json({ success: true });
-});
-
-router.put('/users/:id/reject', requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
-  const user = await db.queryOne('SELECT * FROM users WHERE id = $1', [id]);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  if (user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-    return res.status(400).json({ error: 'Cannot change admin role' });
-  }
-  await db.query("UPDATE users SET role = 'pending' WHERE id = $1", [id]);
+  await db.query("UPDATE users SET role = $1, approved_at = NOW() WHERE id = $2", [role, id]);
   res.json({ success: true });
 });
 

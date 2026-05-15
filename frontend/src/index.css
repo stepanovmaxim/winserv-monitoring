@@ -150,7 +150,7 @@ tr:hover { background: var(--bg-hover); }
 .badge-error { background: var(--danger); color: #fff; }
 .badge-warning { background: var(--warning); color: #000; }
 .badge-admin { background: var(--primary); color: #fff; }
-.badge-approved { background: var(--success); color: #fff; }
+.badge-viewer { background: var(--success); color: #fff; }
 .badge-pending { background: var(--warning); color: #000; }
 
 .grid { display: grid; gap: 16px; }
