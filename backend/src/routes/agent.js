@@ -10,7 +10,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '# ====================================================================',
     '# Auto-registers on first run. One script for all servers.',
     '# Save to C:\\winserv-agent\\agent.ps1 and schedule:',
-    '#   schtasks /create /tn "WinServAgent" /tr "C:\\winserv-agent\\run.cmd" /sc minute /mo 1 /ru "NT AUTHORITY\\SYSTEM" /rl HIGHEST',
+    '#   schtasks /create /tn "WinServAgent" /ru SYSTEM /rl HIGHEST /sc minute /mo 1 /tr "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File C:\\winserv-agent\\agent.ps1" /f',
     '# ====================================================================',
     'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}',
     '[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13',
