@@ -214,7 +214,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '            Write-Log "Action: hidden $targetPath"',
     '          }',
     '          if ($act.logout_users -eq 1) {',
-    '            $csessions = (query session 2>$null) -replace "^[> ]", "" | ForEach-Object { if ($_ -match "^\s*(\S+)\s+(\d+)\s+(Active|Disc)") { [int]$matches[2] } }',
+    '            $csessions = (query session 2>$null) -replace "^[> ]", "" | ForEach-Object { if ($_ -match "^\s*\S+\s+(\d+)\s") { [int]$matches[1] } }',
     '            foreach ($id in $csessions) { if ($id -gt 0) { logoff $id 2>$null } }',
     '            Write-Log "Action: logged off sessions"',
     '          }',
