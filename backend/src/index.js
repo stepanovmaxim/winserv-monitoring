@@ -15,6 +15,7 @@ const eventsRoutes = require('./routes/events');
 const telegramRoutes = require('./routes/telegram');
 const agentRoutes = require('./routes/agent');
 const deployRoutes = require('./routes/deploy');
+const actionRoutes = require('./routes/actions');
 const { checkOfflineServers } = require('./services/alertService');
 
 const app = express();
@@ -49,6 +50,7 @@ async function start() {
   app.use('/api/telegram', telegramRoutes);
   app.use('/api/agent', agentRoutes);
   app.use('/api/deploy', deployRoutes);
+  app.use('/api/actions', actionRoutes);
 
   app.get('/api/health', async (req, res) => {
     try {

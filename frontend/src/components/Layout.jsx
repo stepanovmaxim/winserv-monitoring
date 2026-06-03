@@ -65,6 +65,7 @@ export default function Layout() {
           {link('/servers', '🖥', 'Servers')}
           {user?.role === 'admin' && link('/groups', '📁', 'Groups')}
           {user?.role === 'admin' && link('/deploy', '🚀', 'Deploy')}
+          {user?.role === 'admin' && link('/actions', '🔧', 'Actions')}
           {user?.role === 'admin' && link('/settings', '⚙', 'Settings')}
           {user?.role === 'admin' && link('/users', '👥', 'Users')}
         </nav>

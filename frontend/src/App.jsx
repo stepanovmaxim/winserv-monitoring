@@ -8,6 +8,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Users from './pages/Users';
 import Deploy from './pages/Deploy';
+import Actions from './pages/Actions';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/settings" element={<AdminRoute><Settings /></AdminRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
         <Route path="/deploy" element={<AdminRoute><Deploy /></AdminRoute>} />
+        <Route path="/actions" element={<AdminRoute><Actions /></AdminRoute>} />
       </Route>
     </Routes>
   );

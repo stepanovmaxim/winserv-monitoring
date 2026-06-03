@@ -103,8 +103,13 @@ router.post('/', async (req, res) => {
     sendTelegramMessage(`<b>ONLINE</b>: ${prev.hostname} is back`).catch(() => {});
   }
 
+  const actions = await db.queryAll(
+    'SELECT id, label, file_path, enabled AS hidden, logout_users FROM server_actions WHERE server_id = $1',
+    [serverId]
+  );
+
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null });
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions });
 });
 
 router.get('/:serverId', async (req, res) => {

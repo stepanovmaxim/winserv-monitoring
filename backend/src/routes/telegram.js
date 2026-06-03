@@ -58,4 +58,58 @@ router.post('/test', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+router.post('/webhook', async (req, res) => {
+  try {
+    const msg = req.body?.message || req.body?.callback_query?.message;
+    if (!msg) return res.sendStatus(200);
+    const text = (msg.text || '').trim();
+    const chatId = msg.chat?.id;
+    if (!chatId || !text.startsWith('/')) return res.sendStatus(200);
+
+    const { sendTelegramMessage } = require('../services/telegram');
+    const parts = text.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+
+    if (cmd === '/list' || cmd === '/status') {
+      const actions = await db.queryAll(
+        'SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id ORDER BY s.hostname'
+      );
+      const lines = actions.map(a => `${a.hostname}: ${a.label || a.file_path} [${a.enabled ? 'HIDDEN' : 'VISIBLE'}]`);
+      await sendTelegramMessage('<b>Server Actions:</b>\n' + (lines.length ? lines.join('\n') : 'No actions configured'));
+      return res.sendStatus(200);
+    }
+
+    if (cmd === '/hide' || cmd === '/show') {
+      const search = parts.slice(1).join(' ').toLowerCase();
+      if (!search) {
+        await sendTelegramMessage('Usage: /hide <server name or label>');
+        return res.sendStatus(200);
+      }
+      const actions = await db.queryAll(
+        `SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id
+         WHERE LOWER(s.hostname) LIKE $1 OR LOWER(sa.label) LIKE $1`, ['%' + search + '%']
+      );
+      if (actions.length === 0) {
+        await sendTelegramMessage('No actions found for: ' + search);
+        return res.sendStatus(200);
+      }
+      const newState = cmd === '/hide' ? 1 : 0;
+      for (const a of actions) {
+        await db.query('UPDATE server_actions SET enabled = $1 WHERE id = $2', [newState, a.id]);
+      }
+      const status = newState ? 'HIDDEN' : 'VISIBLE';
+      for (const a of actions) {
+        await sendTelegramMessage(`<b>${a.hostname}</b>: ${a.label || a.file_path} → ${status} (agent will apply within 1 min)`);
+      }
+      return res.sendStatus(200);
+    }
+
+    await sendTelegramMessage('Commands: /list /hide &lt;server&gt; /show &lt;server&gt;');
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('[Webhook]', err.message);
+    res.sendStatus(200);
+  }
+});
+
 module.exports = router;
