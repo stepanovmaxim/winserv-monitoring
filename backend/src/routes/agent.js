@@ -217,6 +217,8 @@ function generateUniversalScript(serverUrl, regKey) {
     '          if ($act.logout_users -eq 1) {',
     '            $raw = quser 2>$null',
     '            Write-Log "quser lines: $(($raw | Measure-Object).Count)"',
+    '            if ($raw.Count -gt 1) { Write-Log "quser[1]: $($raw[1])" }',
+    '            if ($raw.Count -gt 2) { Write-Log "quser[2]: $($raw[2])" }',
     '            $csessions = foreach ($line in $raw) {',
     '              if ($line -match "\s+(\d+)\s+(Disc|Active|Conn)") { $id = [int]$matches[1]; if ($id -gt 0) { $id } }',
     '            }',
