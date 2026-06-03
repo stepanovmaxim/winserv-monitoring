@@ -205,6 +205,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '  # --- Process server actions (file rename + user logout) ---',
     '  if ($lastResponse -and $lastResponse.actions) {',
     '    foreach ($act in $lastResponse.actions) {',
+    '      if ($act.applied -ne 0) { continue }',
     '      try {',
     '        $targetPath = $act.file_path',
     '        $hiddenPath = Join-Path (Split-Path $targetPath -Parent) ("~" + (Split-Path $targetPath -Leaf) + ".old")',

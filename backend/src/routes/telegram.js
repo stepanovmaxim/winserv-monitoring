@@ -104,7 +104,7 @@ router.post('/webhook', async (req, res) => {
       }
       const newState = cmd === '/hide' ? 1 : 0;
       for (const a of actions) {
-        await db.query('UPDATE server_actions SET enabled = $1 WHERE id = $2', [newState, a.id]);
+        await db.query('UPDATE server_actions SET enabled = $1, applied = 0 WHERE id = $2', [newState, a.id]);
       }
       const status = newState ? 'HIDDEN' : 'VISIBLE';
       for (const a of actions) {

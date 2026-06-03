@@ -104,7 +104,7 @@ router.post('/', async (req, res) => {
   }
 
   const actions = await db.queryAll(
-    'SELECT id, label, file_path, enabled AS hidden, logout_users FROM server_actions WHERE server_id = $1',
+    'SELECT id, label, file_path, enabled AS hidden, applied, logout_users FROM server_actions WHERE server_id = $1',
     [serverId]
   );
 

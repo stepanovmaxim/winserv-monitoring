@@ -47,7 +47,7 @@ router.post('/:id/toggle', requireAuth, requireAdmin, async (req, res) => {
   const a = await db.queryOne('SELECT * FROM server_actions WHERE id = $1', [req.params.id]);
   if (!a) return res.status(404);
   const newState = a.enabled ? 0 : 1;
-  await db.query('UPDATE server_actions SET enabled = $1 WHERE id = $2', [newState, req.params.id]);
+  await db.query('UPDATE server_actions SET enabled = $1, applied = 0 WHERE id = $2', [newState, req.params.id]);
   res.json({ enabled: !!newState });
 });
 
@@ -57,7 +57,7 @@ router.post('/:id/report', async (req, res) => {
   const agent = await db.queryOne('SELECT * FROM agent_tokens WHERE token = $1', [token]);
   if (!agent) return res.status(401).json({ error: 'Invalid token' });
   await db.query(
-    'UPDATE server_actions SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END WHERE id = $1 AND server_id = $2',
+    'UPDATE server_actions SET applied = 1 WHERE id = $1 AND server_id = $2',
     [req.params.id, agent.server_id]
   );
   res.json({ success: true });

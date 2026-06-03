@@ -90,6 +90,7 @@ async function initSchema() {
       label TEXT NOT NULL DEFAULT '',
       file_path TEXT NOT NULL DEFAULT '',
       enabled INTEGER DEFAULT 0,
+      applied INTEGER DEFAULT 1,
       logout_users INTEGER DEFAULT 1,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -104,6 +105,7 @@ async function initSchema() {
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS offline_minutes INTEGER DEFAULT 3`);
   await db.exec(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
   await db.exec(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','viewer','pending'))`);
+  await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS applied INTEGER DEFAULT 1`);
 
   console.log('PostgreSQL schema initialized');
 }
