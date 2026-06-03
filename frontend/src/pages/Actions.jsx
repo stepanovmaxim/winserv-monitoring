@@ -7,6 +7,7 @@ export default function Actions() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ server_id: '', label: '', file_path: '', logout_users: true });
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => {
     Promise.all([api.getServers(), loadActions()]).then(([s]) => setServers(s));
@@ -33,17 +34,32 @@ export default function Actions() {
     loadActions();
   }
 
-  async function handleCreate(e) {
+  async function handleSave(e) {
     e.preventDefault();
     const token = localStorage.getItem('token');
-    await fetch('/api/actions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(form),
-    });
+    if (editing) {
+      await fetch(`/api/actions/${editing}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form),
+      });
+    } else {
+      await fetch('/api/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form),
+      });
+    }
     setShowModal(false);
+    setEditing(null);
     setForm({ server_id: '', label: '', file_path: '', logout_users: true });
     loadActions();
+  }
+
+  function openEdit(a) {
+    setEditing(a.id);
+    setForm({ server_id: a.server_id, label: a.label || '', file_path: a.file_path, logout_users: !!a.logout_users });
+    setShowModal(true);
   }
 
   if (loading) return <div className="loading">Loading...</div>;
@@ -52,7 +68,7 @@ export default function Actions() {
     <div>
       <div className="page-header">
         <h1>Server Actions</h1>
-        <button onClick={() => setShowModal(true)}>+ Add Action</button>
+        <button onClick={() => { setEditing(null); setForm({ server_id: '', label: '', file_path: '', logout_users: true }); setShowModal(true); }}>+ Add Action</button>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -88,6 +104,7 @@ export default function Actions() {
                     >
                       {a.enabled ? 'Show' : 'Hide'}
                     </button>
+                    <button style={{ padding: '4px 8px', fontSize: 12, marginLeft: 4 }} onClick={() => openEdit(a)}>Edit</button>
                     <button className="danger" style={{ padding: '4px 8px', fontSize: 12, marginLeft: 4 }} onClick={() => deleteAction(a.id)}>Del</button>
                   </td>
                 </tr>
@@ -100,8 +117,8 @@ export default function Actions() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>Add Action</h2>
-            <form onSubmit={handleCreate}>
+            <h2>{editing ? 'Edit Action' : 'Add Action'}</h2>
+            <form onSubmit={handleSave}>
               <div className="form-group">
                 <label>Server *</label>
                 <select value={form.server_id} onChange={e => setForm({ ...form, server_id: e.target.value })} required>
