@@ -46,6 +46,15 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
   }
 
   res.json({ success: true });
+
+  if (bot_token && bot_token.includes(':')) {
+    const nodeFetch = require('node-fetch');
+    const publicUrl = process.env.PUBLIC_URL || ('http://localhost:' + (process.env.PORT || '3000'));
+    const webhookUrl = publicUrl.replace(/\/$/, '') + '/api/telegram/webhook';
+    nodeFetch('https://api.telegram.org/bot' + bot_token + '/setWebhook?url=' + encodeURIComponent(webhookUrl))
+      .then(r => r.json()).then(d => console.log('[Webhook]', d.description || 'registered:', webhookUrl))
+      .catch(() => {});
+  }
 });
 
 router.post('/test', requireAuth, requireAdmin, async (req, res) => {
