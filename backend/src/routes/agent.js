@@ -217,7 +217,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '          if ($act.logout_users -eq 1) {',
     '            $raw = query session 2>$null',
     '            Write-Log "Sessions found: $(($raw | Measure-Object).Count)"',
-    '            $csessions = $raw | Select-String "\s+(\d+)\s+\S+" | ForEach-Object { [int]$_.Matches.Groups[1].Value } | Where-Object { $_ -gt 0 -and $_ -lt 65500 }',
+    '            $csessions = $raw | Select-String "\s+(\d+)\s+\S+" | ForEach-Object { [int]$_.Matches[0].Groups[1].Value } | Where-Object { $_ -gt 0 -and $_ -lt 65500 }',
     '            Write-Log "To logoff: $($csessions -join \",\")"',
     '            foreach ($id in $csessions) {',
     '              try { & C:\\Windows\\System32\\logoff.exe $id 2>&1 | Out-Null; Write-Log "Logoff session $id OK" }',
