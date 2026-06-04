@@ -103,22 +103,8 @@ router.post('/webhook', async (req, res) => {
         '<b>WinServ Bot</b>\n' +
         '/list — show all server actions\n' +
         '/hide &lt;name&gt; — hide file on server\n' +
-        '/show &lt;name&gt; — restore file on server\n' +
-        '/status — show online/offline servers'
+        '/show &lt;name&gt; — restore file on server'
       );
-      return res.sendStatus(200);
-    }
-
-    if (cmd === '/status') {
-      const servers = await db.queryAll('SELECT hostname, status, last_seen FROM servers ORDER BY hostname');
-      const online = servers.filter(s => s.status === 'online').length;
-      const offline = servers.filter(s => s.status === 'offline').length;
-      let reply = `<b>Servers: ${online} online, ${offline} offline</b>\n`;
-      for (const s of servers.slice(0, 15)) {
-        reply += `${s.status === 'online' ? '🟢' : '🔴'} ${s.hostname}\n`;
-      }
-      if (servers.length > 15) reply += `... and ${servers.length - 15} more`;
-      await sendBotReply(config, chatId, reply);
       return res.sendStatus(200);
     }
 
