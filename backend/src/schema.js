@@ -95,6 +95,7 @@ async function initSchema() {
       enabled INTEGER DEFAULT 0,
       applied INTEGER DEFAULT 1,
       logout_users INTEGER DEFAULT 1,
+      allowed_chats TEXT DEFAULT '',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
@@ -112,6 +113,7 @@ async function initSchema() {
   await db.exec(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
   await db.exec(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','viewer','pending'))`);
   await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS applied INTEGER DEFAULT 1`);
+  await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS allowed_chats TEXT DEFAULT ''`);
 
   console.log('PostgreSQL schema initialized');
 }

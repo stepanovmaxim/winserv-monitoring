@@ -94,6 +94,24 @@ router.post('/webhook', async (req, res) => {
       if (token !== config.webhook_secret) return res.sendStatus(403);
     }
 
+    const callback = req.body?.callback_query;
+    if (callback) {
+      const chatId = String(callback.message?.chat?.id);
+      const data = callback.data;
+      if (!chatId || !data) return res.sendStatus(200);
+      const parts = data.split('_');
+      if (parts[0] === 'toggle' && parts[1]) {
+        const actionId = parseInt(parts[1]);
+        await db.query('UPDATE server_actions SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END, applied = 0 WHERE id = $1', [actionId]);
+        await answerCallback(config, callback.id, 'Toggled. Agent will apply within 1 min.');
+        const a = await db.queryOne('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id WHERE sa.id = $1', [actionId]);
+        if (a) {
+          await sendBotReplyRaw(config, chatId, `<b>${a.hostname}</b>: ${a.label || a.file_path} → ${a.enabled ? 'HIDDEN' : 'VISIBLE'}`, null);
+        }
+      }
+      return res.sendStatus(200);
+    }
+
     const msg = req.body?.message || req.body?.callback_query?.message;
     if (!msg) return res.sendStatus(200);
     const text = (msg.text || '').trim();
@@ -115,20 +133,23 @@ router.post('/webhook', async (req, res) => {
     const cmd = parts[0].toLowerCase();
 
     if (cmd === '/start' || cmd === '/help') {
-      const menu = {
-        keyboard: [[{ text: '/list' }, { text: '/help' }]],
-        resize_keyboard: true,
-        one_time_keyboard: false,
-      };
+      const allActions = await db.queryAll('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id ORDER BY s.hostname');
+      const actions = filterActionsForUser(allActions, config, chatId);
+
+      const keyboard = { inline_keyboard: [] };
+      for (const a of actions) {
+        const label = `${a.hostname}: ${a.label || a.file_path}`;
+        keyboard.inline_keyboard.push([{ text: `${a.enabled ? '✅' : '❌'} ${label}`, callback_data: `toggle_${a.id}` }]);
+      }
+      if (keyboard.inline_keyboard.length === 0) {
+        keyboard.inline_keyboard.push([{ text: 'No actions available', callback_data: 'noop' }]);
+      }
+
       await sendBotReplyRaw(config, chatId,
-        (isAdmin
-          ? '<b>WinServ Bot (Admin)</b>\n/list — show all actions\n'
-          : '<b>WinServ Bot</b>\n'
-        ) +
-        '/hide &lt;name&gt; — hide file on server\n' +
-        '/show &lt;name&gt; — restore file on server\n' +
-        '/help — this menu',
-        menu
+        (isAdmin ? '<b>WinServ Bot (Admin)</b>\n' : '<b>WinServ Bot</b>\n') +
+        'Tap to toggle hide/show:\n' +
+        '/help — text commands',
+        { reply_markup: keyboard }
       );
       return res.sendStatus(200);
     }
@@ -194,13 +215,36 @@ async function sendBotReplyRaw(config, chatId, text, extra) {
   const nodeFetch = require('node-fetch');
   try {
     const body = { chat_id: chatId, text, parse_mode: 'HTML' };
-    if (extra) body.reply_markup = JSON.stringify(extra);
+    if (extra) body.reply_markup = extra;
     await nodeFetch(`https://api.telegram.org/bot${config.bot_token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   } catch {}
+}
+
+async function answerCallback(config, callbackId, text) {
+  const nodeFetch = require('node-fetch');
+  try {
+    await nodeFetch(`https://api.telegram.org/bot${config.bot_token}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: callbackId, text, show_alert: false }),
+    });
+  } catch {}
+}
+
+function filterActionsForUser(actions, config, chatId) {
+  const adminList = (config.authorized_chats || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (adminList.includes(chatId)) return actions;
+  const viewerList = (config.viewer_chats || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!viewerList.includes(chatId)) return [];
+  return actions.filter(a => {
+    if (!a.allowed_chats) return false;
+    const allowed = a.allowed_chats.split(',').map(s => s.trim()).filter(Boolean);
+    return allowed.includes(chatId);
+  });
 }
 
 module.exports = router;
