@@ -97,11 +97,11 @@ export default function Settings() {
           {config.enabled && (
             <>
               <div className="form-group">
-                <label>Authorized Admin Chat IDs</label>
+                <label>Admin Chat IDs (alerts + full bot access)</label>
                 <input value={config.authorized_chats || ''} onChange={e => setConfig({ ...config, authorized_chats: e.target.value })} placeholder="123456789" />
               </div>
               <div className="form-group">
-                <label>Viewer Chat IDs (read-only)</label>
+                <label>User Chat IDs (hide/show only)</label>
                 <input value={config.viewer_chats || ''} onChange={e => setConfig({ ...config, viewer_chats: e.target.value })} placeholder="987654321" />
               </div>
               <div className="form-group">

@@ -121,16 +121,23 @@ router.post('/webhook', async (req, res) => {
         one_time_keyboard: false,
       };
       await sendBotReplyRaw(config, chatId,
-        '<b>WinServ Bot</b>\n' +
-        '/list — show all server actions\n' +
+        (isAdmin
+          ? '<b>WinServ Bot (Admin)</b>\n/list — show all actions\n'
+          : '<b>WinServ Bot</b>\n'
+        ) +
         '/hide &lt;name&gt; — hide file on server\n' +
-        '/show &lt;name&gt; — restore file on server',
+        '/show &lt;name&gt; — restore file on server\n' +
+        '/help — this menu',
         menu
       );
       return res.sendStatus(200);
     }
 
     if (cmd === '/list') {
+      if (!isAdmin) {
+        await sendBotReply(config, chatId, '/list requires admin access.');
+        return res.sendStatus(200);
+      }
       const actions = await db.queryAll(
         'SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id ORDER BY s.hostname'
       );
@@ -140,8 +147,8 @@ router.post('/webhook', async (req, res) => {
     }
 
     if (cmd === '/hide' || cmd === '/show') {
-      if (!isAdmin) {
-        await sendBotReply(config, chatId, 'This command requires admin access.');
+      if (!isAdmin && !isViewer) {
+        await sendBotReply(config, chatId, 'This command requires access.');
         return res.sendStatus(200);
       }
       const search = parts.slice(1).join(' ').toLowerCase();
