@@ -7,7 +7,7 @@ const router = express.Router();
 const defaults = {
   bot_token: '', chat_id: '', enabled: false,
   notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true,
-  offline_minutes: 3, authorized_chats: '', webhook_secret: '',
+  offline_minutes: 3, authorized_chats: '', viewer_chats: '', webhook_secret: '',
 };
 
 router.get('/config', requireAuth, requireAdmin, async (req, res) => {
@@ -16,7 +16,7 @@ router.get('/config', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/config', requireAuth, requireAdmin, async (req, res) => {
-  const { bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, webhook_secret } = req.body;
+  const { bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, viewer_chats, webhook_secret } = req.body;
 
   const existing = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
 
@@ -24,8 +24,8 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
     await db.query(
       `UPDATE telegram_config SET bot_token = $1, chat_id = $2, enabled = $3,
        notify_disk = $4, notify_cpu = $5, notify_errors = $6, notify_offline = $7, offline_minutes = $8,
-       authorized_chats = $9, webhook_secret = $10
-       WHERE id = $11`,
+       authorized_chats = $9, viewer_chats = $10, webhook_secret = $11
+       WHERE id = $12`,
       [
         bot_token !== undefined ? bot_token : existing.bot_token,
         chat_id !== undefined ? chat_id : existing.chat_id,
@@ -36,15 +36,16 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
         notify_offline !== undefined ? (notify_offline ? 1 : 0) : existing.notify_offline,
         offline_minutes !== undefined ? parseInt(offline_minutes) || 3 : existing.offline_minutes,
         authorized_chats !== undefined ? authorized_chats : existing.authorized_chats,
+        viewer_chats !== undefined ? viewer_chats : existing.viewer_chats,
         webhook_secret !== undefined ? webhook_secret : existing.webhook_secret,
         existing.id
       ]
     );
   } else {
     await db.query(
-      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, webhook_secret)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, authorized_chats || '', webhook_secret || '']
+      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, viewer_chats, webhook_secret)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, authorized_chats || '', viewer_chats || '', webhook_secret || '']
     );
   }
 
@@ -100,8 +101,12 @@ router.post('/webhook', async (req, res) => {
     if (!chatId || !text) return res.sendStatus(200);
 
     const authorized = (config.authorized_chats || '').split(',').map(s => s.trim()).filter(Boolean);
-    if (authorized.length > 0 && !authorized.includes(chatId)) {
-      await sendBotReply(config, chatId, 'Access denied. Your chat ID is not authorized.');
+    const viewers = (config.viewer_chats || '').split(',').map(s => s.trim()).filter(Boolean);
+    const isAdmin = authorized.includes(chatId);
+    const isViewer = viewers.includes(chatId);
+
+    if (!isAdmin && !isViewer) {
+      await sendBotReply(config, chatId, 'Access denied.');
       return res.sendStatus(200);
     }
 
@@ -135,6 +140,10 @@ router.post('/webhook', async (req, res) => {
     }
 
     if (cmd === '/hide' || cmd === '/show') {
+      if (!isAdmin) {
+        await sendBotReply(config, chatId, 'This command requires admin access.');
+        return res.sendStatus(200);
+      }
       const search = parts.slice(1).join(' ').toLowerCase();
       if (!search) {
         await sendBotReply(config, chatId, 'Usage: ' + cmd + ' &lt;server name or label&gt;');

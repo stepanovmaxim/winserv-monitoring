@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, authorized_chats: '', webhook_secret: '' });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, authorized_chats: '', viewer_chats: '', webhook_secret: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -97,8 +97,12 @@ export default function Settings() {
           {config.enabled && (
             <>
               <div className="form-group">
-                <label>Authorized Chat IDs (comma-separated)</label>
-                <input value={config.authorized_chats || ''} onChange={e => setConfig({ ...config, authorized_chats: e.target.value })} placeholder="123456789,987654321" />
+                <label>Authorized Admin Chat IDs</label>
+                <input value={config.authorized_chats || ''} onChange={e => setConfig({ ...config, authorized_chats: e.target.value })} placeholder="123456789" />
+              </div>
+              <div className="form-group">
+                <label>Viewer Chat IDs (read-only)</label>
+                <input value={config.viewer_chats || ''} onChange={e => setConfig({ ...config, viewer_chats: e.target.value })} placeholder="987654321" />
               </div>
               <div className="form-group">
                 <label>Webhook Secret Token</label>
