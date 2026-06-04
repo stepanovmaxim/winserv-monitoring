@@ -59,6 +59,17 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
     nodeFetch('https://api.telegram.org/bot' + bot_token + '/setWebhook?' + params)
       .then(r => r.json()).then(d => console.log('[Webhook]', d.description || 'registered:', webhookUrl))
       .catch(() => {});
+    const commands = [
+      { command: 'list', description: 'Show all server actions' },
+      { command: 'hide', description: 'Hide file on server' },
+      { command: 'show', description: 'Restore file on server' },
+      { command: 'help', description: 'Bot commands help' },
+    ];
+    nodeFetch('https://api.telegram.org/bot' + bot_token + '/setMyCommands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands }),
+    }).catch(() => {});
   }
 });
 
@@ -99,11 +110,17 @@ router.post('/webhook', async (req, res) => {
     const cmd = parts[0].toLowerCase();
 
     if (cmd === '/start' || cmd === '/help') {
-      await sendBotReply(config, chatId,
+      const menu = {
+        keyboard: [[{ text: '/list' }, { text: '/help' }]],
+        resize_keyboard: true,
+        one_time_keyboard: false,
+      };
+      await sendBotReplyRaw(config, chatId,
         '<b>WinServ Bot</b>\n' +
         '/list — show all server actions\n' +
         '/hide &lt;name&gt; — hide file on server\n' +
-        '/show &lt;name&gt; — restore file on server'
+        '/show &lt;name&gt; — restore file on server',
+        menu
       );
       return res.sendStatus(200);
     }
@@ -154,12 +171,18 @@ router.post('/webhook', async (req, res) => {
 });
 
 async function sendBotReply(config, chatId, text) {
+  return sendBotReplyRaw(config, chatId, text, null);
+}
+
+async function sendBotReplyRaw(config, chatId, text, extra) {
   const nodeFetch = require('node-fetch');
   try {
+    const body = { chat_id: chatId, text, parse_mode: 'HTML' };
+    if (extra) body.reply_markup = JSON.stringify(extra);
     await nodeFetch(`https://api.telegram.org/bot${config.bot_token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+      body: JSON.stringify(body),
     });
   } catch {}
 }
