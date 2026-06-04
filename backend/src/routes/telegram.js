@@ -116,7 +116,9 @@ router.post('/webhook', async (req, res) => {
         await answerCallback(config, callback.id, parts[0] === 'dohide' ? 'Hiding...' : 'Showing...');
         const a = await db.queryOne('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id WHERE sa.id = $1', [actionId]);
         if (a) {
-          await sendBotReplyRaw(config, chatId, `<b>${a.hostname}</b>: ${a.label || a.file_path} → ${newState ? 'HIDING' : 'SHOWING'} (agent applies within 1 min)', null);
+          const actionLabel = a.hostname + ': ' + (a.label || a.file_path);
+          const newStatus = newState ? 'HIDING' : 'SHOWING';
+          await sendBotReplyRaw(config, chatId, '<b>' + actionLabel + '</b> → ' + newStatus + ' (agent applies within 1 min)', null);
         }
       }
       return res.sendStatus(200);
