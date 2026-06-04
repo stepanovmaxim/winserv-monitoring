@@ -109,6 +109,16 @@ router.post('/webhook', async (req, res) => {
           await sendBotReplyRaw(config, chatId, `<b>${a.hostname}</b>: ${a.label || a.file_path} → ${a.enabled ? 'HIDDEN' : 'VISIBLE'}`, null);
         }
       }
+      if ((parts[0] === 'dohide' || parts[0] === 'doshow') && parts[1]) {
+        const actionId = parseInt(parts[1]);
+        const newState = parts[0] === 'dohide' ? 1 : 0;
+        await db.query('UPDATE server_actions SET enabled = $1, applied = 0 WHERE id = $2', [newState, actionId]);
+        await answerCallback(config, callback.id, parts[0] === 'dohide' ? 'Hiding...' : 'Showing...');
+        const a = await db.queryOne('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id WHERE sa.id = $1', [actionId]);
+        if (a) {
+          await sendBotReplyRaw(config, chatId, `<b>${a.hostname}</b>: ${a.label || a.file_path} → ${newState ? 'HIDING' : 'SHOWING'} (agent applies within 1 min)', null);
+        }
+      }
       return res.sendStatus(200);
     }
 
@@ -172,6 +182,18 @@ router.post('/webhook', async (req, res) => {
         return res.sendStatus(200);
       }
       const search = parts.slice(1).join(' ').toLowerCase();
+      if (!search) {
+        const wantHide = cmd === '/hide';
+        const keyboard = { inline_keyboard: [] };
+        for (const a of myActions) {
+          const label = `${a.hostname}: ${a.label || a.file_path}`;
+          const cbData = `${cmd === '/hide' ? 'dohide' : 'doshow'}_${a.id}`;
+          keyboard.inline_keyboard.push([{ text: label, callback_data: cbData }]);
+        }
+        keyboard.inline_keyboard.push([{ text: '« Cancel', callback_data: 'noop' }]);
+        await sendBotReplyRaw(config, chatId, 'Choose server to ' + (cmd === '/hide' ? 'hide:' : 'show:'), { reply_markup: keyboard });
+        return res.sendStatus(200);
+      }
       if (!search) {
         await sendBotReply(config, chatId, 'Usage: ' + cmd + ' &lt;server name or label&gt;');
         return res.sendStatus(200);
