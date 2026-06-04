@@ -158,7 +158,7 @@ router.post('/webhook', async (req, res) => {
         (isAdmin ? '<b>WinServ Bot (Admin)</b>\n' : '<b>WinServ Bot</b>\n') +
         'Tap to toggle hide/show:\n' +
         '/help — text commands',
-        { reply_markup: keyboard }
+        keyboard
       );
       return res.sendStatus(200);
     }
@@ -193,7 +193,7 @@ router.post('/webhook', async (req, res) => {
           keyboard.inline_keyboard.push([{ text: label, callback_data: cbData }]);
         }
         keyboard.inline_keyboard.push([{ text: '« Cancel', callback_data: 'noop' }]);
-        await sendBotReplyRaw(config, chatId, 'Choose server to ' + (cmd === '/hide' ? 'hide:' : 'show:'), { reply_markup: keyboard });
+        await sendBotReplyRaw(config, chatId, 'Choose server to ' + (cmd === '/hide' ? 'hide:' : 'show:'), keyboard);
         return res.sendStatus(200);
       }
       if (!search) {
