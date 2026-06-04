@@ -7,7 +7,7 @@ const router = express.Router();
 const defaults = {
   bot_token: '', chat_id: '', enabled: false,
   notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true,
-  offline_minutes: 3,
+  offline_minutes: 3, authorized_chats: '', webhook_secret: '',
 };
 
 router.get('/config', requireAuth, requireAdmin, async (req, res) => {
@@ -16,15 +16,16 @@ router.get('/config', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/config', requireAuth, requireAdmin, async (req, res) => {
-  const { bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes } = req.body;
+  const { bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, webhook_secret } = req.body;
 
   const existing = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
 
   if (existing) {
     await db.query(
       `UPDATE telegram_config SET bot_token = $1, chat_id = $2, enabled = $3,
-       notify_disk = $4, notify_cpu = $5, notify_errors = $6, notify_offline = $7, offline_minutes = $8
-       WHERE id = $9`,
+       notify_disk = $4, notify_cpu = $5, notify_errors = $6, notify_offline = $7, offline_minutes = $8,
+       authorized_chats = $9, webhook_secret = $10
+       WHERE id = $11`,
       [
         bot_token !== undefined ? bot_token : existing.bot_token,
         chat_id !== undefined ? chat_id : existing.chat_id,
@@ -34,14 +35,16 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
         notify_errors !== undefined ? (notify_errors ? 1 : 0) : existing.notify_errors,
         notify_offline !== undefined ? (notify_offline ? 1 : 0) : existing.notify_offline,
         offline_minutes !== undefined ? parseInt(offline_minutes) || 3 : existing.offline_minutes,
+        authorized_chats !== undefined ? authorized_chats : existing.authorized_chats,
+        webhook_secret !== undefined ? webhook_secret : existing.webhook_secret,
         existing.id
       ]
     );
   } else {
     await db.query(
-      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3]
+      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, webhook_secret)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, authorized_chats || '', webhook_secret || '']
     );
   }
 
@@ -51,7 +54,9 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
     const nodeFetch = require('node-fetch');
     const publicUrl = process.env.PUBLIC_URL || ('http://localhost:' + (process.env.PORT || '3000'));
     const webhookUrl = publicUrl.replace(/\/$/, '') + '/api/telegram/webhook';
-    nodeFetch('https://api.telegram.org/bot' + bot_token + '/setWebhook?url=' + encodeURIComponent(webhookUrl))
+    const secret = webhook_secret || '';
+    const params = 'url=' + encodeURIComponent(webhookUrl) + (secret ? '&secret_token=' + encodeURIComponent(secret) : '');
+    nodeFetch('https://api.telegram.org/bot' + bot_token + '/setWebhook?' + params)
       .then(r => r.json()).then(d => console.log('[Webhook]', d.description || 'registered:', webhookUrl))
       .catch(() => {});
   }
@@ -69,29 +74,67 @@ router.post('/test', requireAuth, requireAdmin, async (req, res) => {
 
 router.post('/webhook', async (req, res) => {
   try {
+    const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
+    if (!config) return res.sendStatus(200);
+
+    if (config.webhook_secret) {
+      const token = req.headers['x-telegram-bot-api-secret-token'];
+      if (token !== config.webhook_secret) return res.sendStatus(403);
+    }
+
     const msg = req.body?.message || req.body?.callback_query?.message;
     if (!msg) return res.sendStatus(200);
     const text = (msg.text || '').trim();
-    const chatId = msg.chat?.id;
-    if (!chatId || !text.startsWith('/')) return res.sendStatus(200);
+    const chatId = String(msg.chat?.id);
+    if (!chatId || !text) return res.sendStatus(200);
+
+    const authorized = (config.authorized_chats || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (authorized.length > 0 && !authorized.includes(chatId)) {
+      await sendBotReply(config, chatId, 'Access denied. Your chat ID is not authorized.');
+      return res.sendStatus(200);
+    }
 
     const { sendTelegramMessage } = require('../services/telegram');
     const parts = text.split(/\s+/);
     const cmd = parts[0].toLowerCase();
 
-    if (cmd === '/list' || cmd === '/status') {
+    if (cmd === '/start' || cmd === '/help') {
+      await sendBotReply(config, chatId,
+        '<b>WinServ Bot</b>\n' +
+        '/list — show all server actions\n' +
+        '/hide &lt;name&gt; — hide file on server\n' +
+        '/show &lt;name&gt; — restore file on server\n' +
+        '/status — show online/offline servers'
+      );
+      return res.sendStatus(200);
+    }
+
+    if (cmd === '/status') {
+      const servers = await db.queryAll('SELECT hostname, status, last_seen FROM servers ORDER BY hostname');
+      const online = servers.filter(s => s.status === 'online').length;
+      const offline = servers.filter(s => s.status === 'offline').length;
+      let reply = `<b>Servers: ${online} online, ${offline} offline</b>\n`;
+      for (const s of servers.slice(0, 15)) {
+        reply += `${s.status === 'online' ? '🟢' : '🔴'} ${s.hostname}\n`;
+      }
+      if (servers.length > 15) reply += `... and ${servers.length - 15} more`;
+      await sendBotReply(config, chatId, reply);
+      return res.sendStatus(200);
+    }
+
+    if (cmd === '/list') {
       const actions = await db.queryAll(
         'SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id ORDER BY s.hostname'
       );
       const lines = actions.map(a => `${a.hostname}: ${a.label || a.file_path} [${a.enabled ? 'HIDDEN' : 'VISIBLE'}]`);
-      await sendTelegramMessage('<b>Server Actions:</b>\n' + (lines.length ? lines.join('\n') : 'No actions configured'));
+      await sendBotReply(config, chatId, '<b>Actions:</b>\n' + (lines.length ? lines.join('\n') : 'No actions configured'));
       return res.sendStatus(200);
     }
 
     if (cmd === '/hide' || cmd === '/show') {
       const search = parts.slice(1).join(' ').toLowerCase();
       if (!search) {
-        await sendTelegramMessage('Usage: /hide <server name or label>');
+        await sendBotReply(config, chatId, 'Usage: ' + cmd + ' &lt;server name or label&gt;');
         return res.sendStatus(200);
       }
       const actions = await db.queryAll(
@@ -99,7 +142,7 @@ router.post('/webhook', async (req, res) => {
          WHERE LOWER(s.hostname) LIKE $1 OR LOWER(sa.label) LIKE $1`, ['%' + search + '%']
       );
       if (actions.length === 0) {
-        await sendTelegramMessage('No actions found for: ' + search);
+        await sendBotReply(config, chatId, 'No actions found for: ' + search);
         return res.sendStatus(200);
       }
       const newState = cmd === '/hide' ? 1 : 0;
@@ -107,18 +150,32 @@ router.post('/webhook', async (req, res) => {
         await db.query('UPDATE server_actions SET enabled = $1, applied = 0 WHERE id = $2', [newState, a.id]);
       }
       const status = newState ? 'HIDDEN' : 'VISIBLE';
+      let reply = '';
       for (const a of actions) {
-        await sendTelegramMessage(`<b>${a.hostname}</b>: ${a.label || a.file_path} → ${status} (agent will apply within 1 min)`);
+        reply += `<b>${a.hostname}</b>: ${a.label || a.file_path} → ${status}\n`;
       }
+      reply += 'Agent will apply within 1 minute.';
+      await sendBotReply(config, chatId, reply);
       return res.sendStatus(200);
     }
 
-    await sendTelegramMessage('Commands: /list /hide &lt;server&gt; /show &lt;server&gt;');
+    await sendBotReply(config, chatId, 'Unknown command. /help for list.');
     res.sendStatus(200);
   } catch (err) {
     console.error('[Webhook]', err.message);
     res.sendStatus(200);
   }
 });
+
+async function sendBotReply(config, chatId, text) {
+  const nodeFetch = require('node-fetch');
+  try {
+    await nodeFetch(`https://api.telegram.org/bot${config.bot_token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+    });
+  } catch {}
+}
 
 module.exports = router;

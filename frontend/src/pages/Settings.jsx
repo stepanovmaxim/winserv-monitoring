@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3 });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, authorized_chats: '', webhook_secret: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -93,6 +93,18 @@ export default function Settings() {
               <label>Offline detection (minutes)</label>
               <input type="number" min="1" max="30" value={config.offline_minutes || 3} onChange={e => setConfig({ ...config, offline_minutes: e.target.value })} style={{ width: 100 }} />
             </div>
+          )}
+          {config.enabled && (
+            <>
+              <div className="form-group">
+                <label>Authorized Chat IDs (comma-separated)</label>
+                <input value={config.authorized_chats || ''} onChange={e => setConfig({ ...config, authorized_chats: e.target.value })} placeholder="123456789,987654321" />
+              </div>
+              <div className="form-group">
+                <label>Webhook Secret Token</label>
+                <input value={config.webhook_secret || ''} onChange={e => setConfig({ ...config, webhook_secret: e.target.value })} placeholder="random-secret-string" />
+              </div>
+            </>
           )}
           <div className="form-actions">
             <button type="submit" disabled={saving}>Save</button>
