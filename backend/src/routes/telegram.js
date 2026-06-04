@@ -119,12 +119,9 @@ router.post('/webhook', async (req, res) => {
     if (!chatId || !text) return res.sendStatus(200);
 
     const authorized = (config.authorized_chats || '').split(',').map(s => s.trim()).filter(Boolean);
-    const viewers = (config.viewer_chats || '').split(',').map(s => s.trim()).filter(Boolean);
     const isAdmin = authorized.includes(chatId);
-    const isViewer = viewers.includes(chatId);
 
-    if (!isAdmin && !isViewer) {
-      await sendBotReply(config, chatId, 'Access denied.');
+    if (!isAdmin && !text.startsWith('/')) {
       return res.sendStatus(200);
     }
 
@@ -168,8 +165,10 @@ router.post('/webhook', async (req, res) => {
     }
 
     if (cmd === '/hide' || cmd === '/show') {
-      if (!isAdmin && !isViewer) {
-        await sendBotReply(config, chatId, 'This command requires access.');
+      const allActions = await db.queryAll('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id');
+      const myActions = filterActionsForUser(allActions, config, chatId);
+      if (myActions.length === 0) {
+        await sendBotReply(config, chatId, 'No actions available or access denied.');
         return res.sendStatus(200);
       }
       const search = parts.slice(1).join(' ').toLowerCase();
@@ -238,8 +237,6 @@ async function answerCallback(config, callbackId, text) {
 function filterActionsForUser(actions, config, chatId) {
   const adminList = (config.authorized_chats || '').split(',').map(s => s.trim()).filter(Boolean);
   if (adminList.includes(chatId)) return actions;
-  const viewerList = (config.viewer_chats || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (!viewerList.includes(chatId)) return [];
   return actions.filter(a => {
     if (!a.allowed_chats) return false;
     const allowed = a.allowed_chats.split(',').map(s => s.trim()).filter(Boolean);
