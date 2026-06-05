@@ -131,9 +131,11 @@ router.post('/webhook', async (req, res) => {
     if (!chatId || !text) return res.sendStatus(200);
 
     const authorized = (config.authorized_chats || '').split(',').map(s => s.trim()).filter(Boolean);
+    const viewers = (config.viewer_chats || '').split(',').map(s => s.trim()).filter(Boolean);
     const isAdmin = authorized.includes(chatId);
+    const isViewer = viewers.includes(chatId);
 
-    if (!isAdmin && !text.startsWith('/')) {
+    if (!isAdmin && !isViewer) {
       return res.sendStatus(200);
     }
 
@@ -164,6 +166,10 @@ router.post('/webhook', async (req, res) => {
     }
 
     if (cmd === '/list') {
+      if (!isAdmin) {
+        await sendBotReply(config, chatId, '/list requires admin access.');
+        return res.sendStatus(200);
+      }
       if (!isAdmin) {
         await sendBotReply(config, chatId, '/list requires admin access.');
         return res.sendStatus(200);
@@ -260,12 +266,9 @@ async function answerCallback(config, callbackId, text) {
 
 function filterActionsForUser(actions, config, chatId) {
   const adminList = (config.authorized_chats || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (adminList.includes(chatId)) return actions;
-  return actions.filter(a => {
-    if (!a.allowed_chats) return false;
-    const allowed = a.allowed_chats.split(',').map(s => s.trim()).filter(Boolean);
-    return allowed.includes(chatId);
-  });
+  const viewerList = (config.viewer_chats || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (adminList.includes(chatId) || viewerList.includes(chatId)) return actions;
+  return [];
 }
 
 module.exports = router;

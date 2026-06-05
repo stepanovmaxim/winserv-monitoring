@@ -97,8 +97,12 @@ export default function Settings() {
           {config.enabled && (
             <>
               <div className="form-group">
-                <label>Admin Chat IDs (full access to all actions)</label>
+                <label>Admin Chat IDs (full access + alerts)</label>
                 <input value={config.authorized_chats || ''} onChange={e => setConfig({ ...config, authorized_chats: e.target.value })} placeholder="123456789" />
+              </div>
+              <div className="form-group">
+                <label>Viewer Chat IDs (hide/show commands)</label>
+                <input value={config.viewer_chats || ''} onChange={e => setConfig({ ...config, viewer_chats: e.target.value })} placeholder="-10012345,987654321" />
               </div>
               <div className="form-group">
                 <label>Webhook Secret Token</label>
