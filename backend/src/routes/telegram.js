@@ -141,7 +141,8 @@ router.post('/webhook', async (req, res) => {
 
     const { sendTelegramMessage } = require('../services/telegram');
     const parts = text.split(/\s+/);
-    const cmd = parts[0].toLowerCase();
+    let cmd = parts[0].toLowerCase();
+    if (cmd.includes('@')) cmd = cmd.split('@')[0];
 
     if (cmd === '/start' || cmd === '/help') {
       const allActions = await db.queryAll('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id ORDER BY s.hostname');
