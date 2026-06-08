@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, authorized_chats: '', viewer_chats: '', webhook_secret: '' });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -93,6 +93,22 @@ export default function Settings() {
               <label>Offline detection (minutes)</label>
               <input type="number" min="1" max="30" value={config.offline_minutes || 3} onChange={e => setConfig({ ...config, offline_minutes: e.target.value })} style={{ width: 100 }} />
             </div>
+          )}
+          {config.enabled && (
+            <>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>Alert Thresholds (%)</label>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <input type="number" min="1" max="100" value={config.cpu_threshold || 90} onChange={e => setConfig({ ...config, cpu_threshold: e.target.value })} placeholder="CPU %" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <input type="number" min="1" max="100" value={config.memory_threshold || 95} onChange={e => setConfig({ ...config, memory_threshold: e.target.value })} placeholder="Memory %" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <input type="number" min="1" max="100" value={config.disk_threshold || 90} onChange={e => setConfig({ ...config, disk_threshold: e.target.value })} placeholder="Disk %" />
+                </div>
+              </div>
+            </>
           )}
           {config.enabled && (
             <>

@@ -7,7 +7,8 @@ const router = express.Router();
 const defaults = {
   bot_token: '', chat_id: '', enabled: false,
   notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true,
-  offline_minutes: 3, authorized_chats: '', viewer_chats: '', webhook_secret: '',
+  offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90,
+  authorized_chats: '', viewer_chats: '', webhook_secret: '',
 };
 
 router.get('/config', requireAuth, requireAdmin, async (req, res) => {
@@ -16,7 +17,7 @@ router.get('/config', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/config', requireAuth, requireAdmin, async (req, res) => {
-  const { bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, viewer_chats, webhook_secret } = req.body;
+  const { bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret } = req.body;
 
   const existing = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
 
@@ -24,8 +25,9 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
     await db.query(
       `UPDATE telegram_config SET bot_token = $1, chat_id = $2, enabled = $3,
        notify_disk = $4, notify_cpu = $5, notify_errors = $6, notify_offline = $7, offline_minutes = $8,
-       authorized_chats = $9, viewer_chats = $10, webhook_secret = $11
-       WHERE id = $12`,
+       cpu_threshold = $9, memory_threshold = $10, disk_threshold = $11,
+       authorized_chats = $12, viewer_chats = $13, webhook_secret = $14
+       WHERE id = $15`,
       [
         bot_token !== undefined ? bot_token : existing.bot_token,
         chat_id !== undefined ? chat_id : existing.chat_id,
@@ -35,6 +37,9 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
         notify_errors !== undefined ? (notify_errors ? 1 : 0) : existing.notify_errors,
         notify_offline !== undefined ? (notify_offline ? 1 : 0) : existing.notify_offline,
         offline_minutes !== undefined ? parseInt(offline_minutes) || 3 : existing.offline_minutes,
+        cpu_threshold !== undefined ? parseInt(cpu_threshold) || 90 : existing.cpu_threshold,
+        memory_threshold !== undefined ? parseInt(memory_threshold) || 95 : existing.memory_threshold,
+        disk_threshold !== undefined ? parseInt(disk_threshold) || 90 : existing.disk_threshold,
         authorized_chats !== undefined ? authorized_chats : existing.authorized_chats,
         viewer_chats !== undefined ? viewer_chats : existing.viewer_chats,
         webhook_secret !== undefined ? webhook_secret : existing.webhook_secret,
@@ -43,9 +48,9 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
     );
   } else {
     await db.query(
-      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, authorized_chats, viewer_chats, webhook_secret)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, authorized_chats || '', viewer_chats || '', webhook_secret || '']
+      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, parseInt(cpu_threshold) || 90, parseInt(memory_threshold) || 95, parseInt(disk_threshold) || 90, authorized_chats || '', viewer_chats || '', webhook_secret || '']
     );
   }
 

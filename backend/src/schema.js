@@ -75,6 +75,9 @@ async function initSchema() {
       notify_errors INTEGER DEFAULT 1,
       notify_offline INTEGER DEFAULT 1,
       offline_minutes INTEGER DEFAULT 3,
+      cpu_threshold INTEGER DEFAULT 90,
+      memory_threshold INTEGER DEFAULT 95,
+      disk_threshold INTEGER DEFAULT 90,
       authorized_chats TEXT DEFAULT '',
       viewer_chats TEXT DEFAULT '',
       webhook_secret TEXT DEFAULT ''
@@ -110,6 +113,9 @@ async function initSchema() {
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS authorized_chats TEXT DEFAULT ''`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS viewer_chats TEXT DEFAULT ''`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS webhook_secret TEXT DEFAULT ''`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS cpu_threshold INTEGER DEFAULT 90`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS memory_threshold INTEGER DEFAULT 95`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS disk_threshold INTEGER DEFAULT 90`);
   await db.exec(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
   await db.exec(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','viewer','pending'))`);
   await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS applied INTEGER DEFAULT 1`);
