@@ -99,13 +99,16 @@ export default function Settings() {
               <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>Alert Thresholds (%)</label>
               <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
                 <div style={{ flex: 1 }}>
-                  <input type="number" min="1" max="100" value={config.cpu_threshold || 90} onChange={e => setConfig({ ...config, cpu_threshold: e.target.value })} placeholder="CPU %" />
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt; %</label>
+                  <input type="number" min="1" max="100" value={config.cpu_threshold || 90} onChange={e => setConfig({ ...config, cpu_threshold: e.target.value })} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <input type="number" min="1" max="100" value={config.memory_threshold || 95} onChange={e => setConfig({ ...config, memory_threshold: e.target.value })} placeholder="Memory %" />
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Memory &gt; %</label>
+                  <input type="number" min="1" max="100" value={config.memory_threshold || 95} onChange={e => setConfig({ ...config, memory_threshold: e.target.value })} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <input type="number" min="1" max="100" value={config.disk_threshold || 90} onChange={e => setConfig({ ...config, disk_threshold: e.target.value })} placeholder="Disk %" />
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt; %</label>
+                  <input type="number" min="1" max="100" value={config.disk_threshold || 90} onChange={e => setConfig({ ...config, disk_threshold: e.target.value })} />
                 </div>
               </div>
             </>
