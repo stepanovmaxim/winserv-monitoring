@@ -84,10 +84,5 @@ async function checkOfflineServers() {
     console.error('[Offline check]', err.message);
   }
 }
-    }
-  } catch (err) {
-    console.error('[Offline check]', err.message);
-  }
-}
 
 module.exports = { checkAlerts, checkOfflineServers };
