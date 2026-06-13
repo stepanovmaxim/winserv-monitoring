@@ -69,18 +69,21 @@ async function checkAlerts(serverId, metrics) {
 async function checkOfflineServers() {
   try {
     const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
-    const minutes = (config && config.offline_minutes) ? parseInt(config.offline_minutes) : 3;
 
     const justOffline = await db.queryAll(
       `UPDATE servers SET status = 'offline'
-       WHERE status = 'online' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '${minutes} minutes')
+       WHERE status = 'online' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '${(config && config.offline_minutes) ? parseInt(config.offline_minutes) : 3} minutes')
        RETURNING hostname`
     );
 
-    if (config && config.notify_offline && Date.now() - serverStart > GRACE_MS) {
-      for (const s of justOffline) {
-        sendTelegramMessage(`<b>OFFLINE</b>: ${s.hostname} — no contact for ${minutes}+ minutes`).catch(() => {});
-      }
+    if (config && config.notify_offline && justOffline.length > 0) {
+      const names = justOffline.map(s => s.hostname).join(', ');
+      sendTelegramMessage(`<b>OFFLINE (${justOffline.length})</b>: ${names}`).catch(() => {});
+    }
+  } catch (err) {
+    console.error('[Offline check]', err.message);
+  }
+}
     }
   } catch (err) {
     console.error('[Offline check]', err.message);

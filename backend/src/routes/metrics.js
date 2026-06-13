@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { checkAlerts } = require('../services/alertService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
+const lastOnline = new Map();
 const router = express.Router();
 
 router.post('/', async (req, res) => {
@@ -99,8 +100,14 @@ router.post('/', async (req, res) => {
   await db.query("UPDATE servers SET last_seen = NOW(), status = 'online' WHERE id = $1", [serverId]);
 
   if (prev && prev.status === 'offline') {
-    const { sendTelegramMessage } = require('../services/telegram');
-    sendTelegramMessage(`<b>ONLINE</b>: ${prev.hostname} is back`).catch(() => {});
+    const key = serverId + ':online';
+    const now = Date.now();
+    const last = lastOnline.get(key) || 0;
+    if (now - last > 300000) {
+      lastOnline.set(key, now);
+      const { sendTelegramMessage } = require('../services/telegram');
+      sendTelegramMessage(`<b>ONLINE</b>: ${prev.hostname} is back`).catch(() => {});
+    }
   }
 
   const actions = await db.queryAll(
