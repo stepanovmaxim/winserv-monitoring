@@ -9,19 +9,28 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 pool.on('error', (err) => {
   console.error('PostgreSQL pool error:', err.message);
 });
 
-async function query(sql, params = []) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(sql, params);
-    return result;
-  } finally {
-    client.release();
+async function query(sql, params = [], retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const client = await pool.connect();
+      try {
+        const result = await client.query(sql, params);
+        return result;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      if (i === retries) throw err;
+      console.error('DB query retry', i + 1, err.message);
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
 }
 
