@@ -5,14 +5,36 @@ const alertActive = new Map();
 const serverStart = Date.now();
 const GRACE_MS = 2 * 60 * 1000;
 
+// Mirror flag changes to the DB so a restart doesn't re-fire alerts that were
+// already active (or miss recoveries that happened while we were down).
+function persistState(key, active) {
+  db.query(
+    `INSERT INTO alert_state (key, active, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET active = $2, updated_at = NOW()`,
+    [key, active ? 1 : 0]
+  ).catch(err => console.error('[Alert state] persist:', err.message));
+}
+
+async function loadAlertState() {
+  try {
+    const rows = await db.queryAll('SELECT key, active FROM alert_state');
+    for (const r of rows) alertActive.set(r.key, !!r.active);
+    console.log(`[Alert state] Restored ${rows.length} flags`);
+  } catch (err) {
+    console.error('[Alert state] load:', err.message);
+  }
+}
+
 function checkThreshold(key, currentValue, triggerAt, recoverAt) {
   const wasAbove = alertActive.get(key) || false;
   if (!wasAbove && currentValue > triggerAt) {
     alertActive.set(key, true);
+    persistState(key, true);
     return 'triggered';
   }
   if (wasAbove && currentValue < recoverAt) {
     alertActive.set(key, false);
+    persistState(key, false);
     return 'recovered';
   }
   return null;
@@ -85,4 +107,4 @@ async function checkOfflineServers() {
   }
 }
 
-module.exports = { checkAlerts, checkOfflineServers };
+module.exports = { checkAlerts, checkOfflineServers, loadAlertState };

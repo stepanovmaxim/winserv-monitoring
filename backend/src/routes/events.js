@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
+const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -83,7 +84,7 @@ router.post('/', async (req, res) => {
   res.json({ success: true, count: events.length });
 });
 
-router.get('/:serverId', async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
   const { serverId } = req.params;
   const { level, limit } = req.query;
 

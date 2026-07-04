@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { checkAlerts } = require('../services/alertService');
+const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const lastOnline = new Map();
@@ -119,7 +120,7 @@ router.post('/', async (req, res) => {
   res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions });
 });
 
-router.get('/:serverId', async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
   const { serverId } = req.params;
   const { hours } = req.query;
   const lookback = hours || 24;

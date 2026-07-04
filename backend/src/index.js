@@ -18,7 +18,8 @@ const telegramRoutes = require('./routes/telegram');
 const agentRoutes = require('./routes/agent');
 const deployRoutes = require('./routes/deploy');
 const actionRoutes = require('./routes/actions');
-const { checkOfflineServers } = require('./services/alertService');
+const { checkOfflineServers, loadAlertState } = require('./services/alertService');
+const { purgeOldData } = require('./services/retentionService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -26,8 +27,19 @@ const PORT = process.env.PORT || 3000;
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'Stepanov.maxim@gmail.com';
 
+// A dropped/aborted client connection is normal here (remote agents over a
+// tunnel), not a server fault. Recognise those so we never treat them as fatal.
+function isClientDisconnect(err) {
+  if (!err) return false;
+  return err.type === 'request.aborted'
+    || err.code === 'ECONNRESET'
+    || err.code === 'ECONNABORTED'
+    || err.message === 'request aborted';
+}
+
 async function start() {
   await initSchema();
+  await loadAlertState();
 
   const adminExists = await db.queryOne('SELECT id FROM users WHERE email = $1', [ADMIN_EMAIL]);
   if (!adminExists) {
@@ -81,12 +93,41 @@ async function start() {
     });
   }
 
+  // Error handler. Agents on flaky links (Cloudflare Tunnel) frequently abort
+  // mid-request; body-parser turns that into a BadRequestError. Swallow client
+  // disconnects quietly, respond 500 for everything else — never crash.
+  app.use((err, req, res, next) => {
+    if (isClientDisconnect(err)) return;
+    console.error('Route error:', err.message);
+    if (res.headersSent) return;
+    res.status(err.status || 500).json({ error: 'Internal server error' });
+  });
+
   app.listen(PORT, () => {
     console.log(`WinServ Monitoring API running on port ${PORT}`);
   });
 
   setInterval(checkOfflineServers, 30000);
+
+  // Prune old metrics/events shortly after boot, then once a day.
+  setTimeout(purgeOldData, 60000);
+  setInterval(purgeOldData, 24 * 60 * 60 * 1000);
 }
+
+// Last-resort guards. Only benign client disconnects are swallowed; any other
+// uncaught error still exits so PM2 restarts on a genuinely broken state.
+process.on('uncaughtException', (err) => {
+  if (isClientDisconnect(err)) {
+    console.warn('Ignored client disconnect:', err.message);
+    return;
+  }
+  console.error('Uncaught exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+});
 
 start().catch(err => {
   console.error('Failed to start server:', err);

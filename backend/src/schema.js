@@ -90,6 +90,12 @@ async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS alert_state (
+      key TEXT PRIMARY KEY,
+      active INTEGER DEFAULT 0,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS server_actions (
       id SERIAL PRIMARY KEY,
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
