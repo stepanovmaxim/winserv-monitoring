@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6 });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -141,6 +141,15 @@ export default function Settings() {
               <div className="form-group">
                 <label>Webhook Secret Token</label>
                 <input value={config.webhook_secret || ''} onChange={e => setConfig({ ...config, webhook_secret: e.target.value })} placeholder="random-secret-string" />
+              </div>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>Extra alert channel (Slack / Teams / custom webhook)</label>
+              <div className="toggle-wrapper" onClick={() => setConfig({ ...config, alert_webhook_enabled: !config.alert_webhook_enabled })} style={{ marginBottom: 8 }}>
+                <div className={`toggle ${config.alert_webhook_enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
+                <label>Send alerts to webhook</label>
+              </div>
+              <div className="form-group">
+                <label>Alert webhook URL</label>
+                <input value={config.alert_webhook_url || ''} onChange={e => setConfig({ ...config, alert_webhook_url: e.target.value })} placeholder="https://hooks.slack.com/services/..." />
               </div>
             </>
           )}

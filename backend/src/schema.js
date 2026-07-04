@@ -228,6 +228,13 @@ async function initSchema() {
   await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS schedule_hide TEXT DEFAULT ''`);
   await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS schedule_show TEXT DEFAULT ''`);
 
+  // Agent self-reported version, for the fleet update view.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS agent_version TEXT DEFAULT ''`);
+
+  // Optional extra alert channel (webhook — Slack/Teams/custom).
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS alert_webhook_url TEXT DEFAULT ''`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS alert_webhook_enabled INTEGER DEFAULT 0`);
+
   console.log('PostgreSQL schema initialized');
 }
 

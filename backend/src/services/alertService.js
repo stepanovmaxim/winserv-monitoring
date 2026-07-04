@@ -2,6 +2,7 @@ const db = require('../db');
 const { sendTelegramMessage } = require('./telegram');
 const { broadcast } = require('./sseService');
 const { isMuted } = require('./maintenanceService');
+const { sendWebhookAlert } = require('./webhookService');
 
 const alertActive = new Map();
 const onlineCooldown = new Map();
@@ -122,7 +123,9 @@ async function checkAlerts(serverId, metrics) {
   }
 
   if (alerts.length > 0 && Date.now() - serverStart > GRACE_MS) {
-    sendTelegramMessage(alerts.join('\n')).catch(err => console.error('[Alert]', err.message));
+    const msg = alerts.join('\n');
+    sendTelegramMessage(msg).catch(err => console.error('[Alert]', err.message));
+    sendWebhookAlert(msg);
   }
 }
 
@@ -165,7 +168,9 @@ async function checkOfflineServers() {
 
     if (config && config.notify_offline && toNotify.length > 0) {
       const names = toNotify.map(s => s.hostname).join(', ');
-      sendTelegramMessage(`<b>OFFLINE (${toNotify.length})</b>: ${names}`).catch(() => {});
+      const msg = `<b>OFFLINE (${toNotify.length})</b>: ${names}`;
+      sendTelegramMessage(msg).catch(() => {});
+      sendWebhookAlert(msg);
     }
   } catch (err) {
     console.error('[Offline check]', err.message);

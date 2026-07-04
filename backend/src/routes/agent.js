@@ -3,10 +3,11 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
+const AGENT_VERSION = '2.4';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
-    '# WinServ Monitoring Agent v2.3',
+    '# WinServ Monitoring Agent v' + AGENT_VERSION,
     '# ====================================================================',
     '# Auto-registers on first run. One script for all servers.',
     '# Save to C:\\winserv-agent\\agent.ps1 and schedule:',
@@ -16,6 +17,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13',
     '',
     '$ErrorActionPreference = "Continue"',
+    '$AgentVersion = "' + AGENT_VERSION + '"',
     '$ServerUrl = "' + serverUrl + '"',
     '$MetricsUrl = "$ServerUrl/api/metrics"',
     '$EventsUrl = "$ServerUrl/api/events"',
@@ -162,7 +164,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '',
     '  if ($metricsObj) {',
     '    if ($Token) {',
-    '      $body = @{token=$Token;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
+    '      $body = @{token=$Token;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;agent_version=$AgentVersion;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
     '      $response = Send-Body $MetricsUrl $body',
     '      if ($response) {',
     '        if ($response.token) { $Token = $response.token; Save-Token }',
@@ -175,7 +177,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '    }',
     '',
     '    if (-not $Token) {',
-    '      $body = @{registration_key=$RegKey;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
+    '      $body = @{registration_key=$RegKey;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;agent_version=$AgentVersion;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
     '      $response = Send-Body $MetricsUrl $body',
     '      if ($response -and $response.token) {',
     '        $Token = $response.token; Save-Token',
@@ -253,6 +255,18 @@ function generateUniversalScript(serverUrl, regKey) {
     '    }',
     '  }',
     '',
+    '  # --- Self-update: pull the newest script when the server reports a newer version ---',
+    '  if ($lastResponse -and $lastResponse.agent_latest -and $lastResponse.agent_latest -ne $AgentVersion -and $Token) {',
+    '    try {',
+    '      $new = Invoke-RestMethod -Uri "$ServerUrl/api/agent/self-update?token=$Token" -Method GET -TimeoutSec 30',
+    '      if ($new -and $new.Length -gt 1000 -and $new -match "WinServ Monitoring Agent") {',
+    '        $selfPath = $PSCommandPath; if (-not $selfPath) { $selfPath = "C:\\winserv-agent\\agent.ps1" }',
+    '        Set-Content -Path $selfPath -Value $new -Encoding UTF8 -Force',
+    '        Write-Log "Self-updated $AgentVersion -> $($lastResponse.agent_latest)"',
+    '      } else { Write-Log "Self-update: rejected payload" }',
+    '    } catch { Write-Log "Self-update failed: $_" }',
+    '  }',
+    '',
     '  Write-Log "Agent completed successfully"',
     '} catch {',
     '  Write-Log "FATAL: $_"',
@@ -273,5 +287,23 @@ router.get('/script/:serverId', requireAuth, requireAdmin, async (req, res) => {
   res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
 });
 
+// Agent self-update: returns the latest script to an agent presenting a valid
+// token. The reg key it embeds is already baked into that agent, so this
+// exposes nothing new.
+const db = require('../db');
+router.get('/self-update', async (req, res) => {
+  const token = req.query.token;
+  if (!token) return res.status(401).type('text/plain').send('# token required');
+  const agent = await db.queryOne('SELECT server_id FROM agent_tokens WHERE token = $1', [token]);
+  if (!agent) return res.status(401).type('text/plain').send('# invalid token');
+  const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
+  res.type('text/plain; charset=utf-8');
+  res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
+});
+
+// Latest agent version, so the UI can flag outdated hosts.
+router.get('/version', requireAuth, (req, res) => res.json({ latest: AGENT_VERSION }));
+
 module.exports = router;
 module.exports.generateUniversalScript = generateUniversalScript;
+module.exports.AGENT_VERSION = AGENT_VERSION;

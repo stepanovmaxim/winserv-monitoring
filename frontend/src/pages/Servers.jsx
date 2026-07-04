@@ -9,6 +9,7 @@ export default function Servers() {
   const [servers, setServers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [latestAgent, setLatestAgent] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(searchParams.get('group_id') || '');
   const [selectedCustomer, setSelectedCustomer] = useState(searchParams.get('customer_id') || '');
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,7 @@ export default function Servers() {
   useEffect(() => {
     api.getGroups().then(setGroups);
     api.getCustomers().then(setCustomers);
+    api.getAgentVersion().then(d => setLatestAgent(d.latest)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -137,7 +139,7 @@ export default function Servers() {
           <div className="empty"><div className="empty-icon">🖥</div><p>No servers yet. Add one to get started.</p></div>
         ) : (
           <table>
-            <thead><tr><th>Status</th><th>Hostname</th><th>Customer</th><th>Group</th><th>CPU</th><th>Memory</th><th>Disk</th><th>IP</th><th>Last Seen</th><th></th></tr></thead>
+            <thead><tr><th>Status</th><th>Hostname</th><th>Customer</th><th>Group</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Agent</th><th>Last Seen</th><th></th></tr></thead>
             <tbody>
               {servers.map(s => (
                 <tr key={s.id}>
@@ -148,7 +150,11 @@ export default function Servers() {
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
                   <td>{s.last_mem_used != null && s.last_mem_total > 0 ? `${Math.round(Number(s.last_mem_used) / Number(s.last_mem_total) * 100)}%` : '-'}</td>
                   <td>{s.last_disk_used != null && s.last_disk_total > 0 ? `${Math.round(Number(s.last_disk_used) / Number(s.last_disk_total) * 100)}%` : '-'}</td>
-                  <td>{s.ip_address || '-'}</td>
+                  <td>
+                    {s.agent_version
+                      ? <span className={`badge ${latestAgent && s.agent_version !== latestAgent ? 'badge-warning' : 'badge-viewer'}`}>v{s.agent_version}{latestAgent && s.agent_version !== latestAgent ? ' ⤴' : ''}</span>
+                      : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
                   <td>{s.last_seen || 'Never'}</td>
                   <td>
                     {user?.role === 'admin' && (

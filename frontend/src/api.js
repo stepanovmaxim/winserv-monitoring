@@ -79,6 +79,14 @@ export const api = {
     return request('/api/commands', { method: 'POST', body: JSON.stringify({ server_id, ctype, param }) });
   },
 
+  // Agent version + reports
+  getAgentVersion() {
+    return request('/api/agent/version');
+  },
+  getUptimeReport(days = 30) {
+    return request(`/api/reports/uptime?days=${days}`);
+  },
+
   // Maintenance windows
   getMaintenance() {
     return request('/api/maintenance');

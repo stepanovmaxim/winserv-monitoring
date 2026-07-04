@@ -5,12 +5,13 @@ const { checkAlerts, handleBackOnline } = require('../services/alertService');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { broadcast } = require('../services/sseService');
 const { assignCustomerByDomain } = require('../services/tenantService');
+const { AGENT_VERSION } = require('./agent');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
 
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname, ip_address, os_info } = req.body;
+  const { token, registration_key, hostname, ip_address, os_info, agent_version } = req.body;
   let { metrics } = req.body;
   const h = hostname || req.body.host || '';
 
@@ -53,6 +54,9 @@ router.post('/', async (req, res) => {
   }
   if (os_info) {
     await db.query('UPDATE servers SET os_info = $1 WHERE id = $2', [os_info, serverId]);
+  }
+  if (agent_version) {
+    await db.query('UPDATE servers SET agent_version = $1 WHERE id = $2', [agent_version, serverId]);
   }
 
   const currentHostname = h || server.hostname;
@@ -130,7 +134,7 @@ router.post('/', async (req, res) => {
   );
 
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands });
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: AGENT_VERSION });
 
   // Push the fresh reading to any live dashboards.
   const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);
