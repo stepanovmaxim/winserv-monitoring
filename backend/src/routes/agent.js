@@ -379,8 +379,12 @@ const db = require('../db');
 router.get('/self-update', async (req, res) => {
   const token = req.query.token;
   if (!token) return res.status(401).type('text/plain').send('# token required');
-  const agent = await db.queryOne('SELECT server_id FROM agent_tokens WHERE token = $1', [token]);
+  const agent = await db.queryOne(
+    'SELECT at.server_id, s.hostname, s.agent_version FROM agent_tokens at JOIN servers s ON s.id = at.server_id WHERE at.token = $1',
+    [token]
+  );
   if (!agent) return res.status(401).type('text/plain').send('# invalid token');
+  console.log(`[Self-update] served to ${agent.hostname} (was v${agent.agent_version || '?'} -> v${AGENT_VERSION})`);
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
   res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
