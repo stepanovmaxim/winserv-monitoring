@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { assignCustomerByDomain } = require('../services/tenantService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -61,6 +62,7 @@ router.post('/', async (req, res) => {
       }
       await db.query('UPDATE servers SET group_id = $1 WHERE id = $2 AND group_id IS NULL', [group.id, serverId]);
     }
+    await assignCustomerByDomain(serverId, h);
   }
 
   const validLevels = ['Critical', 'Error', 'Warning', 'Information'];

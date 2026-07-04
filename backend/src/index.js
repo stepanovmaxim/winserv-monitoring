@@ -18,6 +18,7 @@ const telegramRoutes = require('./routes/telegram');
 const agentRoutes = require('./routes/agent');
 const deployRoutes = require('./routes/deploy');
 const actionRoutes = require('./routes/actions');
+const customerRoutes = require('./routes/customers');
 const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
@@ -76,6 +77,7 @@ async function start() {
   app.use('/api/agent', agentRoutes);
   app.use('/api/deploy', deployRoutes);
   app.use('/api/actions', actionRoutes);
+  app.use('/api/customers', customerRoutes);
   app.use('/api/stream', streamRoutes);
 
   app.get('/api/health', async (req, res) => {

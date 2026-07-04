@@ -202,6 +202,7 @@ export default function ServerDetail() {
             <dt style={{ color: 'var(--text-muted)' }}>Hostname:</dt><dd>{server.hostname}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>IP Address:</dt><dd>{server.ip_address || '-'}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>OS:</dt><dd>{server.os_info || '-'}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>Customer:</dt><dd>{server.customer_name || '—'}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>Group:</dt><dd>{server.group_name || '-'}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>Status:</dt><dd><span className="status"><span className={`status-dot ${server.status}`} />{server.status}</span></dd>
             <dt style={{ color: 'var(--text-muted)' }}>Last Seen:</dt><dd>{server.last_seen || 'Never'}</dd>

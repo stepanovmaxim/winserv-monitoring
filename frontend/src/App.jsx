@@ -10,6 +10,7 @@ import Users from './pages/Users';
 import Deploy from './pages/Deploy';
 import Actions from './pages/Actions';
 import Audit from './pages/Audit';
+import Customers from './pages/Customers';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/servers" />} />
         <Route path="/servers" element={<Servers />} />
         <Route path="/servers/:id" element={<ServerDetail />} />
+        <Route path="/customers" element={<AdminRoute><Customers /></AdminRoute>} />
         <Route path="/groups" element={<AdminRoute><Groups /></AdminRoute>} />
         <Route path="/settings" element={<AdminRoute><Settings /></AdminRoute>} />
         <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />

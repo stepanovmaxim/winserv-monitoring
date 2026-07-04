@@ -6,9 +6,9 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 router.get('/', requireAuth, requireApproved, async (req, res) => {
-  const { group_id } = req.query;
+  const { group_id, customer_id } = req.query;
   let q = `
-    SELECT s.*, g.name as group_name,
+    SELECT s.*, g.name as group_name, c.name as customer_name,
       (SELECT cpu_usage FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_cpu,
       (SELECT memory_used_mb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_mem_used,
       (SELECT memory_total_mb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_mem_total,
@@ -16,14 +16,16 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
       (SELECT disk_total_gb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_disk_total
     FROM servers s
     LEFT JOIN server_groups g ON s.group_id = g.id
+    LEFT JOIN customers c ON s.customer_id = c.id
   `;
   const params = [];
+  const where = [];
 
-  if (group_id) {
-    q += ' WHERE s.group_id = $1';
-    params.push(group_id);
-  }
+  if (group_id) { params.push(group_id); where.push(`s.group_id = $${params.length}`); }
+  if (customer_id === 'none') { where.push('s.customer_id IS NULL'); }
+  else if (customer_id) { params.push(customer_id); where.push(`s.customer_id = $${params.length}`); }
 
+  if (where.length) q += ' WHERE ' + where.join(' AND ');
   q += ' ORDER BY s.hostname';
   const servers = await db.queryAll(q, params);
   res.json(servers);
@@ -45,14 +47,14 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const { hostname, description, ip_address, group_id, os_info, notify_cpu, notify_memory, notify_disk } = req.body;
+  const { hostname, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk } = req.body;
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [req.params.id]);
   if (!server) return res.status(404).json({ error: 'Server not found' });
 
   const toBool = (v, def) => v !== undefined ? (v ? 1 : 0) : def;
 
   await db.query(
-    'UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5, notify_cpu = $6, notify_memory = $7, notify_disk = $8 WHERE id = $9',
+    'UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5, notify_cpu = $6, notify_memory = $7, notify_disk = $8, customer_id = $9 WHERE id = $10',
     [
       hostname || server.hostname,
       ip_address !== undefined ? ip_address : server.ip_address,
@@ -62,6 +64,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
       toBool(notify_cpu, server.notify_cpu),
       toBool(notify_memory, server.notify_memory),
       toBool(notify_disk, server.notify_disk),
+      customer_id !== undefined ? (customer_id || null) : server.customer_id,
       req.params.id
     ]
   );
@@ -75,9 +78,10 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 
 router.get('/:id', requireAuth, requireApproved, async (req, res) => {
   const server = await db.queryOne(`
-    SELECT s.*, g.name as group_name
+    SELECT s.*, g.name as group_name, c.name as customer_name
     FROM servers s
     LEFT JOIN server_groups g ON s.group_id = g.id
+    LEFT JOIN customers c ON s.customer_id = c.id
     WHERE s.id = $1
   `, [req.params.id]);
 

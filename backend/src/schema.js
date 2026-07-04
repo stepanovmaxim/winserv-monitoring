@@ -13,6 +13,21 @@ async function initSchema() {
       approved_at TIMESTAMPTZ
     );
 
+    CREATE TABLE IF NOT EXISTS customers (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      active INTEGER DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Maps an AD domain suffix (e.g. semargl.pro) to a customer, so domain-joined
+    -- machines inherit their owner automatically on registration.
+    CREATE TABLE IF NOT EXISTS domain_customers (
+      domain TEXT PRIMARY KEY,
+      customer_id INTEGER REFERENCES customers(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS server_groups (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -152,6 +167,8 @@ async function initSchema() {
   await db.exec(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','viewer','pending'))`);
   await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS applied INTEGER DEFAULT 1`);
   await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS allowed_chats TEXT DEFAULT ''`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_servers_customer ON servers(customer_id)`);
 
   console.log('PostgreSQL schema initialized');
 }

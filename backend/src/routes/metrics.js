@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { checkAlerts } = require('../services/alertService');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { broadcast } = require('../services/sseService');
+const { assignCustomerByDomain } = require('../services/tenantService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const lastOnline = new Map();
@@ -69,6 +70,8 @@ router.post('/', async (req, res) => {
     await db.query('UPDATE servers SET group_id = $1 WHERE id = $2 AND group_id IS NULL', [group.id, serverId]);
   }
 
+  await assignCustomerByDomain(serverId, currentHostname);
+
   let snapshot = null;
 
   if (metrics) {
@@ -133,8 +136,10 @@ router.post('/', async (req, res) => {
   res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions });
 
   // Push the fresh reading to any live dashboards.
+  const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);
   broadcast('metrics', {
     server_id: serverId,
+    customer_id: cust?.customer_id || null,
     hostname: prev?.hostname || server.hostname,
     status: 'online',
     last_seen: new Date().toISOString(),

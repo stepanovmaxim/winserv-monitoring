@@ -8,19 +8,24 @@ export default function Servers() {
   const [searchParams] = useSearchParams();
   const [servers, setServers] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(searchParams.get('group_id') || '');
+  const [selectedCustomer, setSelectedCustomer] = useState(searchParams.get('customer_id') || '');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editServer, setEditServer] = useState(null);
   const [showToken, setShowToken] = useState(null);
-  const [form, setForm] = useState({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
+  const [form, setForm] = useState({ hostname: '', description: '', ip_address: '', group_id: '', customer_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
 
-  useEffect(() => { api.getGroups().then(setGroups); }, []);
+  useEffect(() => {
+    api.getGroups().then(setGroups);
+    api.getCustomers().then(setCustomers);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
-    api.getServers(selectedGroup || undefined).then(setServers).finally(() => setLoading(false));
-  }, [selectedGroup]);
+    api.getServers(selectedGroup || undefined, selectedCustomer || undefined).then(setServers).finally(() => setLoading(false));
+  }, [selectedGroup, selectedCustomer]);
 
   // Live updates: patch rows in place as agents check in or drop offline.
   useEffect(() => {
@@ -50,7 +55,7 @@ export default function Servers() {
 
   function openCreate() {
     setEditServer(null);
-    setForm({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
+    setForm({ hostname: '', description: '', ip_address: '', group_id: '', customer_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
     setShowModal(true);
   }
 
@@ -58,7 +63,7 @@ export default function Servers() {
     setEditServer(s);
     setForm({
       hostname: s.hostname, description: s.description || '', ip_address: s.ip_address || '',
-      group_id: s.group_id || '', os_info: s.os_info || '',
+      group_id: s.group_id || '', customer_id: s.customer_id || '', os_info: s.os_info || '',
       notify_cpu: s.notify_cpu !== 0, notify_memory: s.notify_memory !== 0, notify_disk: s.notify_disk !== 0,
     });
     setShowModal(true);
@@ -74,7 +79,7 @@ export default function Servers() {
     }
     setShowModal(false);
     setLoading(true);
-    api.getServers(selectedGroup || undefined).then(setServers).finally(() => setLoading(false));
+    api.getServers(selectedGroup || undefined, selectedCustomer || undefined).then(setServers).finally(() => setLoading(false));
   }
 
   async function handleDelete(id) {
@@ -89,7 +94,12 @@ export default function Servers() {
     <div>
       <div className="page-header">
         <h1>Servers</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <select value={selectedCustomer} onChange={e => setSelectedCustomer(e.target.value)}>
+            <option value="">All Customers</option>
+            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="none">— Unassigned —</option>
+          </select>
           <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
             <option value="">All Groups</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -126,12 +136,13 @@ export default function Servers() {
           <div className="empty"><div className="empty-icon">🖥</div><p>No servers yet. Add one to get started.</p></div>
         ) : (
           <table>
-            <thead><tr><th>Status</th><th>Hostname</th><th>Group</th><th>CPU</th><th>Memory</th><th>Disk</th><th>IP</th><th>Last Seen</th><th></th></tr></thead>
+            <thead><tr><th>Status</th><th>Hostname</th><th>Customer</th><th>Group</th><th>CPU</th><th>Memory</th><th>Disk</th><th>IP</th><th>Last Seen</th><th></th></tr></thead>
             <tbody>
               {servers.map(s => (
                 <tr key={s.id}>
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
                   <td><Link to={`/servers/${s.id}`}>{s.hostname}</Link></td>
+                  <td>{s.customer_name || <span style={{ color: 'var(--warning)' }}>—</span>}</td>
                   <td>{s.group_name || '-'}</td>
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
                   <td>{s.last_mem_used != null && s.last_mem_total > 0 ? `${Math.round(Number(s.last_mem_used) / Number(s.last_mem_total) * 100)}%` : '-'}</td>
@@ -161,6 +172,7 @@ export default function Servers() {
               <div className="form-group"><label>Hostname *</label><input value={form.hostname} onChange={e => setForm({ ...form, hostname: e.target.value })} required /></div>
               <div className="form-group"><label>Description</label><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Primary domain controller" /></div>
               <div className="form-group"><label>IP Address</label><input value={form.ip_address} onChange={e => setForm({ ...form, ip_address: e.target.value })} /></div>
+              <div className="form-group"><label>Customer</label><select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">Unassigned</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
               <div className="form-group"><label>Group</label><select value={form.group_id} onChange={e => setForm({ ...form, group_id: e.target.value })}><option value="">None</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
               <div className="form-group"><label>OS Info</label><input value={form.os_info} onChange={e => setForm({ ...form, os_info: e.target.value })} /></div>
               {editServer && (

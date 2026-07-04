@@ -45,10 +45,36 @@ export const api = {
     return request(`/api/groups/${id}`, { method: 'DELETE' });
   },
 
+  // Customers (tenants)
+  getCustomers() {
+    return request('/api/customers');
+  },
+  createCustomer(data) {
+    return request('/api/customers', { method: 'POST', body: JSON.stringify(data) });
+  },
+  updateCustomer(id, data) {
+    return request(`/api/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  deleteCustomer(id) {
+    return request(`/api/customers/${id}`, { method: 'DELETE' });
+  },
+  getDomainMappings() {
+    return request('/api/customers/domains');
+  },
+  setDomainMapping(domain, customer_id) {
+    return request('/api/customers/domains', { method: 'PUT', body: JSON.stringify({ domain, customer_id }) });
+  },
+  deleteDomainMapping(domain) {
+    return request(`/api/customers/domains/${encodeURIComponent(domain)}`, { method: 'DELETE' });
+  },
+
   // Servers
-  getServers(groupId) {
-    const q = groupId ? `?group_id=${groupId}` : '';
-    return request(`/api/servers${q}`);
+  getServers(groupId, customerId) {
+    const p = new URLSearchParams();
+    if (groupId) p.set('group_id', groupId);
+    if (customerId) p.set('customer_id', customerId);
+    const q = p.toString();
+    return request(`/api/servers${q ? '?' + q : ''}`);
   },
   getServer(id) {
     return request(`/api/servers/${id}`);
