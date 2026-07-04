@@ -1,5 +1,6 @@
 const db = require('../db');
 const { sendTelegramMessage } = require('./telegram');
+const { broadcast } = require('./sseService');
 
 const alertActive = new Map();
 const serverStart = Date.now();
@@ -95,8 +96,12 @@ async function checkOfflineServers() {
     const justOffline = await db.queryAll(
       `UPDATE servers SET status = 'offline'
        WHERE status = 'online' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '${(config && config.offline_minutes) ? parseInt(config.offline_minutes) : 3} minutes')
-       RETURNING hostname`
+       RETURNING id, hostname`
     );
+
+    for (const s of justOffline) {
+      broadcast('status', { server_id: s.id, hostname: s.hostname, status: 'offline' });
+    }
 
     if (config && config.notify_offline && justOffline.length > 0) {
       const names = justOffline.map(s => s.hostname).join(', ');

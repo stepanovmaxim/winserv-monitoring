@@ -18,8 +18,11 @@ const telegramRoutes = require('./routes/telegram');
 const agentRoutes = require('./routes/agent');
 const deployRoutes = require('./routes/deploy');
 const actionRoutes = require('./routes/actions');
+const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
+const { rollupMetrics } = require('./services/rollupService');
+const { heartbeat } = require('./services/sseService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -73,6 +76,7 @@ async function start() {
   app.use('/api/agent', agentRoutes);
   app.use('/api/deploy', deployRoutes);
   app.use('/api/actions', actionRoutes);
+  app.use('/api/stream', streamRoutes);
 
   app.get('/api/health', async (req, res) => {
     try {
@@ -112,6 +116,13 @@ async function start() {
   // Prune old metrics/events shortly after boot, then once a day.
   setTimeout(purgeOldData, 60000);
   setInterval(purgeOldData, 24 * 60 * 60 * 1000);
+
+  // Roll minute metrics into hourly buckets shortly after boot, then hourly.
+  setTimeout(rollupMetrics, 90000);
+  setInterval(rollupMetrics, 60 * 60 * 1000);
+
+  // Keep SSE connections alive through nginx/Cloudflare idle timeouts.
+  setInterval(heartbeat, 25000);
 }
 
 // Last-resort guards. Only benign client disconnects are swallowed; any other

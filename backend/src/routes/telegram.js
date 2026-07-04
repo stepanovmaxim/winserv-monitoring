@@ -1,8 +1,10 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { logAction } = require('../services/auditService');
 
 const router = express.Router();
+const TOKEN_MASK = '********';
 
 const defaults = {
   bot_token: '', chat_id: '', enabled: false,
@@ -13,11 +15,16 @@ const defaults = {
 
 router.get('/config', requireAuth, requireAdmin, async (req, res) => {
   const config = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
-  res.json(config || defaults);
+  if (!config) return res.json(defaults);
+  // Never send the real bot token to the browser; expose only whether one is set.
+  const safe = { ...config, bot_token_set: !!config.bot_token, bot_token: config.bot_token ? TOKEN_MASK : '' };
+  res.json(safe);
 });
 
 router.put('/config', requireAuth, requireAdmin, async (req, res) => {
-  const { bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret } = req.body;
+  const { chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret } = req.body;
+  // A masked token means "unchanged" — treat it as absent so we keep the stored one.
+  const bot_token = req.body.bot_token === TOKEN_MASK ? undefined : req.body.bot_token;
 
   const existing = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
 
@@ -111,6 +118,7 @@ router.post('/webhook', async (req, res) => {
         await answerCallback(config, callback.id, 'Toggled. Agent will apply within 1 min.');
         const a = await db.queryOne('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id WHERE sa.id = $1', [actionId]);
         if (a) {
+          logAction({ action_id: a.id, server_id: a.server_id, hostname: a.hostname, label: a.label, new_state: a.enabled ? 'HIDDEN' : 'VISIBLE', source: 'telegram', actor: chatId });
           await sendBotReplyRaw(config, chatId, `<b>${a.hostname}</b>: ${a.label || a.file_path} → ${a.enabled ? 'HIDDEN' : 'VISIBLE'}`, null);
         }
       }
@@ -121,6 +129,7 @@ router.post('/webhook', async (req, res) => {
         await answerCallback(config, callback.id, parts[0] === 'dohide' ? 'Hiding...' : 'Showing...');
         const a = await db.queryOne('SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id WHERE sa.id = $1', [actionId]);
         if (a) {
+          logAction({ action_id: a.id, server_id: a.server_id, hostname: a.hostname, label: a.label, new_state: newState ? 'HIDDEN' : 'VISIBLE', source: 'telegram', actor: chatId });
           const actionLabel = a.hostname + ': ' + (a.label || a.file_path);
           const newStatus = newState ? 'HIDING' : 'SHOWING';
           await sendBotReplyRaw(config, chatId, '<b>' + actionLabel + '</b> → ' + newStatus + ' (agent applies within 1 min)', null);
@@ -223,6 +232,7 @@ router.post('/webhook', async (req, res) => {
       const newState = cmd === '/hide' ? 1 : 0;
       for (const a of actions) {
         await db.query('UPDATE server_actions SET enabled = $1, applied = 0 WHERE id = $2', [newState, a.id]);
+        logAction({ action_id: a.id, server_id: a.server_id, hostname: a.hostname, label: a.label, new_state: newState ? 'HIDDEN' : 'VISIBLE', source: 'telegram', actor: chatId });
       }
       const status = newState ? 'HIDDEN' : 'VISIBLE';
       let reply = '';

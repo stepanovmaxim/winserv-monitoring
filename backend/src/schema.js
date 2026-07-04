@@ -63,6 +63,32 @@ async function initSchema() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_events_server_level ON system_events(server_id, level);
+    CREATE INDEX IF NOT EXISTS idx_events_dedup ON system_events(server_id, event_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS metrics_hourly (
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      bucket TIMESTAMPTZ NOT NULL,
+      cpu_avg DOUBLE PRECISION,
+      cpu_max DOUBLE PRECISION,
+      mem_pct_avg DOUBLE PRECISION,
+      disk_pct_avg DOUBLE PRECISION,
+      sample_count INTEGER,
+      PRIMARY KEY (server_id, bucket)
+    );
+
+    CREATE TABLE IF NOT EXISTS action_audit (
+      id SERIAL PRIMARY KEY,
+      action_id INTEGER,
+      server_id INTEGER,
+      hostname TEXT DEFAULT '',
+      label TEXT DEFAULT '',
+      new_state TEXT DEFAULT '',
+      source TEXT DEFAULT '',
+      actor TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_created ON action_audit(created_at DESC);
 
     CREATE TABLE IF NOT EXISTS telegram_config (
       id SERIAL PRIMARY KEY,

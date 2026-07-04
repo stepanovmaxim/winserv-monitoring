@@ -64,6 +64,7 @@ router.post('/', async (req, res) => {
   }
 
   const validLevels = ['Critical', 'Error', 'Warning', 'Information'];
+  let inserted = 0;
 
   for (const ev of events) {
     let lvl = ev.level || 'Error';
@@ -74,14 +75,22 @@ router.post('/', async (req, res) => {
       else if (lower.includes('warn') || lower.includes('пред')) lvl = 'Warning';
       else lvl = 'Error';
     }
-    await db.query(
+    // Agents resend a 30-min lookback every minute, so the same event arrives
+    // ~30 times. Skip an insert if an identical one landed in the last 30 min.
+    const r = await db.query(
       `INSERT INTO system_events (server_id, event_source, event_id, level, message, recorded_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+       SELECT $1, $2, $3, $4, $5, $6
+       WHERE NOT EXISTS (
+         SELECT 1 FROM system_events
+         WHERE server_id = $1 AND event_source = $2 AND event_id = $3 AND message = $5
+           AND created_at > NOW() - INTERVAL '30 minutes'
+       )`,
       [serverId, ev.source || '', ev.event_id || 0, lvl, ev.message || '', ev.recorded_at || null]
     );
+    if (r.rowCount > 0) inserted++;
   }
 
-  res.json({ success: true, count: events.length });
+  res.json({ success: true, count: inserted });
 });
 
 router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {

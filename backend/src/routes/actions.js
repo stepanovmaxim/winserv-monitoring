@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { logAction } = require('../services/auditService');
 
 const router = express.Router();
 
@@ -12,6 +13,15 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
      ORDER BY s.hostname`
   );
   res.json(actions);
+});
+
+router.get('/audit', requireAuth, requireAdmin, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const rows = await db.queryAll(
+    'SELECT * FROM action_audit ORDER BY created_at DESC LIMIT $1',
+    [limit]
+  );
+  res.json(rows);
 });
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
@@ -29,7 +39,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
   const { label, file_path, logout_users, allowed_chats } = req.body;
   const a = await db.queryOne('SELECT * FROM server_actions WHERE id = $1', [req.params.id]);
-  if (!a) return res.status(404);
+  if (!a) return res.sendStatus(404);
 
   await db.query(
     'UPDATE server_actions SET label = $1, file_path = $2, logout_users = $3, allowed_chats = $4 WHERE id = $5',
@@ -44,10 +54,17 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.post('/:id/toggle', requireAuth, requireAdmin, async (req, res) => {
-  const a = await db.queryOne('SELECT * FROM server_actions WHERE id = $1', [req.params.id]);
-  if (!a) return res.status(404);
+  const a = await db.queryOne(
+    'SELECT sa.*, s.hostname FROM server_actions sa JOIN servers s ON s.id = sa.server_id WHERE sa.id = $1',
+    [req.params.id]
+  );
+  if (!a) return res.sendStatus(404);
   const newState = a.enabled ? 0 : 1;
   await db.query('UPDATE server_actions SET enabled = $1, applied = 0 WHERE id = $2', [newState, req.params.id]);
+  logAction({
+    action_id: a.id, server_id: a.server_id, hostname: a.hostname, label: a.label,
+    new_state: newState ? 'HIDDEN' : 'VISIBLE', source: 'web', actor: req.user.email,
+  });
   res.json({ enabled: !!newState });
 });
 

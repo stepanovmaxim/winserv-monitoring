@@ -3,6 +3,7 @@ const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { checkAlerts } = require('../services/alertService');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { broadcast } = require('../services/sseService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const lastOnline = new Map();
@@ -68,6 +69,8 @@ router.post('/', async (req, res) => {
     await db.query('UPDATE servers SET group_id = $1 WHERE id = $2 AND group_id IS NULL', [group.id, serverId]);
   }
 
+  let snapshot = null;
+
   if (metrics) {
     if (typeof metrics === 'string') {
       try { metrics = JSON.parse(metrics); } catch { metrics = null; }
@@ -94,6 +97,16 @@ router.post('/', async (req, res) => {
       );
 
       checkAlerts(serverId, { cpu_usage, memory_total_mb, memory_used_mb, disk_total_gb, disk_used_gb, disk_free_gb });
+
+      snapshot = {
+        cpu: cpu_usage,
+        mem_pct: memory_total_mb > 0 ? (memory_used_mb / memory_total_mb) * 100 : null,
+        disk_pct: disk_total_gb > 0 ? (disk_used_gb / disk_total_gb) * 100 : null,
+        mem_used_mb: memory_used_mb,
+        mem_total_mb: memory_total_mb,
+        disk_used_gb,
+        disk_total_gb,
+      };
     }
   }
 
@@ -118,6 +131,15 @@ router.post('/', async (req, res) => {
 
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
   res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions });
+
+  // Push the fresh reading to any live dashboards.
+  broadcast('metrics', {
+    server_id: serverId,
+    hostname: prev?.hostname || server.hostname,
+    status: 'online',
+    last_seen: new Date().toISOString(),
+    ...(snapshot || {}),
+  });
 });
 
 router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
@@ -137,6 +159,32 @@ router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
   }
 
   res.json(metrics);
+});
+
+// Single most-recent reading — used for the live "current" cards regardless of
+// the chart's selected range.
+router.get('/:serverId/latest', requireAuth, requireApproved, async (req, res) => {
+  const m = await db.queryOne(
+    'SELECT * FROM metrics WHERE server_id = $1 ORDER BY collected_at DESC LIMIT 1',
+    [req.params.serverId]
+  );
+  if (m && typeof m.disks_json === 'string') {
+    try { m.disks_json = JSON.parse(m.disks_json); } catch { m.disks_json = []; }
+  }
+  res.json(m || null);
+});
+
+// Hourly rollups for long-range charts (fields already percentaged).
+router.get('/:serverId/rollup', requireAuth, requireApproved, async (req, res) => {
+  const hours = parseInt(req.query.hours) || 720;
+  const rows = await db.queryAll(
+    `SELECT bucket AS collected_at, cpu_avg, cpu_max, mem_pct_avg, disk_pct_avg
+     FROM metrics_hourly
+     WHERE server_id = $1 AND bucket >= NOW() - ($2 || ' hours')::INTERVAL
+     ORDER BY bucket ASC`,
+    [req.params.serverId, String(hours)]
+  );
+  res.json(rows);
 });
 
 module.exports = router;
