@@ -144,7 +144,11 @@ export default function Servers() {
               {servers.map(s => (
                 <tr key={s.id}>
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
-                  <td><Link to={`/servers/${s.id}`}>{s.hostname}</Link></td>
+                  <td>
+                    <Link to={`/servers/${s.id}`}>{s.hostname}</Link>
+                    {s.health_issues > 0 && <span title="health issues" style={{ marginLeft: 6, color: 'var(--danger)', fontSize: 12 }}>⚠{s.health_issues}</span>}
+                    {s.pending_reboot ? <span title="reboot pending" style={{ marginLeft: 4 }}>🔄</span> : null}
+                  </td>
                   <td>{s.customer_name || <span style={{ color: 'var(--warning)' }}>—</span>}</td>
                   <td>{s.group_name || '-'}</td>
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>

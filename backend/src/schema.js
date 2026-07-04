@@ -193,6 +193,20 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_sec_server_time ON security_events(server_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_sec_ip_time ON security_events(ip, created_at);
 
+    -- Current health snapshot per server (replaced on each agent health report).
+    -- kind: service_stopped | cert_expiring | task_failed.
+    CREATE TABLE IF NOT EXISTS health_items (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      name TEXT DEFAULT '',
+      detail TEXT DEFAULT '',
+      expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_health_server ON health_items(server_id, kind);
+
     CREATE TABLE IF NOT EXISTS server_actions (
       id SERIAL PRIMARY KEY,
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
@@ -245,6 +259,10 @@ async function initSchema() {
 
   // Agent self-reported version, for the fleet update view.
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS agent_version TEXT DEFAULT ''`);
+
+  // Deep-health fields reported by the agent.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS pending_reboot INTEGER DEFAULT 0`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS health_at TIMESTAMPTZ`);
 
   // Optional extra alert channel (webhook — Slack/Teams/custom).
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS alert_webhook_url TEXT DEFAULT ''`);

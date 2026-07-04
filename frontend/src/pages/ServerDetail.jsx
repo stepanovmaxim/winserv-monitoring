@@ -21,6 +21,7 @@ export default function ServerDetail() {
   const [commands, setCommands] = useState([]);
   const [svc, setSvc] = useState('');
   const [secEvents, setSecEvents] = useState([]);
+  const [health, setHealth] = useState([]);
 
   useEffect(() => {
     api.getServer(id).then(setServer);
@@ -48,6 +49,10 @@ export default function ServerDetail() {
 
   function loadSecurity() {
     api.getServerSecurity(id).then(setSecEvents);
+  }
+
+  function loadHealth() {
+    api.getServerHealth(id).then(setHealth);
   }
 
   async function blockIp(ip) {
@@ -173,6 +178,7 @@ export default function ServerDetail() {
         <button className={`tab ${tab === 'metrics' ? 'active' : ''}`} onClick={() => setTab('metrics')}>Metrics</button>
         <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>System Events</button>
         <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>Info</button>
+        <button className={`tab ${tab === 'health' ? 'active' : ''}`} onClick={() => { setTab('health'); loadHealth(); }}>Health</button>
         {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>Agent</button>}
         {user?.role === 'admin' && <button className={`tab ${tab === 'control' ? 'active' : ''}`} onClick={() => { setTab('control'); loadCommands(); }}>Control</button>}
         {user?.role === 'admin' && <button className={`tab ${tab === 'security' ? 'active' : ''}`} onClick={() => { setTab('security'); loadSecurity(); }}>Security</button>}
@@ -242,6 +248,40 @@ export default function ServerDetail() {
             <dt style={{ color: 'var(--text-muted)' }}>Last Seen:</dt><dd>{server.last_seen || 'Never'}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>Registered:</dt><dd>{new Date(server.created_at).toLocaleString()}</dd>
           </dl>
+        </div>
+      )}
+
+      {tab === 'health' && (
+        <div className="card">
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>Health</h3>
+            {server.pending_reboot ? <span className="badge badge-warning">Reboot pending</span> : <span className="badge badge-viewer">No reboot pending</span>}
+            {server.health_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>updated {new Date(server.health_at).toLocaleString()}</span>}
+          </div>
+          {!server.health_at ? (
+            <div className="empty"><p>No health data yet — requires agent v2.6+ on this host.</p></div>
+          ) : health.length === 0 ? (
+            <div className="empty"><p>✓ All healthy — no stopped services, expiring certs, or failed tasks.</p></div>
+          ) : (
+            <table>
+              <thead><tr><th>Type</th><th>Item</th><th>Detail</th></tr></thead>
+              <tbody>
+                {health.map(h => (
+                  <tr key={h.id}>
+                    <td>
+                      <span className={`badge ${h.kind === 'service_stopped' ? 'badge-error' : h.kind === 'cert_expiring' ? 'badge-warning' : 'badge-error'}`}>
+                        {h.kind === 'service_stopped' ? 'Service down' : h.kind === 'cert_expiring' ? 'Cert expiring' : 'Task failed'}
+                      </span>
+                    </td>
+                    <td>{h.name || '-'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {h.kind === 'cert_expiring' && h.expires_at ? `expires ${new Date(h.expires_at).toLocaleDateString()}` : (h.detail || '-')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 

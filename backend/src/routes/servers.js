@@ -9,6 +9,7 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
   const { group_id, customer_id } = req.query;
   let q = `
     SELECT s.*, g.name as group_name, c.name as customer_name,
+      (SELECT COUNT(*)::int FROM health_items WHERE server_id = s.id) as health_issues,
       (SELECT cpu_usage FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_cpu,
       (SELECT memory_used_mb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_mem_used,
       (SELECT memory_total_mb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_mem_total,

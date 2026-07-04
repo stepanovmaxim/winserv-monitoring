@@ -79,6 +79,11 @@ export const api = {
     return request('/api/commands', { method: 'POST', body: JSON.stringify({ server_id, ctype, param }) });
   },
 
+  // Deep health
+  getServerHealth(serverId) {
+    return request(`/api/health-report/${serverId}`);
+  },
+
   // Security
   getSecurityTop(hours = 24) {
     return request(`/api/security/top?hours=${hours}`);
