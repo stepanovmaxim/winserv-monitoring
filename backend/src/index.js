@@ -22,6 +22,7 @@ const customerRoutes = require('./routes/customers');
 const maintenanceRoutes = require('./routes/maintenance');
 const commandRoutes = require('./routes/commands');
 const reportRoutes = require('./routes/reports');
+const securityRoutes = require('./routes/security');
 const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
@@ -86,6 +87,7 @@ async function start() {
   app.use('/api/maintenance', maintenanceRoutes);
   app.use('/api/commands', commandRoutes);
   app.use('/api/reports', reportRoutes);
+  app.use('/api/security', securityRoutes);
   app.use('/api/stream', streamRoutes);
 
   app.get('/api/health', async (req, res) => {

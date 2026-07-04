@@ -21,7 +21,11 @@ async function purgeOldData() {
       `DELETE FROM metrics_hourly WHERE bucket < NOW() - ($1 || ' days')::INTERVAL`,
       [String(ROLLUP_DAYS)]
     );
-    console.log(`[Retention] Purged ${m.rowCount} metrics (>${METRICS_DAYS}d), ${e.rowCount} events (>${EVENTS_DAYS}d), ${r.rowCount} rollups (>${ROLLUP_DAYS}d)`);
+    const sec = await db.query(
+      `DELETE FROM security_events WHERE created_at < NOW() - ($1 || ' days')::INTERVAL`,
+      [String(EVENTS_DAYS)]
+    );
+    console.log(`[Retention] Purged ${m.rowCount} metrics (>${METRICS_DAYS}d), ${e.rowCount} events (>${EVENTS_DAYS}d), ${sec.rowCount} security (>${EVENTS_DAYS}d), ${r.rowCount} rollups (>${ROLLUP_DAYS}d)`);
   } catch (err) {
     console.error('[Retention]', err.message);
   }

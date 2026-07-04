@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false, notify_bruteforce: true, bruteforce_threshold: 10 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -128,6 +128,17 @@ export default function Settings() {
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Flap alert after N/hr</label>
                   <input type="number" min="2" value={config.flap_threshold ?? 6} onChange={e => setConfig({ ...config, flap_threshold: e.target.value })} style={{ width: 120 }} />
+                </div>
+              </div>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>RDP brute-force detection</label>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_bruteforce: !config.notify_bruteforce })}>
+                  <div className={`toggle ${config.notify_bruteforce ? 'on' : ''}`}><div className="toggle-knob" /></div>
+                  <label style={{ cursor: 'pointer' }}>Alert on brute-force</label>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Failed logons/hr from one IP</label>
+                  <input type="number" min="3" value={config.bruteforce_threshold ?? 10} onChange={e => setConfig({ ...config, bruteforce_threshold: e.target.value })} style={{ width: 160 }} />
                 </div>
               </div>
               <div className="form-group">

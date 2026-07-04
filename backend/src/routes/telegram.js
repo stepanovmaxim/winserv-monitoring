@@ -22,7 +22,7 @@ router.get('/config', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/config', requireAuth, requireAdmin, async (req, res) => {
-  const { chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled } = req.body;
+  const { chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled, notify_bruteforce, bruteforce_threshold } = req.body;
   // A masked token means "unchanged" — treat it as absent so we keep the stored one.
   const bot_token = req.body.bot_token === TOKEN_MASK ? undefined : req.body.bot_token;
 
@@ -35,8 +35,9 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
        cpu_threshold = $9, memory_threshold = $10, disk_threshold = $11,
        authorized_chats = $12, viewer_chats = $13, webhook_secret = $14,
        digest_enabled = $15, digest_hour = $16, flap_threshold = $17,
-       alert_webhook_url = $18, alert_webhook_enabled = $19
-       WHERE id = $20`,
+       alert_webhook_url = $18, alert_webhook_enabled = $19,
+       notify_bruteforce = $20, bruteforce_threshold = $21
+       WHERE id = $22`,
       [
         bot_token !== undefined ? bot_token : existing.bot_token,
         chat_id !== undefined ? chat_id : existing.chat_id,
@@ -57,14 +58,16 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
         flap_threshold !== undefined ? parseInt(flap_threshold) || 6 : existing.flap_threshold,
         alert_webhook_url !== undefined ? alert_webhook_url : existing.alert_webhook_url,
         alert_webhook_enabled !== undefined ? (alert_webhook_enabled ? 1 : 0) : existing.alert_webhook_enabled,
+        notify_bruteforce !== undefined ? (notify_bruteforce ? 1 : 0) : existing.notify_bruteforce,
+        bruteforce_threshold !== undefined ? parseInt(bruteforce_threshold) || 10 : existing.bruteforce_threshold,
         existing.id
       ]
     );
   } else {
     await db.query(
-      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
-      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, parseInt(cpu_threshold) || 90, parseInt(memory_threshold) || 95, parseInt(disk_threshold) || 90, authorized_chats || '', viewer_chats || '', webhook_secret || '', digest_enabled ? 1 : 0, digest_hour !== undefined ? parseInt(digest_hour) : 9, parseInt(flap_threshold) || 6, alert_webhook_url || '', alert_webhook_enabled ? 1 : 0]
+      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled, notify_bruteforce, bruteforce_threshold)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, parseInt(cpu_threshold) || 90, parseInt(memory_threshold) || 95, parseInt(disk_threshold) || 90, authorized_chats || '', viewer_chats || '', webhook_secret || '', digest_enabled ? 1 : 0, digest_hour !== undefined ? parseInt(digest_hour) : 9, parseInt(flap_threshold) || 6, alert_webhook_url || '', alert_webhook_enabled ? 1 : 0, notify_bruteforce ? 1 : 0, parseInt(bruteforce_threshold) || 10]
     );
   }
 

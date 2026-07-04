@@ -13,6 +13,7 @@ import Audit from './pages/Audit';
 import Customers from './pages/Customers';
 import Maintenance from './pages/Maintenance';
 import Reports from './pages/Reports';
+import Security from './pages/Security';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/audit" element={<AdminRoute><Audit /></AdminRoute>} />
         <Route path="/maintenance" element={<AdminRoute><Maintenance /></AdminRoute>} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/security" element={<AdminRoute><Security /></AdminRoute>} />
       </Route>
     </Routes>
   );

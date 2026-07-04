@@ -178,6 +178,21 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_commands_pending ON server_commands(server_id, status);
 
+    -- Security-log logons: 4625 failures (brute-force signal) and 4624 RDP successes.
+    CREATE TABLE IF NOT EXISTS security_events (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      event TEXT NOT NULL,
+      account TEXT DEFAULT '',
+      ip TEXT DEFAULT '',
+      logon_type TEXT DEFAULT '',
+      recorded_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sec_server_time ON security_events(server_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sec_ip_time ON security_events(ip, created_at);
+
     CREATE TABLE IF NOT EXISTS server_actions (
       id SERIAL PRIMARY KEY,
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
@@ -234,6 +249,14 @@ async function initSchema() {
   // Optional extra alert channel (webhook — Slack/Teams/custom).
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS alert_webhook_url TEXT DEFAULT ''`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS alert_webhook_enabled INTEGER DEFAULT 0`);
+
+  // RDP brute-force alerting.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS notify_bruteforce INTEGER DEFAULT 1`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS bruteforce_threshold INTEGER DEFAULT 10`);
+
+  // Allow the manual "block IP" command type.
+  await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
+  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip'))`);
 
   console.log('PostgreSQL schema initialized');
 }

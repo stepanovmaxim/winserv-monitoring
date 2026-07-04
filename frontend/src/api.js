@@ -79,6 +79,14 @@ export const api = {
     return request('/api/commands', { method: 'POST', body: JSON.stringify({ server_id, ctype, param }) });
   },
 
+  // Security
+  getSecurityTop(hours = 24) {
+    return request(`/api/security/top?hours=${hours}`);
+  },
+  getServerSecurity(serverId) {
+    return request(`/api/security/${serverId}`);
+  },
+
   // Agent version + reports
   getAgentVersion() {
     return request('/api/agent/version');

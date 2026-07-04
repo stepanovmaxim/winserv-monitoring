@@ -69,6 +69,7 @@ export default function Layout() {
           {user?.role === 'admin' && link('/deploy', '🚀', 'Deploy')}
           {user?.role === 'admin' && link('/actions', '🔧', 'Actions')}
           {user?.role === 'admin' && link('/maintenance', '⏸', 'Maintenance')}
+          {user?.role === 'admin' && link('/security', '🛡', 'Security')}
           {user?.role === 'admin' && link('/audit', '📜', 'Audit')}
           {user?.role === 'admin' && link('/settings', '⚙', 'Settings')}
           {user?.role === 'admin' && link('/users', '👥', 'Users')}

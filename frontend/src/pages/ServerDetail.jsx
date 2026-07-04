@@ -20,6 +20,7 @@ export default function ServerDetail() {
   const [scriptContent, setScriptContent] = useState('');
   const [commands, setCommands] = useState([]);
   const [svc, setSvc] = useState('');
+  const [secEvents, setSecEvents] = useState([]);
 
   useEffect(() => {
     api.getServer(id).then(setServer);
@@ -43,6 +44,17 @@ export default function ServerDetail() {
 
   function loadCommands() {
     api.getCommands(id).then(setCommands);
+  }
+
+  function loadSecurity() {
+    api.getServerSecurity(id).then(setSecEvents);
+  }
+
+  async function blockIp(ip) {
+    if (!ip || ip === '-') return;
+    if (!confirm(`Block ${ip} on ${server.hostname}?`)) return;
+    await api.queueCommand(Number(id), 'block_ip', ip);
+    alert(`Queued. Applies within ~1 min (agent v2.5+).`);
   }
 
   async function doReboot() {
@@ -163,6 +175,7 @@ export default function ServerDetail() {
         <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>Info</button>
         {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>Agent</button>}
         {user?.role === 'admin' && <button className={`tab ${tab === 'control' ? 'active' : ''}`} onClick={() => { setTab('control'); loadCommands(); }}>Control</button>}
+        {user?.role === 'admin' && <button className={`tab ${tab === 'security' ? 'active' : ''}`} onClick={() => { setTab('security'); loadSecurity(); }}>Security</button>}
       </div>
 
       {tab === 'metrics' && (
@@ -280,10 +293,38 @@ export default function ServerDetail() {
                 {commands.map(c => (
                   <tr key={c.id}>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(c.created_at).toLocaleString()}</td>
-                    <td>{c.ctype === 'reboot' ? 'reboot' : `restart ${c.param}`}</td>
+                    <td>{c.ctype === 'reboot' ? 'reboot' : c.ctype === 'block_ip' ? `block ${c.param}` : `restart ${c.param}`}</td>
                     <td><span className={`badge ${c.status === 'done' ? 'badge-viewer' : c.status === 'failed' ? 'badge-error' : 'badge-warning'}`}>{c.status}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.result || '-'}</td>
                     <td style={{ fontSize: 12 }}>{c.requested_by || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {tab === 'security' && (
+        <div className="card">
+          <h3 style={{ marginBottom: 8 }}>Recent logons</h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
+            Failed (4625) and RDP (4624) logons from the Security log. Requires agent v2.5+.
+          </p>
+          {secEvents.length === 0 ? (
+            <div className="empty"><p>No security events recorded</p></div>
+          ) : (
+            <table>
+              <thead><tr><th>Result</th><th>Account</th><th>Source IP</th><th>Type</th><th>Time</th><th></th></tr></thead>
+              <tbody>
+                {secEvents.map(e => (
+                  <tr key={e.id}>
+                    <td><span className={`badge ${e.event === 'fail' ? 'badge-error' : 'badge-viewer'}`}>{e.event === 'fail' ? 'FAIL' : 'OK'}</span></td>
+                    <td>{e.account || '-'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{e.ip || '-'}</td>
+                    <td style={{ fontSize: 12 }}>{e.logon_type === '10' ? 'RDP' : e.logon_type}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(e.recorded_at || e.created_at).toLocaleString()}</td>
+                    <td>{e.event === 'fail' && e.ip && e.ip !== '-' && <button className="danger" style={{ padding: '2px 10px', fontSize: 12 }} onClick={() => blockIp(e.ip)}>Block</button>}</td>
                   </tr>
                 ))}
               </tbody>
