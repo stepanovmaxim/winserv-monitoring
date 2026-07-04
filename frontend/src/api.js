@@ -68,6 +68,17 @@ export const api = {
     return request(`/api/customers/domains/${encodeURIComponent(domain)}`, { method: 'DELETE' });
   },
 
+  // Actions: bulk + commands
+  bulkAction(scope, scope_id, action) {
+    return request('/api/actions/bulk', { method: 'POST', body: JSON.stringify({ scope, scope_id, action }) });
+  },
+  getCommands(serverId) {
+    return request(`/api/commands/${serverId}`);
+  },
+  queueCommand(server_id, ctype, param) {
+    return request('/api/commands', { method: 'POST', body: JSON.stringify({ server_id, ctype, param }) });
+  },
+
   // Maintenance windows
   getMaintenance() {
     return request('/api/maintenance');

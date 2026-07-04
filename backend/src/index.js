@@ -20,12 +20,14 @@ const deployRoutes = require('./routes/deploy');
 const actionRoutes = require('./routes/actions');
 const customerRoutes = require('./routes/customers');
 const maintenanceRoutes = require('./routes/maintenance');
+const commandRoutes = require('./routes/commands');
 const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
 const { rollupMetrics } = require('./services/rollupService');
 const { heartbeat } = require('./services/sseService');
 const { maybeSendDigest } = require('./services/digestService');
+const { runScheduledActions } = require('./services/scheduleService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -81,6 +83,7 @@ async function start() {
   app.use('/api/actions', actionRoutes);
   app.use('/api/customers', customerRoutes);
   app.use('/api/maintenance', maintenanceRoutes);
+  app.use('/api/commands', commandRoutes);
   app.use('/api/stream', streamRoutes);
 
   app.get('/api/health', async (req, res) => {
@@ -131,6 +134,9 @@ async function start() {
 
   // Daily digest: check twice an hour; an atomic claim guards against double-send.
   setInterval(maybeSendDigest, 30 * 60 * 1000);
+
+  // Scheduled hide/show — every 30s so each target minute is hit at least once.
+  setInterval(runScheduledActions, 30 * 1000);
 }
 
 // Last-resort guards. Only benign client disconnects are swallowed; any other

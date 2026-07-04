@@ -18,6 +18,8 @@ export default function ServerDetail() {
   const [token, setToken] = useState('');
   const [showScript, setShowScript] = useState(false);
   const [scriptContent, setScriptContent] = useState('');
+  const [commands, setCommands] = useState([]);
+  const [svc, setSvc] = useState('');
 
   useEffect(() => {
     api.getServer(id).then(setServer);
@@ -37,6 +39,24 @@ export default function ServerDetail() {
   async function loadToken() {
     const data = await api.getServerToken(id);
     setToken(data.token);
+  }
+
+  function loadCommands() {
+    api.getCommands(id).then(setCommands);
+  }
+
+  async function doReboot() {
+    if (!confirm(`Reboot ${server.hostname}? The agent will reboot it within ~1 minute.`)) return;
+    await api.queueCommand(Number(id), 'reboot', '');
+    loadCommands();
+  }
+
+  async function doRestartService() {
+    if (!svc.trim()) return;
+    if (!confirm(`Restart service "${svc}" on ${server.hostname}?`)) return;
+    await api.queueCommand(Number(id), 'restart_service', svc.trim());
+    setSvc('');
+    loadCommands();
   }
 
   async function regenerateToken() {
@@ -142,6 +162,7 @@ export default function ServerDetail() {
         <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>System Events</button>
         <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>Info</button>
         {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>Agent</button>}
+        {user?.role === 'admin' && <button className={`tab ${tab === 'control' ? 'active' : ''}`} onClick={() => { setTab('control'); loadCommands(); }}>Control</button>}
       </div>
 
       {tab === 'metrics' && (
@@ -229,6 +250,44 @@ export default function ServerDetail() {
             <div className="script-container" style={{ marginTop: 16, maxHeight: 600, overflow: 'auto' }}>
               <pre>{scriptContent}</pre>
             </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'control' && (
+        <div className="card">
+          <h3>Remote control</h3>
+          <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
+            Commands are queued and executed by the agent on its next check-in (within ~1 minute).
+            Requires agent v2.3+ on the host.
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 16 }}>
+            <div style={{ flex: '1 1 220px' }}>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Service name</label>
+              <input value={svc} onChange={e => setSvc(e.target.value)} placeholder="e.g. MSSQLSERVER, Spooler, W3SVC" />
+            </div>
+            <button onClick={doRestartService}>Restart service</button>
+            <button className="danger" onClick={doReboot}>Reboot server</button>
+          </div>
+
+          <h3 style={{ margin: '16px 0 8px' }}>Recent commands</h3>
+          {commands.length === 0 ? (
+            <div className="empty"><p>No commands yet</p></div>
+          ) : (
+            <table>
+              <thead><tr><th>Time</th><th>Command</th><th>Status</th><th>Result</th><th>By</th></tr></thead>
+              <tbody>
+                {commands.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(c.created_at).toLocaleString()}</td>
+                    <td>{c.ctype === 'reboot' ? 'reboot' : `restart ${c.param}`}</td>
+                    <td><span className={`badge ${c.status === 'done' ? 'badge-viewer' : c.status === 'failed' ? 'badge-error' : 'badge-warning'}`}>{c.status}</span></td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.result || '-'}</td>
+                    <td style={{ fontSize: 12 }}>{c.requested_by || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}

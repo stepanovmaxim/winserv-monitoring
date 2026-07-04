@@ -124,8 +124,13 @@ router.post('/', async (req, res) => {
     [serverId]
   );
 
+  const commands = await db.queryAll(
+    "SELECT id, ctype, param FROM server_commands WHERE server_id = $1 AND status = 'pending' ORDER BY created_at",
+    [serverId]
+  );
+
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions });
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands });
 
   // Push the fresh reading to any live dashboards.
   const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);

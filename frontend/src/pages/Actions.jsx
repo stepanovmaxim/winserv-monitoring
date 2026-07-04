@@ -1,17 +1,30 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 
+const EMPTY = { server_id: '', label: '', file_path: '', logout_users: true, allowed_chats: '', schedule_enabled: false, schedule_hide: '', schedule_show: '' };
+
 export default function Actions() {
   const [actions, setActions] = useState([]);
   const [servers, setServers] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ server_id: '', label: '', file_path: '', logout_users: true, allowed_chats: '' });
+  const [form, setForm] = useState(EMPTY);
   const [editing, setEditing] = useState(null);
+  const [bulk, setBulk] = useState({ scope: 'all', scope_id: '' });
 
   useEffect(() => {
-    Promise.all([api.getServers(), loadActions()]).then(([s]) => setServers(s));
+    Promise.all([api.getServers(), loadActions(), api.getGroups(), api.getCustomers()])
+      .then(([s, , g, c]) => { setServers(s); setGroups(g); setCustomers(c); });
   }, []);
+
+  async function runBulk(action) {
+    if (bulk.scope !== 'all' && !bulk.scope_id) return alert('Select a target');
+    const r = await api.bulkAction(bulk.scope, bulk.scope === 'all' ? null : Number(bulk.scope_id), action);
+    alert(`${action === 'hide' ? 'Hidden' : 'Shown'} ${r.affected} action(s). Agents apply within 1 min.`);
+    loadActions();
+  }
 
   async function loadActions() {
     const token = localStorage.getItem('token');
@@ -52,13 +65,13 @@ export default function Actions() {
     }
     setShowModal(false);
     setEditing(null);
-    setForm({ server_id: '', label: '', file_path: '', logout_users: true });
+    setForm(EMPTY);
     loadActions();
   }
 
   function openEdit(a) {
     setEditing(a.id);
-    setForm({ server_id: a.server_id, label: a.label || '', file_path: a.file_path, logout_users: !!a.logout_users, allowed_chats: a.allowed_chats || '' });
+    setForm({ server_id: a.server_id, label: a.label || '', file_path: a.file_path, logout_users: !!a.logout_users, allowed_chats: a.allowed_chats || '', schedule_enabled: !!a.schedule_enabled, schedule_hide: a.schedule_hide || '', schedule_show: a.schedule_show || '' });
     setShowModal(true);
   }
 
@@ -68,7 +81,32 @@ export default function Actions() {
     <div>
       <div className="page-header">
         <h1>Server Actions</h1>
-        <button onClick={() => { setEditing(null); setForm({ server_id: '', label: '', file_path: '', logout_users: true, allowed_chats: '' }); setShowModal(true); }}>+ Add Action</button>
+        <button onClick={() => { setEditing(null); setForm(EMPTY); setShowModal(true); }}>+ Add Action</button>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginBottom: 8 }}>Bulk hide / show</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Scope</label>
+            <select value={bulk.scope} onChange={e => setBulk({ scope: e.target.value, scope_id: '' })}>
+              <option value="all">All servers</option>
+              <option value="customer">Customer</option>
+              <option value="group">Group</option>
+            </select>
+          </div>
+          {bulk.scope !== 'all' && (
+            <div>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Target</label>
+              <select value={bulk.scope_id} onChange={e => setBulk({ ...bulk, scope_id: e.target.value })}>
+                <option value="">Select...</option>
+                {(bulk.scope === 'customer' ? customers : groups).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </div>
+          )}
+          <button style={{ background: 'var(--danger)' }} onClick={() => runBulk('hide')}>Hide all</button>
+          <button style={{ background: 'var(--success)' }} onClick={() => runBulk('show')}>Show all</button>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -84,7 +122,7 @@ export default function Actions() {
           <div className="empty"><p>No actions configured</p></div>
         ) : (
           <table>
-            <thead><tr><th>Server</th><th>Label</th><th>File path</th><th>State</th><th>Logout</th><th></th></tr></thead>
+            <thead><tr><th>Server</th><th>Label</th><th>File path</th><th>State</th><th>Schedule</th><th>Logout</th><th></th></tr></thead>
             <tbody>
               {actions.map(a => (
                 <tr key={a.id}>
@@ -96,6 +134,7 @@ export default function Actions() {
                       {a.enabled ? 'HIDDEN' : 'VISIBLE'}
                     </span>
                   </td>
+                  <td style={{ fontSize: 12 }}>{a.schedule_enabled ? `🕐 ${a.schedule_hide || '—'} / ${a.schedule_show || '—'}` : '-'}</td>
                   <td>{a.logout_users ? 'Yes' : 'No'}</td>
                   <td>
                     <button
@@ -142,6 +181,16 @@ export default function Actions() {
                 <div className={`toggle ${form.logout_users ? 'on' : ''}`}><div className="toggle-knob" /></div>
                 <label>Logout users after hiding</label>
               </div>
+              <div className="toggle-wrapper" onClick={() => setForm({ ...form, schedule_enabled: !form.schedule_enabled })} style={{ marginBottom: 12 }}>
+                <div className={`toggle ${form.schedule_enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
+                <label>Daily schedule (server local time)</label>
+              </div>
+              {form.schedule_enabled && (
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Hide at (HH:MM)</label><input value={form.schedule_hide} onChange={e => setForm({ ...form, schedule_hide: e.target.value })} placeholder="23:00" /></div>
+                  <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Show at (HH:MM)</label><input value={form.schedule_show} onChange={e => setForm({ ...form, schedule_show: e.target.value })} placeholder="07:00" /></div>
+                </div>
+              )}
               <div className="form-actions">
                 <button type="submit">Create</button>
                 <button type="button" className="secondary" onClick={() => setShowModal(false)}>Cancel</button>

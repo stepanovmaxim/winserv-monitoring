@@ -162,6 +162,22 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_statuslog_server_time ON status_log(server_id, changed_at);
 
+    -- One-shot control commands (reboot, restart a service). Queued here,
+    -- delivered to the agent on its next check-in, executed once, reported back.
+    CREATE TABLE IF NOT EXISTS server_commands (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      ctype TEXT NOT NULL CHECK(ctype IN ('reboot','restart_service')),
+      param TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','done','failed')),
+      result TEXT DEFAULT '',
+      requested_by TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      executed_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_commands_pending ON server_commands(server_id, status);
+
     CREATE TABLE IF NOT EXISTS server_actions (
       id SERIAL PRIMARY KEY,
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
@@ -206,6 +222,11 @@ async function initSchema() {
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS digest_hour INTEGER DEFAULT 9`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS digest_last_sent DATE`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS flap_threshold INTEGER DEFAULT 6`);
+
+  // Daily hide/show schedule for a file-action (HH:MM, server local time).
+  await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS schedule_enabled INTEGER DEFAULT 0`);
+  await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS schedule_hide TEXT DEFAULT ''`);
+  await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS schedule_show TEXT DEFAULT ''`);
 
   console.log('PostgreSQL schema initialized');
 }
