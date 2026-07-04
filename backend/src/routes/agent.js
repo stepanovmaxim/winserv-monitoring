@@ -3,7 +3,7 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.6';
+const AGENT_VERSION = '2.7';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -340,22 +340,26 @@ function generateUniversalScript(serverUrl, regKey) {
     '    }',
     '  }',
     '',
-    '  # --- Self-update: pull the newest script when the server reports a newer version ---',
-    '  if ($lastResponse -and $lastResponse.agent_latest -and $lastResponse.agent_latest -ne $AgentVersion -and $Token) {',
-    '    try {',
-    '      $new = Invoke-RestMethod -Uri "$ServerUrl/api/agent/self-update?token=$Token" -Method GET -TimeoutSec 30',
-    '      if ($new -and $new.Length -gt 1000 -and $new -match "WinServ Monitoring Agent") {',
-    '        $selfPath = $PSCommandPath; if (-not $selfPath) { $selfPath = "C:\\winserv-agent\\agent.ps1" }',
-    '        Set-Content -Path $selfPath -Value $new -Encoding UTF8 -Force',
-    '        Write-Log "Self-updated $AgentVersion -> $($lastResponse.agent_latest)"',
-    '      } else { Write-Log "Self-update: rejected payload" }',
-    '    } catch { Write-Log "Self-update failed: $_" }',
-    '  }',
-    '',
     '  Write-Log "Agent completed successfully"',
     '} catch {',
     '  Write-Log "FATAL: $_"',
-    '  throw',
+    '} finally {',
+    '  # Self-update runs in finally so a failure in the collection above (e.g. on a',
+    '  # busy DC/Exchange) can never skip it. Writes to a temp file, then atomically',
+    '  # renames into place — safer than an in-place overwrite of the running script.',
+    '  if ($lastResponse -and $lastResponse.agent_latest -and $lastResponse.agent_latest -ne $AgentVersion -and $Token) {',
+    '    $selfPath = $PSCommandPath; if (-not $selfPath) { $selfPath = "C:\\winserv-agent\\agent.ps1" }',
+    '    Write-Log "Self-update: $AgentVersion -> $($lastResponse.agent_latest) target=$selfPath"',
+    '    try {',
+    '      $new = Invoke-RestMethod -Uri "$ServerUrl/api/agent/self-update?token=$Token" -Method GET -TimeoutSec 30',
+    '      if ($new -and $new.Length -gt 1000 -and $new -match "WinServ Monitoring Agent") {',
+    '        $tmp = "$selfPath.new"',
+    '        [System.IO.File]::WriteAllText($tmp, $new, (New-Object System.Text.UTF8Encoding($false)))',
+    '        Move-Item -Path $tmp -Destination $selfPath -Force',
+    '        Write-Log "Self-updated OK -> $($lastResponse.agent_latest)"',
+    '      } else { Write-Log "Self-update rejected payload len=$($new.Length)" }',
+    '    } catch { Write-Log "Self-update failed: $_" }',
+    '  }',
     '}',
   ].join('\n');
 }
