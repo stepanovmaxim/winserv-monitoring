@@ -73,6 +73,23 @@ export const api = {
   getMetrics(serverId, hours = 24) {
     return request(`/api/metrics/${serverId}?hours=${hours}`);
   },
+  getMetricsLatest(serverId) {
+    return request(`/api/metrics/${serverId}/latest`);
+  },
+  getMetricsRollup(serverId, hours = 720) {
+    return request(`/api/metrics/${serverId}/rollup?hours=${hours}`);
+  },
+
+  // Action audit trail
+  getActionAudit(limit = 100) {
+    return request(`/api/actions/audit?limit=${limit}`);
+  },
+
+  // Live event stream URL (EventSource can't set headers, so token goes in query)
+  streamUrl() {
+    const token = localStorage.getItem('token');
+    return `${API_BASE}/api/stream?token=${encodeURIComponent(token || '')}`;
+  },
 
   // Events
   getEvents(serverId, level = '', limit = 100) {

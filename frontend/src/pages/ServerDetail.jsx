@@ -9,6 +9,8 @@ export default function ServerDetail() {
   const { user } = useAuth();
   const [server, setServer] = useState(null);
   const [metrics, setMetrics] = useState([]);
+  const [latest, setLatest] = useState(null);
+  const [rollupMode, setRollupMode] = useState(false);
   const [events, setEvents] = useState([]);
   const [hours, setHours] = useState(24);
   const [tab, setTab] = useState('metrics');
@@ -19,9 +21,17 @@ export default function ServerDetail() {
 
   useEffect(() => {
     api.getServer(id).then(setServer);
-    api.getMetrics(id, hours).then(setMetrics);
     api.getEvents(id, '', 200).then(setEvents);
+    api.getMetricsLatest(id).then(setLatest);
     setLoading(false);
+  }, [id]);
+
+  // Charts: raw minute data for short ranges, hourly rollups beyond a week.
+  useEffect(() => {
+    const useRollup = hours > 168;
+    setRollupMode(useRollup);
+    const load = useRollup ? api.getMetricsRollup(id, hours) : api.getMetrics(id, hours);
+    load.then(setMetrics).catch(() => setMetrics([]));
   }, [id, hours]);
 
   async function loadToken() {
@@ -47,15 +57,20 @@ export default function ServerDetail() {
   if (loading) return <div className="loading">Loading...</div>;
   if (!server) return <div className="empty">Server not found</div>;
 
-  const chartData = metrics.map(m => ({
+  const chartData = metrics.map(m => rollupMode ? ({
+    time: new Date(m.collected_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit' }),
+    cpu: m.cpu_avg != null ? Math.round(Number(m.cpu_avg)) : 0,
+    mem: m.mem_pct_avg != null ? Math.round(Number(m.mem_pct_avg)) : 0,
+    disk: m.disk_pct_avg != null ? Math.round(Number(m.disk_pct_avg)) : 0,
+  }) : ({
     time: new Date(m.collected_at).toLocaleTimeString(),
     cpu: m.cpu_usage != null ? Math.round(Number(m.cpu_usage)) : 0,
     mem: m.memory_total_mb > 0 ? Math.round((Number(m.memory_used_mb) / Number(m.memory_total_mb)) * 100) : 0,
     disk: m.disk_total_gb > 0 ? Math.round((Number(m.disk_used_gb) / Number(m.disk_total_gb)) * 100) : 0,
   }));
 
-  const latest = metrics[metrics.length - 1] || {};
-  const latestDisks = Array.isArray(latest.disks_json) ? latest.disks_json : [];
+  const latestData = latest || {};
+  const latestDisks = Array.isArray(latestData.disks_json) ? latestData.disks_json : [];
 
   return (
     <div>
@@ -70,6 +85,7 @@ export default function ServerDetail() {
             <option value={6}>Last 6 hours</option>
             <option value={24}>Last 24 hours</option>
             <option value={168}>Last 7 days</option>
+            <option value={720}>Last 30 days</option>
           </select>
         </div>
       </div>
@@ -81,21 +97,21 @@ export default function ServerDetail() {
         </div>
         <div className="card">
           <div className="metric-label">CPU</div>
-          <div className="metric-value">{latest.cpu_usage != null ? `${Number(latest.cpu_usage).toFixed(1)}%` : '-'}</div>
-          <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${Number(latest.cpu_usage) || 0}%`, background: Number(latest.cpu_usage) > 90 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+          <div className="metric-value">{latestData.cpu_usage != null ? `${Number(latestData.cpu_usage).toFixed(1)}%` : '-'}</div>
+          <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${Number(latestData.cpu_usage) || 0}%`, background: Number(latestData.cpu_usage) > 90 ? 'var(--danger)' : 'var(--primary)' }} /></div>
         </div>
         <div className="card">
           <div className="metric-label">Memory</div>
-          <div className="metric-value">{latest.memory_used_mb != null ? `${Number(latest.memory_used_mb).toFixed(0)} / ${Number(latest.memory_total_mb).toFixed(0)} MB` : '-'}</div>
-          {latest.memory_total_mb > 0 && (
-            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latest.memory_used_mb) / Number(latest.memory_total_mb)) * 100}%`, background: (Number(latest.memory_used_mb) / Number(latest.memory_total_mb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+          <div className="metric-value">{latestData.memory_used_mb != null ? `${Number(latestData.memory_used_mb).toFixed(0)} / ${Number(latestData.memory_total_mb).toFixed(0)} MB` : '-'}</div>
+          {latestData.memory_total_mb > 0 && (
+            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latestData.memory_used_mb) / Number(latestData.memory_total_mb)) * 100}%`, background: (Number(latestData.memory_used_mb) / Number(latestData.memory_total_mb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
           )}
         </div>
         <div className="card">
           <div className="metric-label">Disk Total</div>
-          <div className="metric-value" style={{ fontSize: 22 }}>{latest.disk_used_gb != null ? `${Number(latest.disk_used_gb).toFixed(0)} / ${Number(latest.disk_total_gb).toFixed(0)} GB` : '-'}</div>
-          {latest.disk_total_gb > 0 && (
-            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latest.disk_used_gb) / Number(latest.disk_total_gb)) * 100}%`, background: (Number(latest.disk_used_gb) / Number(latest.disk_total_gb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+          <div className="metric-value" style={{ fontSize: 22 }}>{latestData.disk_used_gb != null ? `${Number(latestData.disk_used_gb).toFixed(0)} / ${Number(latestData.disk_total_gb).toFixed(0)} GB` : '-'}</div>
+          {latestData.disk_total_gb > 0 && (
+            <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latestData.disk_used_gb) / Number(latestData.disk_total_gb)) * 100}%`, background: (Number(latestData.disk_used_gb) / Number(latestData.disk_total_gb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
           )}
         </div>
       </div>

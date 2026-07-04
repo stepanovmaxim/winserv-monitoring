@@ -22,6 +22,32 @@ export default function Servers() {
     api.getServers(selectedGroup || undefined).then(setServers).finally(() => setLoading(false));
   }, [selectedGroup]);
 
+  // Live updates: patch rows in place as agents check in or drop offline.
+  useEffect(() => {
+    const es = new EventSource(api.streamUrl());
+    es.onmessage = (e) => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch { return; }
+      if (msg.type !== 'metrics' && msg.type !== 'status') return;
+      setServers(prev => prev.map(s => {
+        if (s.id !== msg.server_id) return s;
+        if (msg.type === 'status') return { ...s, status: msg.status };
+        return {
+          ...s,
+          status: msg.status || s.status,
+          last_seen: msg.last_seen || s.last_seen,
+          last_cpu: msg.cpu != null ? msg.cpu : s.last_cpu,
+          last_mem_used: msg.mem_used_mb != null ? msg.mem_used_mb : s.last_mem_used,
+          last_mem_total: msg.mem_total_mb != null ? msg.mem_total_mb : s.last_mem_total,
+          last_disk_used: msg.disk_used_gb != null ? msg.disk_used_gb : s.last_disk_used,
+          last_disk_total: msg.disk_total_gb != null ? msg.disk_total_gb : s.last_disk_total,
+        };
+      }));
+    };
+    es.onerror = () => {}; // EventSource auto-reconnects
+    return () => es.close();
+  }, []);
+
   function openCreate() {
     setEditServer(null);
     setForm({ hostname: '', description: '', ip_address: '', group_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
@@ -100,16 +126,17 @@ export default function Servers() {
           <div className="empty"><div className="empty-icon">🖥</div><p>No servers yet. Add one to get started.</p></div>
         ) : (
           <table>
-            <thead><tr><th>Status</th><th>Hostname</th><th>Group</th><th>Description</th><th>IP</th><th>OS</th><th>Last Seen</th><th></th></tr></thead>
+            <thead><tr><th>Status</th><th>Hostname</th><th>Group</th><th>CPU</th><th>Memory</th><th>Disk</th><th>IP</th><th>Last Seen</th><th></th></tr></thead>
             <tbody>
               {servers.map(s => (
                 <tr key={s.id}>
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
                   <td><Link to={`/servers/${s.id}`}>{s.hostname}</Link></td>
                   <td>{s.group_name || '-'}</td>
-                  <td style={{ color: 'var(--text-muted)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.description || '-'}</td>
+                  <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
+                  <td>{s.last_mem_used != null && s.last_mem_total > 0 ? `${Math.round(Number(s.last_mem_used) / Number(s.last_mem_total) * 100)}%` : '-'}</td>
+                  <td>{s.last_disk_used != null && s.last_disk_total > 0 ? `${Math.round(Number(s.last_disk_used) / Number(s.last_disk_total) * 100)}%` : '-'}</td>
                   <td>{s.ip_address || '-'}</td>
-                  <td>{s.os_info || '-'}</td>
                   <td>{s.last_seen || 'Never'}</td>
                   <td>
                     {user?.role === 'admin' && (
