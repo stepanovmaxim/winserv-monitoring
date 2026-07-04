@@ -137,6 +137,31 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Planned mute windows. scope_type: global | customer | group | server.
+    -- While NOW() is inside a matching window, alerts (incl. offline) are suppressed.
+    CREATE TABLE IF NOT EXISTS maintenance_windows (
+      id SERIAL PRIMARY KEY,
+      scope_type TEXT NOT NULL CHECK(scope_type IN ('global','customer','group','server')),
+      scope_id INTEGER,
+      starts_at TIMESTAMPTZ NOT NULL,
+      ends_at TIMESTAMPTZ NOT NULL,
+      reason TEXT DEFAULT '',
+      created_by TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_maint_active ON maintenance_windows(starts_at, ends_at);
+
+    -- Online/offline transition log, for flapping detection.
+    CREATE TABLE IF NOT EXISTS status_log (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      changed_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_statuslog_server_time ON status_log(server_id, changed_at);
+
     CREATE TABLE IF NOT EXISTS server_actions (
       id SERIAL PRIMARY KEY,
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
@@ -169,6 +194,18 @@ async function initSchema() {
   await db.exec(`ALTER TABLE server_actions ADD COLUMN IF NOT EXISTS allowed_chats TEXT DEFAULT ''`);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL`);
   await db.exec(`CREATE INDEX IF NOT EXISTS idx_servers_customer ON servers(customer_id)`);
+
+  // Per-entity threshold overrides (NULL = inherit: server → group → customer → global).
+  for (const tbl of ['servers', 'server_groups', 'customers']) {
+    await db.exec(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS cpu_threshold INTEGER`);
+    await db.exec(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS memory_threshold INTEGER`);
+    await db.exec(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS disk_threshold INTEGER`);
+  }
+
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS digest_enabled INTEGER DEFAULT 0`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS digest_hour INTEGER DEFAULT 9`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS digest_last_sent DATE`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS flap_threshold INTEGER DEFAULT 6`);
 
   console.log('PostgreSQL schema initialized');
 }

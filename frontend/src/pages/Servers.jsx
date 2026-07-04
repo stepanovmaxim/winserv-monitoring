@@ -55,7 +55,7 @@ export default function Servers() {
 
   function openCreate() {
     setEditServer(null);
-    setForm({ hostname: '', description: '', ip_address: '', group_id: '', customer_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
+    setForm({ hostname: '', description: '', ip_address: '', group_id: '', customer_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true, cpu_threshold: '', memory_threshold: '', disk_threshold: '' });
     setShowModal(true);
   }
 
@@ -65,6 +65,7 @@ export default function Servers() {
       hostname: s.hostname, description: s.description || '', ip_address: s.ip_address || '',
       group_id: s.group_id || '', customer_id: s.customer_id || '', os_info: s.os_info || '',
       notify_cpu: s.notify_cpu !== 0, notify_memory: s.notify_memory !== 0, notify_disk: s.notify_disk !== 0,
+      cpu_threshold: s.cpu_threshold ?? '', memory_threshold: s.memory_threshold ?? '', disk_threshold: s.disk_threshold ?? '',
     });
     setShowModal(true);
   }
@@ -191,6 +192,12 @@ export default function Servers() {
                       <div className={`toggle ${form.notify_disk ? 'on' : ''}`}><div className="toggle-knob" /></div>
                       <label style={{ cursor: 'pointer' }}>Disk</label>
                     </div>
+                  </div>
+                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Threshold overrides (%) — empty inherits group / customer / global</label>
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Memory &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
                   </div>
                 </>
               )}

@@ -18,13 +18,13 @@ export default function Groups() {
 
   function openCreate() {
     setEditGroup(null);
-    setForm({ name: '', description: '' });
+    setForm({ name: '', description: '', cpu_threshold: '', memory_threshold: '', disk_threshold: '' });
     setShowModal(true);
   }
 
   function openEdit(g) {
     setEditGroup(g);
-    setForm({ name: g.name, description: g.description || '' });
+    setForm({ name: g.name, description: g.description || '', cpu_threshold: g.cpu_threshold ?? '', memory_threshold: g.memory_threshold ?? '', disk_threshold: g.disk_threshold ?? '' });
     setShowModal(true);
   }
 
@@ -84,6 +84,12 @@ export default function Groups() {
             <form onSubmit={handleSave}>
               <div className="form-group"><label>Name *</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
               <div className="form-group"><label>Description</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} /></div>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Default thresholds (%) — empty inherits customer / global</label>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Mem &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
+              </div>
               <div className="form-actions">
                 <button type="submit">Save</button>
                 <button type="button" className="secondary" onClick={() => setShowModal(false)}>Cancel</button>

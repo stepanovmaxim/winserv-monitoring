@@ -19,11 +19,13 @@ const agentRoutes = require('./routes/agent');
 const deployRoutes = require('./routes/deploy');
 const actionRoutes = require('./routes/actions');
 const customerRoutes = require('./routes/customers');
+const maintenanceRoutes = require('./routes/maintenance');
 const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
 const { rollupMetrics } = require('./services/rollupService');
 const { heartbeat } = require('./services/sseService');
+const { maybeSendDigest } = require('./services/digestService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -78,6 +80,7 @@ async function start() {
   app.use('/api/deploy', deployRoutes);
   app.use('/api/actions', actionRoutes);
   app.use('/api/customers', customerRoutes);
+  app.use('/api/maintenance', maintenanceRoutes);
   app.use('/api/stream', streamRoutes);
 
   app.get('/api/health', async (req, res) => {
@@ -125,6 +128,9 @@ async function start() {
 
   // Keep SSE connections alive through nginx/Cloudflare idle timeouts.
   setInterval(heartbeat, 25000);
+
+  // Daily digest: check twice an hour; an atomic claim guards against double-send.
+  setInterval(maybeSendDigest, 30 * 60 * 1000);
 }
 
 // Last-resort guards. Only benign client disconnects are swallowed; any other

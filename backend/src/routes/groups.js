@@ -26,12 +26,16 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const { name, description } = req.body;
+  const { name, description, cpu_threshold, memory_threshold, disk_threshold } = req.body;
   const group = await db.queryOne('SELECT * FROM server_groups WHERE id = $1', [req.params.id]);
   if (!group) return res.status(404).json({ error: 'Group not found' });
+  const toThresh = (v, def) => v === undefined ? def : (v === '' || v === null ? null : (parseInt(v) || null));
   await db.query(
-    'UPDATE server_groups SET name = $1, description = $2 WHERE id = $3',
-    [name || group.name, description !== undefined ? description : group.description, req.params.id]
+    `UPDATE server_groups SET name = $1, description = $2,
+       cpu_threshold = $3, memory_threshold = $4, disk_threshold = $5 WHERE id = $6`,
+    [name || group.name, description !== undefined ? description : group.description,
+     toThresh(cpu_threshold, group.cpu_threshold), toThresh(memory_threshold, group.memory_threshold),
+     toThresh(disk_threshold, group.disk_threshold), req.params.id]
   );
   res.json({ success: true });
 });

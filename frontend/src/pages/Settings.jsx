@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '' });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -115,6 +115,21 @@ export default function Settings() {
           )}
           {config.enabled && (
             <>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>Daily digest & flapping</label>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="toggle-wrapper" onClick={() => setConfig({ ...config, digest_enabled: !config.digest_enabled })}>
+                  <div className={`toggle ${config.digest_enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
+                  <label style={{ cursor: 'pointer' }}>Daily digest</label>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Digest hour (0–23)</label>
+                  <input type="number" min="0" max="23" value={config.digest_hour ?? 9} onChange={e => setConfig({ ...config, digest_hour: e.target.value })} style={{ width: 100 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Flap alert after N/hr</label>
+                  <input type="number" min="2" value={config.flap_threshold ?? 6} onChange={e => setConfig({ ...config, flap_threshold: e.target.value })} style={{ width: 120 }} />
+                </div>
+              </div>
               <div className="form-group">
                 <label>Admin Chat IDs (full access + alerts)</label>
                 <input value={config.authorized_chats || ''} onChange={e => setConfig({ ...config, authorized_chats: e.target.value })} placeholder="123456789" />

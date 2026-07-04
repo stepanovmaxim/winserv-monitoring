@@ -68,6 +68,17 @@ export const api = {
     return request(`/api/customers/domains/${encodeURIComponent(domain)}`, { method: 'DELETE' });
   },
 
+  // Maintenance windows
+  getMaintenance() {
+    return request('/api/maintenance');
+  },
+  createMaintenance(data) {
+    return request('/api/maintenance', { method: 'POST', body: JSON.stringify(data) });
+  },
+  deleteMaintenance(id) {
+    return request(`/api/maintenance/${id}`, { method: 'DELETE' });
+  },
+
   // Servers
   getServers(groupId, customerId) {
     const p = new URLSearchParams();

@@ -47,14 +47,19 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const { hostname, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk } = req.body;
+  const { hostname, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk, cpu_threshold, memory_threshold, disk_threshold } = req.body;
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [req.params.id]);
   if (!server) return res.status(404).json({ error: 'Server not found' });
 
   const toBool = (v, def) => v !== undefined ? (v ? 1 : 0) : def;
+  // '' or null clears the override (inherit); undefined keeps the stored value.
+  const toThresh = (v, def) => v === undefined ? def : (v === '' || v === null ? null : (parseInt(v) || null));
 
   await db.query(
-    'UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5, notify_cpu = $6, notify_memory = $7, notify_disk = $8, customer_id = $9 WHERE id = $10',
+    `UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5,
+       notify_cpu = $6, notify_memory = $7, notify_disk = $8, customer_id = $9,
+       cpu_threshold = $10, memory_threshold = $11, disk_threshold = $12
+     WHERE id = $13`,
     [
       hostname || server.hostname,
       ip_address !== undefined ? ip_address : server.ip_address,
@@ -65,6 +70,9 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
       toBool(notify_memory, server.notify_memory),
       toBool(notify_disk, server.notify_disk),
       customer_id !== undefined ? (customer_id || null) : server.customer_id,
+      toThresh(cpu_threshold, server.cpu_threshold),
+      toThresh(memory_threshold, server.memory_threshold),
+      toThresh(disk_threshold, server.disk_threshold),
       req.params.id
     ]
   );

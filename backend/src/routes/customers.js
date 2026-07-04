@@ -66,13 +66,17 @@ router.delete('/domains/:domain', requireAuth, requireAdmin, async (req, res) =>
 
 // --- Single customer ---
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const { name, description, active } = req.body;
+  const { name, description, active, cpu_threshold, memory_threshold, disk_threshold } = req.body;
   const c = await db.queryOne('SELECT * FROM customers WHERE id = $1', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'Customer not found' });
+  const toThresh = (v, def) => v === undefined ? def : (v === '' || v === null ? null : (parseInt(v) || null));
   await db.query(
-    'UPDATE customers SET name = $1, description = $2, active = $3 WHERE id = $4',
+    `UPDATE customers SET name = $1, description = $2, active = $3,
+       cpu_threshold = $4, memory_threshold = $5, disk_threshold = $6 WHERE id = $7`,
     [name || c.name, description !== undefined ? description : c.description,
-     active !== undefined ? (active ? 1 : 0) : c.active, req.params.id]
+     active !== undefined ? (active ? 1 : 0) : c.active,
+     toThresh(cpu_threshold, c.cpu_threshold), toThresh(memory_threshold, c.memory_threshold),
+     toThresh(disk_threshold, c.disk_threshold), req.params.id]
   );
   res.json({ success: true });
 });
