@@ -38,8 +38,8 @@ export default function Layout() {
           onClick={() => setMenuOpen(!menuOpen)}
           style={{
             position: 'fixed', top: 8, left: 8, zIndex: 200,
-            width: 40, height: 40, fontSize: 20, color: '#e2e8f0',
-            background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
+            width: 40, height: 40, fontSize: 20, color: 'var(--text)',
+            background: 'var(--bg-card)', border: '1px solid var(--border-strong)', borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', padding: 0,
           }}
@@ -53,9 +53,9 @@ export default function Layout() {
       )}
       <aside
         style={isMobile ? {
-          position: 'fixed', top: 0, left: menuOpen ? 0 : -260, bottom: 0, zIndex: 150,
-          transition: 'left 0.3s', width: 260, background: '#1e293b',
-          borderRight: '1px solid #334155', padding: '20px 0',
+          position: 'fixed', top: 0, left: menuOpen ? 0 : -270, bottom: 0, zIndex: 150,
+          transition: 'left 0.3s', width: 260, background: 'var(--bg-card)',
+          borderRight: '1px solid var(--border)', padding: '20px 0',
           display: 'flex', flexDirection: 'column',
         } : {}}
         className={!isMobile ? 'sidebar' : ''}
