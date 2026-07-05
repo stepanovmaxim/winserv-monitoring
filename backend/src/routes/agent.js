@@ -3,7 +3,7 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.7';
+const AGENT_VERSION = '2.8';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -146,7 +146,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '  # 4625 failed logons (brute-force signal) + 4624 RDP successes (type 10).',
     '  $since = (Get-Date).AddMinutes(-30)',
     '  try {',
-    '    $events = Get-WinEvent -FilterHashtable @{LogName=\'Security\';Id=4624,4625;StartTime=$since} -MaxEvents 500 -ErrorAction Stop',
+    '    $events = Get-WinEvent -FilterHashtable @{LogName=\'Security\';Id=4624,4625;StartTime=$since} -MaxEvents 150 -ErrorAction Stop',
     '  } catch { return @() }',
     '  if (-not $events) { return @() }',
     '  $result = @()',
@@ -263,17 +263,23 @@ function generateUniversalScript(serverUrl, regKey) {
     '    }',
     '  }',
     '',
-    '  # --- Security logons (4625/4624) ---',
-    '  try { $secEvents = Get-SecurityEvents } catch { Write-Log "Security collection error: $_"; $secEvents = @() }',
-    '  Write-Log "Security events found: $($secEvents.Count)"',
-    '  if ($secEvents.Count -gt 0 -and $Token) {',
-    '    $secBody = @{token=$Token;hostname=$FullHostname;events=$secEvents} | ConvertTo-Json -Depth 6',
-    '    $r = Send-Body $SecurityUrl $secBody',
-    '    if ($r) { Write-Log "Security sent: $($secEvents.Count)" }',
+    '  # Heavy collectors are throttled so per-minute runs stay fast and never',
+    '  # block the metrics cadence (busy servers were stalling ~6 min otherwise).',
+    '  $minNow = (Get-Date).Minute',
+    '',
+    '  # --- Security logons (4625/4624) — every 5 minutes ---',
+    '  if ($Token -and ($minNow % 5) -eq 0) {',
+    '    try { $secEvents = Get-SecurityEvents } catch { Write-Log "Security collection error: $_"; $secEvents = @() }',
+    '    Write-Log "Security events found: $($secEvents.Count)"',
+    '    if ($secEvents.Count -gt 0) {',
+    '      $secBody = @{token=$Token;hostname=$FullHostname;events=$secEvents} | ConvertTo-Json -Depth 6',
+    '      $r = Send-Body $SecurityUrl $secBody',
+    '      if ($r) { Write-Log "Security sent: $($secEvents.Count)" }',
+    '    }',
     '  }',
     '',
-    '  # --- Deep health (services, reboot, certs, tasks) ---',
-    '  if ($Token) {',
+    '  # --- Deep health (services, reboot, certs, tasks) — every 10 minutes ---',
+    '  if ($Token -and ($minNow % 10) -eq 0) {',
     '    try {',
     '      $health = Get-HealthInfo',
     '      $hBody = @{token=$Token;hostname=$FullHostname;pending_reboot=$health.pending_reboot;services=$health.services;certs=$health.certs;tasks=$health.tasks} | ConvertTo-Json -Depth 6',
