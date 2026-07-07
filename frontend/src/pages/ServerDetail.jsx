@@ -76,6 +76,12 @@ export default function ServerDetail() {
     loadCommands();
   }
 
+  async function doUninstall() {
+    if (!confirm(`Uninstall the agent from ${server.hostname}? It stops reporting and the scheduled task + files are removed. To re-add it, redeploy the agent.`)) return;
+    await api.queueCommand(Number(id), 'uninstall_agent', '');
+    loadCommands();
+  }
+
   async function regenerateToken() {
     const data = await api.regenerateToken(id);
     setToken(data.token);
@@ -322,6 +328,10 @@ export default function ServerDetail() {
             <button onClick={doRestartService}>Restart service</button>
             <button className="danger" onClick={doReboot}>Reboot server</button>
           </div>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>Stop monitoring this server — removes the agent (scheduled task + files) from the host.</div>
+            <button className="danger" onClick={doUninstall}>Uninstall agent</button>
+          </div>
 
           <h3 style={{ margin: '16px 0 8px' }}>Recent commands</h3>
           {commands.length === 0 ? (
@@ -333,7 +343,7 @@ export default function ServerDetail() {
                 {commands.map(c => (
                   <tr key={c.id}>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(c.created_at).toLocaleString()}</td>
-                    <td>{c.ctype === 'reboot' ? 'reboot' : c.ctype === 'block_ip' ? `block ${c.param}` : `restart ${c.param}`}</td>
+                    <td>{c.ctype === 'reboot' ? 'reboot' : c.ctype === 'block_ip' ? `block ${c.param}` : c.ctype === 'uninstall_agent' ? 'uninstall agent' : `restart ${c.param}`}</td>
                     <td><span className={`badge ${c.status === 'done' ? 'badge-viewer' : c.status === 'failed' ? 'badge-error' : 'badge-warning'}`}>{c.status}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.result || '-'}</td>
                     <td style={{ fontSize: 12 }}>{c.requested_by || '-'}</td>

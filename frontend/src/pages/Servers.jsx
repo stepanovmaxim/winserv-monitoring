@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
@@ -17,6 +17,39 @@ export default function Servers() {
   const [editServer, setEditServer] = useState(null);
   const [showToken, setShowToken] = useState(null);
   const [form, setForm] = useState({ hostname: '', description: '', ip_address: '', group_id: '', customer_id: '', os_info: '', notify_cpu: true, notify_memory: true, notify_disk: true });
+  const [sortKey, setSortKey] = useState('hostname');
+  const [sortDir, setSortDir] = useState('asc');
+
+  function sortVal(s, key) {
+    switch (key) {
+      case 'status': return s.status || '';
+      case 'customer': return (s.customer_name || '').toLowerCase();
+      case 'group': return (s.group_name || '').toLowerCase();
+      case 'cpu': return s.last_cpu != null ? Number(s.last_cpu) : -1;
+      case 'memory': return s.last_mem_total > 0 ? Number(s.last_mem_used) / Number(s.last_mem_total) : -1;
+      case 'disk': return s.last_disk_total > 0 ? Number(s.last_disk_used) / Number(s.last_disk_total) : -1;
+      case 'agent': return s.agent_version || '';
+      case 'last_seen': return s.last_seen || '';
+      default: return (s.hostname || '').toLowerCase();
+    }
+  }
+  const sorted = useMemo(() => {
+    return [...servers].sort((a, b) => {
+      const va = sortVal(a, sortKey), vb = sortVal(b, sortKey);
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [servers, sortKey, sortDir]);
+  function toggleSort(k) {
+    if (sortKey === k) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(k); setSortDir('asc'); }
+  }
+  function Th({ k, children }) {
+    return <th onClick={() => toggleSort(k)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>{children}{sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>;
+  }
+  const diskPct = (s) => (s.last_disk_used != null && s.last_disk_total > 0)
+    ? Math.max(0, Math.min(100, Math.round(Number(s.last_disk_used) / Number(s.last_disk_total) * 100))) : null;
 
   useEffect(() => {
     api.getGroups().then(setGroups);
@@ -139,9 +172,13 @@ export default function Servers() {
           <div className="empty"><div className="empty-icon">🖥</div><p>No servers yet. Add one to get started.</p></div>
         ) : (
           <table>
-            <thead><tr><th>Status</th><th>Hostname</th><th>Customer</th><th>Group</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Agent</th><th>Last Seen</th><th></th></tr></thead>
+            <thead><tr>
+              <Th k="status">Status</Th><Th k="hostname">Hostname</Th><Th k="customer">Customer</Th>
+              <Th k="group">Group</Th><Th k="cpu">CPU</Th><Th k="memory">Memory</Th><Th k="disk">Disk</Th>
+              <Th k="agent">Agent</Th><Th k="last_seen">Last Seen</Th><th></th>
+            </tr></thead>
             <tbody>
-              {servers.map(s => (
+              {sorted.map(s => (
                 <tr key={s.id}>
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
                   <td>
@@ -153,7 +190,7 @@ export default function Servers() {
                   <td>{s.group_name || '-'}</td>
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
                   <td>{s.last_mem_used != null && s.last_mem_total > 0 ? `${Math.round(Number(s.last_mem_used) / Number(s.last_mem_total) * 100)}%` : '-'}</td>
-                  <td>{s.last_disk_used != null && s.last_disk_total > 0 ? `${Math.round(Number(s.last_disk_used) / Number(s.last_disk_total) * 100)}%` : '-'}</td>
+                  <td>{diskPct(s) != null ? `${diskPct(s)}%` : '-'}</td>
                   <td>
                     {s.agent_version
                       ? <span className={`badge ${latestAgent && s.agent_version !== latestAgent ? 'badge-warning' : 'badge-viewer'}`}>v{s.agent_version}{latestAgent && s.agent_version !== latestAgent ? ' ⤴' : ''}</span>

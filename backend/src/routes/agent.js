@@ -3,7 +3,7 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.8';
+const AGENT_VERSION = '2.9';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -338,11 +338,21 @@ function generateUniversalScript(serverUrl, regKey) {
     '        } elseif ($cmd.ctype -eq "reboot") {',
     '          $ok = $true; $msg = "rebooting"',
     '          Write-Log "Command: reboot requested"',
+    '        } elseif ($cmd.ctype -eq "uninstall_agent") {',
+    '          $ok = $true; $msg = "uninstalling"',
+    '          Write-Log "Command: uninstall requested"',
     '        }',
     '      } catch { $ok = $false; $msg = "$_"; Write-Log "Command error: $_" }',
     '      $rep = @{token=$Token; success=$ok; result=$msg} | ConvertTo-Json -Compress',
     '      try { Invoke-RestMethod -Uri "$ServerUrl/api/commands/$($cmd.id)/report" -Method POST -Body $rep -ContentType "application/json; charset=utf-8" -TimeoutSec 10 } catch {}',
     '      if ($cmd.ctype -eq "reboot" -and $ok) { Start-Sleep -Seconds 2; Restart-Computer -Force }',
+    '      # Remove the scheduled task and agent files after reporting success.',
+    '      if ($cmd.ctype -eq "uninstall_agent" -and $ok) {',
+    '        try { schtasks /delete /tn "WinServAgent" /f 2>$null | Out-Null } catch {}',
+    '        Remove-Item -Recurse -Force "$env:ProgramData\\WinServAgent" -ErrorAction SilentlyContinue',
+    '        Start-Process -FilePath "cmd.exe" -ArgumentList \'/c timeout /t 5 & rmdir /s /q C:\\winserv-agent\' -WindowStyle Hidden',
+    '        return',
+    '      }',
     '    }',
     '  }',
     '',

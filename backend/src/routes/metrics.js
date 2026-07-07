@@ -86,14 +86,26 @@ router.post('/', async (req, res) => {
       const cpu_usage = metrics.cpu_usage != null ? Number(metrics.cpu_usage) : null;
       const memory_total_mb = metrics.memory_total_mb != null ? Number(metrics.memory_total_mb) : null;
       const memory_used_mb = metrics.memory_used_mb != null ? Number(metrics.memory_used_mb) : null;
-      const disk_total_gb = metrics.disk_total_gb != null ? Number(metrics.disk_total_gb) : null;
-      const disk_used_gb = metrics.disk_used_gb != null ? Number(metrics.disk_used_gb) : null;
-      const disk_free_gb = metrics.disk_free_gb != null ? Number(metrics.disk_free_gb) : null;
+      let disk_total_gb = metrics.disk_total_gb != null ? Number(metrics.disk_total_gb) : null;
+      let disk_used_gb = metrics.disk_used_gb != null ? Number(metrics.disk_used_gb) : null;
+      let disk_free_gb = metrics.disk_free_gb != null ? Number(metrics.disk_free_gb) : null;
       const uptime_seconds = metrics.uptime_seconds != null ? Math.round(Number(metrics.uptime_seconds)) : null;
 
+      // Mount-point / reparse volumes report free > total (impossible), which
+      // dragged the aggregate negative. Keep only real fixed disks, then
+      // recompute the totals from them so the numbers are always sane.
       let disksJson = '[]';
-      if (metrics.disks && Array.isArray(metrics.disks)) {
-        disksJson = JSON.stringify(metrics.disks);
+      if (Array.isArray(metrics.disks)) {
+        const validDisks = metrics.disks.filter(d => {
+          const t = Number(d.total_gb), f = Number(d.free_gb);
+          return t > 0 && f >= 0 && f <= t + 0.5;
+        });
+        disksJson = JSON.stringify(validDisks);
+        if (validDisks.length) {
+          disk_total_gb = validDisks.reduce((a, d) => a + Number(d.total_gb), 0);
+          disk_free_gb = validDisks.reduce((a, d) => a + Number(d.free_gb), 0);
+          disk_used_gb = disk_total_gb - disk_free_gb;
+        }
       }
 
       await db.query(
