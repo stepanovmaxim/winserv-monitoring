@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false, notify_bruteforce: true, bruteforce_threshold: 10, service_ignore: '' });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false, notify_bruteforce: true, bruteforce_threshold: 10, service_ignore: '', metric_interval: 1 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -164,6 +164,13 @@ export default function Settings() {
               </div>
             </>
           )}
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label>Metric interval (minutes)</label>
+            <input type="number" min="1" max="1439" value={config.metric_interval ?? 1} onChange={e => setConfig({ ...config, metric_interval: e.target.value })} style={{ width: 120 }} />
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              How often agents report and reschedule their task. Applied to already-deployed servers on their next check-in (agent v2.10+).
+            </div>
+          </div>
           <div className="form-group" style={{ marginTop: 16 }}>
             <label>Ignored services (health monitoring)</label>
             <textarea value={config.service_ignore || ''} onChange={e => setConfig({ ...config, service_ignore: e.target.value })} rows={4} placeholder="sppsvc&#10;googleupdate&#10;remoteregistry" style={{ fontFamily: 'monospace', fontSize: 13 }} />

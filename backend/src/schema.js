@@ -275,6 +275,9 @@ async function initSchema() {
   // Health: services to ignore (NULL = use built-in defaults; edited in Settings).
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS service_ignore TEXT`);
 
+  // Metric scheduler interval (minutes) pushed to agents; they reschedule to it.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS metric_interval INTEGER DEFAULT 1`);
+
   // Allow the manual "block IP" command type.
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
   await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent'))`);
