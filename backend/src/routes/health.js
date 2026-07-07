@@ -4,27 +4,11 @@ const { requireAuth, requireApproved } = require('../middleware/authMiddleware')
 const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { isMuted } = require('../services/maintenanceService');
+const { parseIgnore, isIgnoredService } = require('../services/serviceFilter');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
 const certAlerted = new Map();
-
-// Auto-start services that legitimately idle-stop (trigger-start, updaters) —
-// flagging them as "down" is pure noise. Matched by lowercased name prefix.
-// Extend as needed; changing this needs only a backend deploy, no agent update.
-const SERVICE_IGNORE = [
-  'sppsvc',                                    // Software Protection (Защита ПО)
-  'googleupdate', 'googleupdater', 'gupdate',  // Google updaters (versioned names)
-  'edgeupdate', 'microsoftedgeelevation',      // Edge updater / elevation
-  'mozillamaintenance', 'braveelevation',      // other browser updaters
-  'clr_optimization',                          // .NET NGEN optimizer
-  'remoteregistry', 'scardsvr', 'trustedinstaller',  // trigger-start, idle-stop
-  'mapsbroker', 'tzautoupdate', 'cbdhsvc', 'cdpsvc', 'wbiosrvc',
-];
-function isIgnoredService(name) {
-  const n = String(name || '').toLowerCase();
-  return SERVICE_IGNORE.some(p => n.startsWith(p));
-}
 
 function notify(text, muted) {
   if (muted) return;
@@ -48,7 +32,9 @@ router.post('/', async (req, res) => {
   }
   if (!serverId) return res.status(401).json({ error: 'Valid token or registration_key required' });
 
-  services = (Array.isArray(services) ? services : []).filter(s => !isIgnoredService(s && s.name));
+  const ignoreRow = await db.queryOne('SELECT service_ignore FROM telegram_config LIMIT 1');
+  const ignoreList = parseIgnore(ignoreRow ? ignoreRow.service_ignore : undefined);
+  services = (Array.isArray(services) ? services : []).filter(s => !isIgnoredService(s && s.name, ignoreList));
   certs = Array.isArray(certs) ? certs : [];
   tasks = Array.isArray(tasks) ? tasks : [];
 

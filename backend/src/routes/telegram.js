@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
 const { logAction } = require('../services/auditService');
+const { DEFAULT_IGNORE } = require('../services/serviceFilter');
 
 const router = express.Router();
 const TOKEN_MASK = '********';
@@ -15,14 +16,20 @@ const defaults = {
 
 router.get('/config', requireAuth, requireAdmin, async (req, res) => {
   const config = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
-  if (!config) return res.json(defaults);
+  if (!config) return res.json({ ...defaults, service_ignore: DEFAULT_IGNORE.join('\n') });
   // Never send the real bot token to the browser; expose only whether one is set.
-  const safe = { ...config, bot_token_set: !!config.bot_token, bot_token: config.bot_token ? TOKEN_MASK : '' };
+  const safe = {
+    ...config,
+    bot_token_set: !!config.bot_token,
+    bot_token: config.bot_token ? TOKEN_MASK : '',
+    // Show the effective list so the user can see and edit the built-in defaults.
+    service_ignore: config.service_ignore != null ? config.service_ignore : DEFAULT_IGNORE.join('\n'),
+  };
   res.json(safe);
 });
 
 router.put('/config', requireAuth, requireAdmin, async (req, res) => {
-  const { chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled, notify_bruteforce, bruteforce_threshold } = req.body;
+  const { chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled, notify_bruteforce, bruteforce_threshold, service_ignore } = req.body;
   // A masked token means "unchanged" — treat it as absent so we keep the stored one.
   const bot_token = req.body.bot_token === TOKEN_MASK ? undefined : req.body.bot_token;
 
@@ -36,8 +43,8 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
        authorized_chats = $12, viewer_chats = $13, webhook_secret = $14,
        digest_enabled = $15, digest_hour = $16, flap_threshold = $17,
        alert_webhook_url = $18, alert_webhook_enabled = $19,
-       notify_bruteforce = $20, bruteforce_threshold = $21
-       WHERE id = $22`,
+       notify_bruteforce = $20, bruteforce_threshold = $21, service_ignore = $22
+       WHERE id = $23`,
       [
         bot_token !== undefined ? bot_token : existing.bot_token,
         chat_id !== undefined ? chat_id : existing.chat_id,
@@ -60,14 +67,15 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
         alert_webhook_enabled !== undefined ? (alert_webhook_enabled ? 1 : 0) : existing.alert_webhook_enabled,
         notify_bruteforce !== undefined ? (notify_bruteforce ? 1 : 0) : existing.notify_bruteforce,
         bruteforce_threshold !== undefined ? parseInt(bruteforce_threshold) || 10 : existing.bruteforce_threshold,
+        service_ignore !== undefined ? service_ignore : existing.service_ignore,
         existing.id
       ]
     );
   } else {
     await db.query(
-      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled, notify_bruteforce, bruteforce_threshold)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
-      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, parseInt(cpu_threshold) || 90, parseInt(memory_threshold) || 95, parseInt(disk_threshold) || 90, authorized_chats || '', viewer_chats || '', webhook_secret || '', digest_enabled ? 1 : 0, digest_hour !== undefined ? parseInt(digest_hour) : 9, parseInt(flap_threshold) || 6, alert_webhook_url || '', alert_webhook_enabled ? 1 : 0, notify_bruteforce ? 1 : 0, parseInt(bruteforce_threshold) || 10]
+      `INSERT INTO telegram_config (bot_token, chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled, notify_bruteforce, bruteforce_threshold, service_ignore)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+      [bot_token || '', chat_id || '', enabled ? 1 : 0, notify_disk ? 1 : 0, notify_cpu ? 1 : 0, notify_errors ? 1 : 0, notify_offline ? 1 : 0, parseInt(offline_minutes) || 3, parseInt(cpu_threshold) || 90, parseInt(memory_threshold) || 95, parseInt(disk_threshold) || 90, authorized_chats || '', viewer_chats || '', webhook_secret || '', digest_enabled ? 1 : 0, digest_hour !== undefined ? parseInt(digest_hour) : 9, parseInt(flap_threshold) || 6, alert_webhook_url || '', alert_webhook_enabled ? 1 : 0, notify_bruteforce ? 1 : 0, parseInt(bruteforce_threshold) || 10, service_ignore !== undefined ? service_ignore : null]
     );
   }
 

@@ -272,6 +272,9 @@ async function initSchema() {
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS notify_bruteforce INTEGER DEFAULT 1`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS bruteforce_threshold INTEGER DEFAULT 10`);
 
+  // Health: services to ignore (NULL = use built-in defaults; edited in Settings).
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS service_ignore TEXT`);
+
   // Allow the manual "block IP" command type.
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
   await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip'))`);

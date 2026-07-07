@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 export default function Settings() {
-  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false, notify_bruteforce: true, bruteforce_threshold: 10 });
+  const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false, notify_bruteforce: true, bruteforce_threshold: 10, service_ignore: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -164,6 +164,13 @@ export default function Settings() {
               </div>
             </>
           )}
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label>Ignored services (health monitoring)</label>
+            <textarea value={config.service_ignore || ''} onChange={e => setConfig({ ...config, service_ignore: e.target.value })} rows={4} placeholder="sppsvc&#10;googleupdate&#10;remoteregistry" style={{ fontFamily: 'monospace', fontSize: 13 }} />
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              One name prefix per line (or comma-separated), case-insensitive. Stopped auto-start services matching these are not alerted or shown in Health. Leave empty to monitor every service.
+            </div>
+          </div>
           <div className="form-actions">
             <button type="submit" disabled={saving}>Save</button>
             <button type="button" className="secondary" onClick={handleTest}>Test Message</button>
