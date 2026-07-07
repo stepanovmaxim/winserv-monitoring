@@ -14,7 +14,8 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
       (SELECT memory_used_mb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_mem_used,
       (SELECT memory_total_mb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_mem_total,
       (SELECT disk_used_gb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_disk_used,
-      (SELECT disk_total_gb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_disk_total
+      (SELECT disk_total_gb FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_disk_total,
+      (SELECT disks_json FROM metrics WHERE server_id = s.id ORDER BY collected_at DESC LIMIT 1) as last_disks
     FROM servers s
     LEFT JOIN server_groups g ON s.group_id = g.id
     LEFT JOIN customers c ON s.customer_id = c.id

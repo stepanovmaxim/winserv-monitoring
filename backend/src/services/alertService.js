@@ -107,11 +107,21 @@ async function checkAlerts(serverId, metrics) {
     else if (state === 'recovered') alerts.push(`<b>CPU OK</b> on ${server.hostname}: ${val.toFixed(1)}%`);
   }
 
-  if (config.notify_disk && server.notify_disk && metrics.disk_total_gb > 0) {
-    const diskPct = (Number(metrics.disk_used_gb) / Number(metrics.disk_total_gb)) * 100;
-    const state = checkThreshold(serverId + ':disk', diskPct, diskT, diskT - 20);
-    if (state === 'triggered') alerts.push(`<b>Low disk</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free (${diskPct.toFixed(1)}%)`);
-    else if (state === 'recovered') alerts.push(`<b>Disk OK</b> on ${server.hostname}: ${Number(metrics.disk_free_gb).toFixed(1)} GB free`);
+  if (config.notify_disk && server.notify_disk) {
+    // Check each disk separately — a single full volume must alert even if the
+    // fleet-wide total still looks fine.
+    const disks = Array.isArray(metrics.disks) && metrics.disks.length
+      ? metrics.disks
+      : (metrics.disk_total_gb > 0 ? [{ drive: '', total_gb: metrics.disk_total_gb, used_gb: metrics.disk_used_gb, free_gb: metrics.disk_free_gb }] : []);
+    for (const d of disks) {
+      const total = Number(d.total_gb), used = Number(d.used_gb), free = Number(d.free_gb);
+      if (!(total > 0)) continue;
+      const pct = (used / total) * 100;
+      const label = d.drive ? ` (${d.drive})` : '';
+      const state = checkThreshold(`${serverId}:disk:${d.drive || 'all'}`, pct, diskT, diskT - 20);
+      if (state === 'triggered') alerts.push(`<b>Low disk</b> on ${server.hostname}${label}: ${free.toFixed(1)} GB free (${pct.toFixed(1)}%)`);
+      else if (state === 'recovered') alerts.push(`<b>Disk OK</b> on ${server.hostname}${label}: ${free.toFixed(1)} GB free`);
+    }
   }
 
   if (config.notify_errors && server.notify_memory) {

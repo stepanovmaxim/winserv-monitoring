@@ -27,7 +27,7 @@ export default function Servers() {
       case 'group': return (s.group_name || '').toLowerCase();
       case 'cpu': return s.last_cpu != null ? Number(s.last_cpu) : -1;
       case 'memory': return s.last_mem_total > 0 ? Number(s.last_mem_used) / Number(s.last_mem_total) : -1;
-      case 'disk': return s.last_disk_total > 0 ? Number(s.last_disk_used) / Number(s.last_disk_total) : -1;
+      case 'disk': { const w = worstDisk(s); return w ? w.pct : -1; }
       case 'agent': return s.agent_version || '';
       case 'last_seen': return s.last_seen || '';
       default: return (s.hostname || '').toLowerCase();
@@ -50,6 +50,23 @@ export default function Servers() {
   }
   const diskPct = (s) => (s.last_disk_used != null && s.last_disk_total > 0)
     ? Math.max(0, Math.min(100, Math.round(Number(s.last_disk_used) / Number(s.last_disk_total) * 100))) : null;
+  // Fullest single disk — a full volume must show even if the total looks fine.
+  function worstDisk(s) {
+    let disks = s.last_disks;
+    if (typeof disks === 'string') { try { disks = JSON.parse(disks); } catch { disks = []; } }
+    let worst = null;
+    if (Array.isArray(disks)) {
+      for (const d of disks) {
+        const t = Number(d.total_gb);
+        if (!(t > 0)) continue;
+        const pct = Math.max(0, Math.min(100, Math.round(Number(d.used_gb) / t * 100)));
+        if (!worst || pct > worst.pct) worst = { pct, drive: d.drive || '' };
+      }
+    }
+    if (worst) return worst;
+    const p = diskPct(s);
+    return p != null ? { pct: p, drive: '' } : null;
+  }
 
   useEffect(() => {
     api.getGroups().then(setGroups);
@@ -81,6 +98,7 @@ export default function Servers() {
           last_mem_total: msg.mem_total_mb != null ? msg.mem_total_mb : s.last_mem_total,
           last_disk_used: msg.disk_used_gb != null ? msg.disk_used_gb : s.last_disk_used,
           last_disk_total: msg.disk_total_gb != null ? msg.disk_total_gb : s.last_disk_total,
+          last_disks: msg.disks != null ? msg.disks : s.last_disks,
         };
       }));
     };
@@ -190,7 +208,7 @@ export default function Servers() {
                   <td>{s.group_name || '-'}</td>
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
                   <td>{s.last_mem_used != null && s.last_mem_total > 0 ? `${Math.round(Number(s.last_mem_used) / Number(s.last_mem_total) * 100)}%` : '-'}</td>
-                  <td>{diskPct(s) != null ? `${diskPct(s)}%` : '-'}</td>
+                  <td>{(() => { const w = worstDisk(s); if (!w) return '-'; return <span title={w.drive ? `fullest volume ${w.drive}` : ''} style={w.pct >= 90 ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{w.pct}%{w.drive ? ` ${w.drive}` : ''}</span>; })()}</td>
                   <td>
                     {s.agent_version
                       ? <span className={`badge ${latestAgent && s.agent_version !== latestAgent ? 'badge-warning' : 'badge-viewer'}`}>v{s.agent_version}{latestAgent && s.agent_version !== latestAgent ? ' ⤴' : ''}</span>

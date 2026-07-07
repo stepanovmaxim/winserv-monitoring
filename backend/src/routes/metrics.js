@@ -95,8 +95,9 @@ router.post('/', async (req, res) => {
       // dragged the aggregate negative. Keep only real fixed disks, then
       // recompute the totals from them so the numbers are always sane.
       let disksJson = '[]';
+      let validDisks = [];
       if (Array.isArray(metrics.disks)) {
-        const validDisks = metrics.disks.filter(d => {
+        validDisks = metrics.disks.filter(d => {
           const t = Number(d.total_gb), f = Number(d.free_gb);
           return t > 0 && f >= 0 && f <= t + 0.5;
         });
@@ -114,7 +115,7 @@ router.post('/', async (req, res) => {
         [serverId, cpu_usage, memory_total_mb, memory_used_mb, disk_total_gb, disk_used_gb, disk_free_gb, disksJson, uptime_seconds]
       );
 
-      checkAlerts(serverId, { cpu_usage, memory_total_mb, memory_used_mb, disk_total_gb, disk_used_gb, disk_free_gb });
+      checkAlerts(serverId, { cpu_usage, memory_total_mb, memory_used_mb, disk_total_gb, disk_used_gb, disk_free_gb, disks: validDisks });
 
       snapshot = {
         cpu: cpu_usage,
@@ -124,6 +125,7 @@ router.post('/', async (req, res) => {
         mem_total_mb: memory_total_mb,
         disk_used_gb,
         disk_total_gb,
+        disks: validDisks,
       };
     }
   }
