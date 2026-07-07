@@ -18,6 +18,7 @@ const SERVICE_IGNORE = [
   'edgeupdate', 'microsoftedgeelevation',      // Edge updater / elevation
   'mozillamaintenance', 'braveelevation',      // other browser updaters
   'clr_optimization',                          // .NET NGEN optimizer
+  'remoteregistry', 'scardsvr', 'trustedinstaller',  // trigger-start, idle-stop
   'mapsbroker', 'tzautoupdate', 'cbdhsvc', 'cdpsvc', 'wbiosrvc',
 ];
 function isIgnoredService(name) {
