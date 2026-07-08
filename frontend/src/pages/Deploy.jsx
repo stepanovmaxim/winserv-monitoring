@@ -3,21 +3,27 @@ import { useState } from 'react';
 export default function Deploy() {
   const [copied, setCopied] = useState(false);
 
-  async function handleDownload() {
+  async function download(path, filename) {
     const token = localStorage.getItem('token');
-    const res = await fetch('/api/deploy/script', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
     const text = await res.text();
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([text], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'winserv-deployer.ps1';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function handleDownload() {
+    await download('/api/deploy/script', 'winserv-deployer.ps1');
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
+  }
+
+  function handleDownloadLauncher() {
+    download('/api/deploy/launcher', 'winserv-deployer.cmd');
   }
 
   return (
@@ -40,11 +46,25 @@ export default function Deploy() {
           <li>Servers auto-register and appear in dashboard within 2 minutes</li>
         </ol>
 
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 20, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={handleDownload} style={{ fontSize: 16, padding: '12px 32px' }}>
-            Download Deployer Script (deployer.ps1)
+            Download deployer (.ps1)
           </button>
-          {copied && <span style={{ marginLeft: 12, color: 'var(--success)' }}>Downloaded</span>}
+          <button className="secondary" onClick={handleDownloadLauncher} style={{ fontSize: 16, padding: '12px 24px' }}>
+            Download launcher (.cmd)
+          </button>
+          {copied && <span style={{ color: 'var(--success)' }}>Downloaded</span>}
+        </div>
+        <div style={{ marginTop: 16, background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 16px' }}>
+          <b style={{ fontSize: 14 }}>Easiest way to run — no unblock, no manual admin:</b>
+          <ol style={{ color: 'var(--text-muted)', paddingLeft: 20, lineHeight: 1.9, marginTop: 8, marginBottom: 0 }}>
+            <li>Download <b>both</b> files above into the <b>same folder</b>.</li>
+            <li>Double-click <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>winserv-deployer.cmd</code> — it requests admin (UAC) and runs the deployer with the execution policy bypassed.</li>
+          </ol>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>
+            The .ps1 also self-elevates and unblocks itself, so running it directly with
+            <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>powershell -ExecutionPolicy Bypass -File winserv-deployer.ps1</code> works too.
+          </p>
         </div>
       </div>
 

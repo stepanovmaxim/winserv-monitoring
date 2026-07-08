@@ -15,6 +15,13 @@ function generateDeployerScript(serverUrl, regKey) {
     '# Run on a domain-joined machine with Domain Admin rights.',
     '# Discovers servers, select with checkboxes, remote installs agent.',
     '# ====================================================================',
+    '# Self-elevate to admin (relaunch with UAC) and unblock itself, so there is',
+    '# no manual "Run as administrator" or Unblock-File step.',
+    'if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {',
+    '  try { Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" } catch { Write-Host "Elevation cancelled." -ForegroundColor Red; Start-Sleep 3 }',
+    '  exit',
+    '}',
+    'try { Unblock-File -Path $PSCommandPath -ErrorAction SilentlyContinue } catch {}',
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     '$ErrorActionPreference = "Continue"',
     '$ServerUrl = "' + serverUrl + '"',
@@ -160,10 +167,39 @@ function generateDeployerScript(serverUrl, regKey) {
   ].join('\n');
 }
 
+// A tiny double-click launcher: self-elevates and runs winserv-deployer.ps1
+// (which must sit in the same folder) with ExecutionPolicy Bypass — no unblock,
+// no manual "Run as administrator".
+function generateLauncherCmd() {
+  return [
+    '@echo off',
+    'title WinServ Deployer',
+    'net session >nul 2>&1',
+    'if %errorlevel% neq 0 (',
+    '  echo Requesting administrator rights...',
+    '  powershell -NoProfile -Command "Start-Process -FilePath \'%~f0\' -Verb RunAs"',
+    '  exit /b',
+    ')',
+    'cd /d "%~dp0"',
+    'if not exist "%~dp0winserv-deployer.ps1" (',
+    '  echo winserv-deployer.ps1 not found next to this launcher. Download it from the panel into this folder.',
+    '  pause & exit /b',
+    ')',
+    'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0winserv-deployer.ps1"',
+    'echo.',
+    'pause',
+  ].join('\r\n');
+}
+
 router.get('/script', requireAuth, requireAdmin, (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
   res.send(generateDeployerScript(serverUrl, REGISTRATION_KEY));
+});
+
+router.get('/launcher', requireAuth, requireAdmin, (req, res) => {
+  res.type('text/plain; charset=utf-8');
+  res.send(generateLauncherCmd());
 });
 
 module.exports = router;
