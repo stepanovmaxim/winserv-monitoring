@@ -45,6 +45,13 @@ export default function Servers() {
     if (sortKey === k) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(k); setSortDir('asc'); }
   }
+  const outdated = servers.filter(s => s.agent_version && latestAgent && s.agent_version !== latestAgent);
+  const outdatedCount = outdated.length;
+  async function forceUpdateOutdated() {
+    if (!confirm(`Queue a forced update for ${outdatedCount} outdated agent(s)? Works on agent v2.11+; older ones must be redeployed.`)) return;
+    await Promise.all(outdated.map(s => api.queueCommand(s.id, 'force_update', '')));
+    alert(`Queued force-update for ${outdatedCount} server(s). They apply on the next check-in.`);
+  }
   function Th({ k, children }) {
     return <th onClick={() => toggleSort(k)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>{children}{sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>;
   }
@@ -158,6 +165,7 @@ export default function Servers() {
             <option value="">All Groups</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
+          {user?.role === 'admin' && outdatedCount > 0 && <button className="secondary" onClick={forceUpdateOutdated}>Update {outdatedCount} outdated</button>}
           {user?.role === 'admin' && <button onClick={openCreate}>+ Add Server</button>}
         </div>
       </div>

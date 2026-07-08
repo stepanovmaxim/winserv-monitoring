@@ -18,7 +18,7 @@ router.get('/:serverId', requireAuth, requireAdmin, async (req, res) => {
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { server_id, ctype, param } = req.body;
   if (!server_id) return res.status(400).json({ error: 'server_id required' });
-  if (!['reboot', 'restart_service', 'block_ip', 'uninstall_agent'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
+  if (!['reboot', 'restart_service', 'block_ip', 'uninstall_agent', 'force_update'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
   if (ctype === 'restart_service' && !param) return res.status(400).json({ error: 'service name required' });
   if (ctype === 'block_ip' && !param) return res.status(400).json({ error: 'ip required' });
 
@@ -31,7 +31,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   );
   logAction({
     action_id: r.rows[0].id, server_id, hostname: server.hostname,
-    label: ctype === 'reboot' ? 'reboot' : ctype === 'block_ip' ? `block IP ${param}` : ctype === 'uninstall_agent' ? 'uninstall agent' : `restart service ${param}`,
+    label: ctype === 'reboot' ? 'reboot' : ctype === 'block_ip' ? `block IP ${param}` : ctype === 'uninstall_agent' ? 'uninstall agent' : ctype === 'force_update' ? 'force update' : `restart service ${param}`,
     new_state: 'QUEUED', source: 'web', actor: req.user.email,
   });
   res.json({ id: r.rows[0].id });

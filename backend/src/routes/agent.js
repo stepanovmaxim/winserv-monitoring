@@ -3,7 +3,7 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.10';
+const AGENT_VERSION = '2.11';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -362,6 +362,15 @@ function generateUniversalScript(serverUrl, regKey) {
     '          }',
     '          $ok = $true; $msg = "blocked $($cmd.param)"',
     '          Write-Log "Command: blocked IP $($cmd.param)"',
+    '        } elseif ($cmd.ctype -eq "force_update") {',
+    '          $selfPath = $PSCommandPath; if (-not $selfPath) { $selfPath = "C:\\winserv-agent\\agent.ps1" }',
+    '          $new = Invoke-RestMethod -Uri "$ServerUrl/api/agent/self-update?token=$Token" -Method GET -TimeoutSec 60',
+    '          if ($new -and $new.Length -gt 1000 -and $new -match "WinServ Monitoring Agent") {',
+    '            $tmp = "$selfPath.new"',
+    '            [System.IO.File]::WriteAllText($tmp, $new, (New-Object System.Text.UTF8Encoding($false)))',
+    '            try { Move-Item -Path $tmp -Destination $selfPath -Force } catch { Copy-Item -Path $tmp -Destination $selfPath -Force; Remove-Item $tmp -Force -ErrorAction SilentlyContinue }',
+    '            $ok = $true; $msg = "updated"; Write-Log "Command: force-updated"',
+    '          } else { $ok = $false; $msg = "bad payload len=$($new.Length)" }',
     '        } elseif ($cmd.ctype -eq "reboot") {',
     '          $ok = $true; $msg = "rebooting"',
     '          Write-Log "Command: reboot requested"',
@@ -398,7 +407,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '      if ($new -and $new.Length -gt 1000 -and $new -match "WinServ Monitoring Agent") {',
     '        $tmp = "$selfPath.new"',
     '        [System.IO.File]::WriteAllText($tmp, $new, (New-Object System.Text.UTF8Encoding($false)))',
-    '        Move-Item -Path $tmp -Destination $selfPath -Force',
+    '        try { Move-Item -Path $tmp -Destination $selfPath -Force } catch { Copy-Item -Path $tmp -Destination $selfPath -Force; Remove-Item $tmp -Force -ErrorAction SilentlyContinue }',
     '        Write-Log "Self-updated OK -> $($lastResponse.agent_latest)"',
     '      } else { Write-Log "Self-update rejected payload len=$($new.Length)" }',
     '    } catch { Write-Log "Self-update failed: $_" }',
