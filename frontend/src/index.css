@@ -215,6 +215,11 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
   .login-card { padding: 28px; width: 95vw; }
   .metric-value { font-size: 24px; }
   .main { padding: 20px 14px; }
+  .tabs { gap: 2px; margin-bottom: 16px; }
+  .tab { padding: 8px 11px; font-size: 13px; }
+  .event-message { max-width: 60vw; }
+  .page-header h1 { font-size: 20px; }
+  .card { padding: 16px; }
 }
 
 .form-group { margin-bottom: 16px; }
@@ -250,7 +255,7 @@ tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
   transition: width 0.4s ease;
 }
 
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
 .tab {
   padding: 9px 16px; background: none; color: var(--text-muted); border-radius: 0;
   border: none; border-bottom: 2px solid transparent; box-shadow: none;
