@@ -70,7 +70,7 @@ export default function Alerts() {
 
       <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-          <input type="checkbox" checked={onlyUnacked} onChange={e => setOnlyUnacked(e.target.checked)} />
+          <input type="checkbox" checked={onlyUnacked} onChange={e => setOnlyUnacked(e.target.checked)} style={{ width: 16, height: 16, flex: '0 0 auto', margin: 0 }} />
           Only unacknowledged
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

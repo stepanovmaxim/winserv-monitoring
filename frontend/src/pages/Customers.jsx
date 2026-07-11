@@ -162,7 +162,7 @@ export default function Customers() {
               No IPs or metrics are exposed. Anyone with the link can view it.
             </p>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, cursor: 'pointer' }}>
-              <input type="checkbox" checked={!!statusFor.status_enabled} onChange={e => updateStatusPage({ enabled: e.target.checked })} />
+              <input type="checkbox" checked={!!statusFor.status_enabled} onChange={e => updateStatusPage({ enabled: e.target.checked })} style={{ width: 16, height: 16, flex: '0 0 auto', margin: 0 }} />
               Enable public status page
             </label>
 
