@@ -249,6 +249,26 @@ async function initSchema() {
       allowed_chats TEXT DEFAULT '',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Central alert journal: every notification that fires (threshold, offline,
+    -- flapping, service, cert, brute-force, check) is recorded here for the panel,
+    -- with acknowledge/snooze state. severity: info | warning | critical.
+    CREATE TABLE IF NOT EXISTS alerts (
+      id SERIAL PRIMARY KEY,
+      severity TEXT DEFAULT 'warning' CHECK(severity IN ('info','warning','critical')),
+      kind TEXT DEFAULT '',
+      server_id INTEGER REFERENCES servers(id) ON DELETE SET NULL,
+      check_id INTEGER REFERENCES checks(id) ON DELETE SET NULL,
+      customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+      title TEXT DEFAULT '',
+      message TEXT DEFAULT '',
+      acknowledged_at TIMESTAMPTZ,
+      acknowledged_by TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_alerts_unacked ON alerts(acknowledged_at, created_at DESC);
   `);
 
   await db.exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disks_json TEXT DEFAULT '[]'`);

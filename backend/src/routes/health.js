@@ -5,15 +5,17 @@ const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { isMuted } = require('../services/maintenanceService');
 const { parseIgnore, isIgnoredService } = require('../services/serviceFilter');
+const { logAlert } = require('../services/alertLog');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
 const certAlerted = new Map();
 
-function notify(text, muted) {
+function notify(text, muted, meta = {}) {
   if (muted) return;
   sendTelegramMessage(text).catch(() => {});
   sendWebhookAlert(text);
+  logAlert({ message: text, ...meta });
 }
 
 // Agent deep-health report (services, certs, failed tasks, pending reboot).
@@ -51,8 +53,8 @@ router.post('/', async (req, res) => {
     const newSet = new Set(services.map(s => s.name));
     const added = services.filter(s => !prevSet.has(s.name));
     const recovered = [...prevSet].filter(n => !newSet.has(n));
-    if (added.length) notify(`<b>Service stopped</b> on ${server.hostname}: ${added.map(s => s.display || s.name).join(', ')}`, muted);
-    if (recovered.length) notify(`<b>Service recovered</b> on ${server.hostname}: ${recovered.join(', ')}`, muted);
+    if (added.length) notify(`<b>Service stopped</b> on ${server.hostname}: ${added.map(s => s.display || s.name).join(', ')}`, muted, { severity: 'critical', kind: 'service', server_id: server.id, customer_id: server.customer_id });
+    if (recovered.length) notify(`<b>Service recovered</b> on ${server.hostname}: ${recovered.join(', ')}`, muted, { severity: 'info', kind: 'service', server_id: server.id, customer_id: server.customer_id });
   }
 
   // Replace the snapshot.
@@ -77,7 +79,7 @@ router.post('/', async (req, res) => {
         const key = serverId + ':' + (c.subject || '');
         if (Date.now() - (certAlerted.get(key) || 0) > 24 * 60 * 60 * 1000) {
           certAlerted.set(key, Date.now());
-          notify(`<b>Certificate expiring</b> on ${server.hostname}: ${c.subject} (${c.expires})`, muted);
+          notify(`<b>Certificate expiring</b> on ${server.hostname}: ${c.subject} (${c.expires})`, muted, { severity: 'warning', kind: 'cert', server_id: server.id, customer_id: server.customer_id });
         }
       }
     }

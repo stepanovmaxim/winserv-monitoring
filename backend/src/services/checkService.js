@@ -6,6 +6,7 @@ const db = require('../db');
 const { sendTelegramMessage } = require('./telegram');
 const { sendWebhookAlert } = require('./webhookService');
 const { isMuted } = require('./maintenanceService');
+const { logAlert } = require('./alertLog');
 
 const CERT_WARN_DAYS = 14;
 const certWarned = new Map();
@@ -94,6 +95,7 @@ async function notifyCheck(c, r) {
       : `<b>CHECK UP</b> ${c.name} (${where})${r.latency != null ? ' — ' + r.latency + ' ms' : ''}`;
     sendTelegramMessage(msg).catch(() => {});
     sendWebhookAlert(msg);
+    logAlert({ severity: r.status === 'down' ? 'critical' : 'info', kind: 'check', message: msg, check_id: c.id, customer_id: c.customer_id });
   } catch (err) {
     console.error('[Check alert]', err.message);
   }
@@ -133,6 +135,7 @@ async function runDueChecks() {
             const m = `<b>TLS expiring</b> ${c.name} (${c.host}): ${r.daysLeft} day(s) left`;
             sendTelegramMessage(m).catch(() => {});
             sendWebhookAlert(m);
+            logAlert({ severity: 'warning', kind: 'cert', message: m, check_id: c.id, customer_id: c.customer_id });
           }
         }
       }

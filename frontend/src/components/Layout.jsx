@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../api';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -8,12 +9,22 @@ export default function Layout() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 1024);
+  const [unacked, setUnacked] = useState(0);
 
   useEffect(() => {
     function check() { setIsMobile(window.innerWidth <= 1024); }
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  // Poll unacknowledged alert count for the nav badge.
+  useEffect(() => {
+    let alive = true;
+    const poll = () => api.getUnackedCount().then(r => { if (alive) setUnacked(r.count || 0); }).catch(() => {});
+    poll();
+    const t = setInterval(poll, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [location.pathname]);
 
   function handleLogout() {
     logout();
@@ -63,6 +74,15 @@ export default function Layout() {
         <div className="sidebar-logo">WinServ Monitor</div>
         <nav className="sidebar-nav">
           {link('/servers', '🖥', 'Servers')}
+          <Link to="/alerts" className={`sidebar-link ${location.pathname === '/alerts' ? 'active' : ''}`} onClick={closeMenu}>
+            <span className="icon">🔔</span>
+            Alerts
+            {unacked > 0 && (
+              <span style={{ marginLeft: 'auto', background: 'var(--danger)', color: '#fff', borderRadius: 10, fontSize: 11, fontWeight: 700, padding: '1px 7px', minWidth: 18, textAlign: 'center' }}>
+                {unacked > 99 ? '99+' : unacked}
+              </span>
+            )}
+          </Link>
           {link('/checks', '📡', 'Checks')}
           {link('/reports', '📈', 'Reports')}
           {user?.role === 'admin' && link('/customers', '🏢', 'Customers')}

@@ -3,6 +3,7 @@ const { sendTelegramMessage } = require('./telegram');
 const { broadcast } = require('./sseService');
 const { isMuted } = require('./maintenanceService');
 const { sendWebhookAlert } = require('./webhookService');
+const { logAlert } = require('./alertLog');
 
 const alertActive = new Map();
 const onlineCooldown = new Map();
@@ -73,7 +74,9 @@ async function checkFlapping(server, config) {
   if (Date.now() - last < 60 * 60 * 1000) return;
   flapAlerted.set(server.id, Date.now());
   if (config?.notify_offline && !(await isMuted(server))) {
-    sendTelegramMessage(`<b>FLAPPING</b>: ${server.hostname} changed state ${row.n}× in the last hour`).catch(() => {});
+    const msg = `<b>FLAPPING</b>: ${server.hostname} changed state ${row.n}× in the last hour`;
+    sendTelegramMessage(msg).catch(() => {});
+    logAlert({ severity: 'warning', kind: 'flapping', message: msg, server_id: server.id, customer_id: server.customer_id });
   }
 }
 
@@ -136,6 +139,8 @@ async function checkAlerts(serverId, metrics) {
     const msg = alerts.join('\n');
     sendTelegramMessage(msg).catch(err => console.error('[Alert]', err.message));
     sendWebhookAlert(msg);
+    const recoveredOnly = alerts.every(a => / OK<\/b>/.test(a));
+    logAlert({ severity: recoveredOnly ? 'info' : 'warning', kind: 'threshold', message: msg, server_id: serverId, customer_id: server.customer_id });
   }
 }
 
@@ -153,6 +158,7 @@ async function handleBackOnline(serverId) {
   if (now - (onlineCooldown.get(key) || 0) > 300000) {
     onlineCooldown.set(key, now);
     sendTelegramMessage(`<b>ONLINE</b>: ${server.hostname} is back`).catch(() => {});
+    logAlert({ severity: 'info', kind: 'online', message: `ONLINE: ${server.hostname} is back`, server_id: server.id, customer_id: server.customer_id });
   }
 }
 
@@ -181,6 +187,7 @@ async function checkOfflineServers() {
       const msg = `<b>OFFLINE (${toNotify.length})</b>: ${names}`;
       sendTelegramMessage(msg).catch(() => {});
       sendWebhookAlert(msg);
+      for (const s of toNotify) logAlert({ severity: 'critical', kind: 'offline', message: `OFFLINE: ${s.hostname}`, server_id: s.id, customer_id: s.customer_id });
     }
   } catch (err) {
     console.error('[Offline check]', err.message);

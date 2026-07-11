@@ -3,6 +3,7 @@ const db = require('../db');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
+const { logAlert } = require('../services/alertLog');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -61,7 +62,7 @@ async function detectBruteforce(serverId) {
       [serverId, threshold]
     );
     if (rows.length === 0) return;
-    const server = await db.queryOne('SELECT hostname FROM servers WHERE id = $1', [serverId]);
+    const server = await db.queryOne('SELECT id, hostname, customer_id FROM servers WHERE id = $1', [serverId]);
     for (const r of rows) {
       const key = serverId + ':' + r.ip;
       if (Date.now() - (bruteAlerted.get(key) || 0) < 60 * 60 * 1000) continue;
@@ -69,6 +70,7 @@ async function detectBruteforce(serverId) {
       const msg = `<b>RDP brute-force</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} in the last hour`;
       sendTelegramMessage(msg).catch(() => {});
       sendWebhookAlert(msg);
+      logAlert({ severity: 'critical', kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
     }
   } catch (err) {
     console.error('[Bruteforce]', err.message);

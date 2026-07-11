@@ -104,6 +104,23 @@ export const api = {
     return request(`/api/checks/${id}/history`);
   },
 
+  // Alert journal
+  getAlerts(params = '') {
+    return request(`/api/alerts${params}`);
+  },
+  getUnackedCount() {
+    return request('/api/alerts/unacked-count');
+  },
+  ackAlert(id) {
+    return request(`/api/alerts/${id}/ack`, { method: 'POST' });
+  },
+  ackAllAlerts() {
+    return request('/api/alerts/ack-all', { method: 'POST' });
+  },
+  snoozeAlert(id, minutes) {
+    return request(`/api/alerts/${id}/snooze`, { method: 'POST', body: JSON.stringify({ minutes }) });
+  },
+
   // Security
   getSecurityTop(hours = 24) {
     return request(`/api/security/top?hours=${hours}`);
