@@ -26,6 +26,7 @@ const securityRoutes = require('./routes/security');
 const healthReportRoutes = require('./routes/health');
 const checkRoutes = require('./routes/checks');
 const alertRoutes = require('./routes/alerts');
+const publicRoutes = require('./routes/public');
 const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
@@ -75,6 +76,10 @@ async function start() {
 
   const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { error: 'Too many attempts' } });
   app.use('/api/auth', authLimiter);
+
+  // Public status page: unauthenticated, so rate-limit per IP against scraping.
+  const publicLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: 'Too many requests' } });
+  app.use('/api/public', publicLimiter, publicRoutes);
 
   app.use(passport.initialize());
 

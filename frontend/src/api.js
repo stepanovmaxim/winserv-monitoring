@@ -121,6 +121,17 @@ export const api = {
     return request(`/api/alerts/${id}/snooze`, { method: 'POST', body: JSON.stringify({ minutes }) });
   },
 
+  // Public status page (management)
+  setStatusPage(id, opts) {
+    return request(`/api/customers/${id}/status-page`, { method: 'POST', body: JSON.stringify(opts) });
+  },
+  // Public status page (unauthenticated read — no token, no 401 redirect)
+  async getPublicStatus(token) {
+    const res = await fetch(`${API_BASE}/api/public/status/${encodeURIComponent(token)}`);
+    if (!res.ok) throw new Error(res.status === 404 ? 'not found' : 'error');
+    return res.json();
+  },
+
   // Security
   getSecurityTop(hours = 24) {
     return request(`/api/security/top?hours=${hours}`);

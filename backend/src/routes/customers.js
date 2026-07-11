@@ -1,4 +1,5 @@
 const express = require('express');
+const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireAdmin, requireApproved } = require('../middleware/authMiddleware');
 const db = require('../db');
 
@@ -84,6 +85,19 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   await db.query('DELETE FROM customers WHERE id = $1', [req.params.id]);
   res.json({ success: true });
+});
+
+// Enable/disable or regenerate the public status-page token for a customer.
+// Returns the current token + enabled flag so the UI can build the share URL.
+router.post('/:id/status-page', requireAuth, requireAdmin, async (req, res) => {
+  const c = await db.queryOne('SELECT * FROM customers WHERE id = $1', [req.params.id]);
+  if (!c) return res.status(404).json({ error: 'Customer not found' });
+  const enabled = req.body.enabled ? 1 : 0;
+  let token = c.status_token;
+  // Mint a fresh token on first enable or explicit rotation (invalidates old links).
+  if (req.body.regenerate || (enabled && !token)) token = uuidv4().replace(/-/g, '');
+  await db.query('UPDATE customers SET status_enabled = $1, status_token = $2 WHERE id = $3', [enabled, token, c.id]);
+  res.json({ status_enabled: enabled, status_token: token });
 });
 
 module.exports = router;

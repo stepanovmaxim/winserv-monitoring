@@ -329,6 +329,11 @@ async function initSchema() {
   // Metric scheduler interval (minutes) pushed to agents; they reschedule to it.
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS metric_interval INTEGER DEFAULT 1`);
 
+  // Public per-customer status page: unguessable token + on/off toggle.
+  await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_token TEXT`);
+  await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_enabled INTEGER DEFAULT 0`);
+  await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_status_token ON customers(status_token) WHERE status_token IS NOT NULL`);
+
   // Allow the manual "block IP" command type.
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
   await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update'))`);
