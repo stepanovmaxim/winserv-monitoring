@@ -24,6 +24,8 @@ export default function ServerDetail() {
   const [health, setHealth] = useState([]);
   const [inventory, setInventory] = useState(null);
   const [swFilter, setSwFilter] = useState('');
+  const [processes, setProcesses] = useState(null);
+  const [procSort, setProcSort] = useState('cpu');
 
   useEffect(() => {
     api.getServer(id).then(setServer);
@@ -59,6 +61,10 @@ export default function ServerDetail() {
 
   function loadInventory() {
     api.getInventory(id).then(setInventory).catch(() => setInventory({ hardware: null, software: [] }));
+  }
+
+  function loadProcesses() {
+    api.getProcesses(id).then(setProcesses).catch(() => setProcesses([]));
   }
 
   async function blockIp(ip) {
@@ -198,6 +204,7 @@ export default function ServerDetail() {
         <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>Info</button>
         <button className={`tab ${tab === 'health' ? 'active' : ''}`} onClick={() => { setTab('health'); loadHealth(); }}>Health</button>
         <button className={`tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => { setTab('inventory'); loadInventory(); }}>Inventory</button>
+        <button className={`tab ${tab === 'processes' ? 'active' : ''}`} onClick={() => { setTab('processes'); loadProcesses(); }}>Processes</button>
         {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>Agent</button>}
         {user?.role === 'admin' && <button className={`tab ${tab === 'control' ? 'active' : ''}`} onClick={() => { setTab('control'); loadCommands(); }}>Control</button>}
         {user?.role === 'admin' && <button className={`tab ${tab === 'security' ? 'active' : ''}`} onClick={() => { setTab('security'); loadSecurity(); }}>Security</button>}
@@ -361,6 +368,41 @@ export default function ServerDetail() {
                 </div>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {tab === 'processes' && (
+        <div className="card">
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>Top processes</h3>
+            {server.processes_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>updated {new Date(server.processes_at).toLocaleString()}</span>}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              <button className={procSort === 'cpu' ? '' : 'secondary'} style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setProcSort('cpu')}>By CPU</button>
+              <button className={procSort === 'mem' ? '' : 'secondary'} style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setProcSort('mem')}>By RAM</button>
+              <button className="secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={loadProcesses}>↻</button>
+            </div>
+          </div>
+          {!processes ? (
+            <div className="empty"><p>Loading…</p></div>
+          ) : !server.processes_at ? (
+            <div className="empty"><p>No process data yet — requires agent v2.12+ on this host (refreshed every few minutes).</p></div>
+          ) : processes.length === 0 ? (
+            <div className="empty"><p>No processes reported.</p></div>
+          ) : (
+            <table>
+              <thead><tr><th>Process</th><th>PID</th><th>CPU %</th><th>RAM (MB)</th></tr></thead>
+              <tbody>
+                {[...processes].sort((a, b) => procSort === 'cpu' ? b.cpu_pct - a.cpu_pct : b.mem_mb - a.mem_mb).map((p, i) => (
+                  <tr key={i}>
+                    <td><strong>{p.name}</strong></td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.pid || '-'}</td>
+                    <td style={{ color: p.cpu_pct >= 50 ? 'var(--danger)' : p.cpu_pct >= 20 ? 'var(--warning)' : 'inherit' }}>{p.cpu_pct?.toFixed(1)}</td>
+                    <td>{p.mem_mb?.toFixed(0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}

@@ -108,6 +108,9 @@ export const api = {
   getInventory(serverId) {
     return request(`/api/inventory-report/${serverId}`);
   },
+  getProcesses(serverId) {
+    return request(`/api/process-report/${serverId}`);
+  },
 
   // Alert journal
   getAlerts(params = '') {

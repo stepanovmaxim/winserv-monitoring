@@ -61,6 +61,17 @@ function logStatus(serverId, status) {
     .catch(err => console.error('[Status log]', err.message));
 }
 
+// Hottest processes from the latest snapshot, e.g. "rphost 74%, sqlservr 12%".
+async function topProcesses(serverId, n = 3) {
+  try {
+    const rows = await db.queryAll(
+      'SELECT name, cpu_pct FROM process_snapshot WHERE server_id = $1 AND cpu_pct > 5 ORDER BY cpu_pct DESC LIMIT $2',
+      [serverId, n]
+    );
+    return rows.map(r => `${r.name} ${Math.round(r.cpu_pct)}%`).join(', ');
+  } catch { return ''; }
+}
+
 // A server that toggles state too often in an hour is flapping; alert once, then
 // stay quiet for an hour so we don't spam.
 async function checkFlapping(server, config) {
@@ -106,7 +117,11 @@ async function checkAlerts(serverId, metrics) {
   if (config.notify_cpu && server.notify_cpu && metrics.cpu_usage != null) {
     const val = Number(metrics.cpu_usage);
     const state = checkThreshold(serverId + ':cpu', val, cpuT, cpuT - 20);
-    if (state === 'triggered') alerts.push(`<b>High CPU</b> on ${server.hostname}: ${val.toFixed(1)}% (>${cpuT}%)`);
+    if (state === 'triggered') {
+      // Name the culprit: append the hottest processes from the latest snapshot.
+      const top = await topProcesses(serverId);
+      alerts.push(`<b>High CPU</b> on ${server.hostname}: ${val.toFixed(1)}% (>${cpuT}%)${top ? ' — top: ' + top : ''}`);
+    }
     else if (state === 'recovered') alerts.push(`<b>CPU OK</b> on ${server.hostname}: ${val.toFixed(1)}%`);
   }
 

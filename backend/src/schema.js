@@ -361,6 +361,20 @@ async function initSchema() {
   `);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS inventory_at TIMESTAMPTZ`);
 
+  // Top-processes snapshot (replaced on each agent report) — "what's loading it".
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS process_snapshot (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      name TEXT DEFAULT '',
+      pid INTEGER DEFAULT 0,
+      cpu_pct DOUBLE PRECISION DEFAULT 0,
+      mem_mb DOUBLE PRECISION DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_proc_server ON process_snapshot(server_id);
+  `);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS processes_at TIMESTAMPTZ`);
+
   // Public per-customer status page: unguessable token + on/off toggle.
   await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_token TEXT`);
   await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_enabled INTEGER DEFAULT 0`);
