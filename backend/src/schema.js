@@ -162,6 +162,37 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_statuslog_server_time ON status_log(server_id, changed_at);
 
+    -- Agentless external checks run from the backend (reachable targets only:
+    -- public IPs, gateways, VPN/mail/web endpoints). kind: ping | tcp | http | tls.
+    CREATE TABLE IF NOT EXISTS checks (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+      kind TEXT NOT NULL CHECK(kind IN ('ping','tcp','http','tls')),
+      host TEXT NOT NULL,
+      port INTEGER,
+      target TEXT DEFAULT '',
+      interval_sec INTEGER DEFAULT 60,
+      enabled INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'unknown' CHECK(status IN ('up','down','unknown')),
+      last_latency_ms INTEGER,
+      last_checked TIMESTAMPTZ,
+      last_error TEXT DEFAULT '',
+      cert_expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS check_events (
+      id SERIAL PRIMARY KEY,
+      check_id INTEGER REFERENCES checks(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      latency_ms INTEGER,
+      detail TEXT DEFAULT '',
+      at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_check_events_time ON check_events(check_id, at DESC);
+
     -- One-shot control commands (reboot, restart a service). Queued here,
     -- delivered to the agent on its next check-in, executed once, reported back.
     CREATE TABLE IF NOT EXISTS server_commands (

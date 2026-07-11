@@ -14,6 +14,7 @@ import Customers from './pages/Customers';
 import Maintenance from './pages/Maintenance';
 import Reports from './pages/Reports';
 import Security from './pages/Security';
+import Checks from './pages/Checks';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/maintenance" element={<AdminRoute><Maintenance /></AdminRoute>} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/security" element={<AdminRoute><Security /></AdminRoute>} />
+        <Route path="/checks" element={<Checks />} />
       </Route>
     </Routes>
   );

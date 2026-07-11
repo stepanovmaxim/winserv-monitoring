@@ -24,6 +24,7 @@ const commandRoutes = require('./routes/commands');
 const reportRoutes = require('./routes/reports');
 const securityRoutes = require('./routes/security');
 const healthReportRoutes = require('./routes/health');
+const checkRoutes = require('./routes/checks');
 const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
@@ -31,6 +32,7 @@ const { rollupMetrics } = require('./services/rollupService');
 const { heartbeat } = require('./services/sseService');
 const { maybeSendDigest } = require('./services/digestService');
 const { runScheduledActions } = require('./services/scheduleService');
+const { runDueChecks } = require('./services/checkService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -90,6 +92,7 @@ async function start() {
   app.use('/api/reports', reportRoutes);
   app.use('/api/security', securityRoutes);
   app.use('/api/health-report', healthReportRoutes);
+  app.use('/api/checks', checkRoutes);
   app.use('/api/stream', streamRoutes);
 
   app.get('/api/health', async (req, res) => {
@@ -143,6 +146,10 @@ async function start() {
 
   // Scheduled hide/show — every 30s so each target minute is hit at least once.
   setInterval(runScheduledActions, 30 * 1000);
+
+  // Agentless external checks (ping/tcp/http/tls) — tick every 15s; each check
+  // respects its own interval.
+  setInterval(runDueChecks, 15 * 1000);
 }
 
 // Last-resort guards. Only benign client disconnects are swallowed; any other

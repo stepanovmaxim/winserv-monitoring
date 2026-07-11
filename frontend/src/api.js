@@ -84,6 +84,26 @@ export const api = {
     return request(`/api/health-report/${serverId}`);
   },
 
+  // External checks (agentless ping/tcp/http/tls)
+  getChecks() {
+    return request('/api/checks');
+  },
+  createCheck(data) {
+    return request('/api/checks', { method: 'POST', body: JSON.stringify(data) });
+  },
+  updateCheck(id, data) {
+    return request(`/api/checks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  deleteCheck(id) {
+    return request(`/api/checks/${id}`, { method: 'DELETE' });
+  },
+  runCheck(id) {
+    return request(`/api/checks/${id}/run`, { method: 'POST' });
+  },
+  getCheckHistory(id) {
+    return request(`/api/checks/${id}/history`);
+  },
+
   // Security
   getSecurityTop(hours = 24) {
     return request(`/api/security/top?hours=${hours}`);
