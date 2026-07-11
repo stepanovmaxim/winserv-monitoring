@@ -3,7 +3,7 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.12';
+const AGENT_VERSION = '2.13';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -210,7 +210,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '',
     'function Get-Inventory {',
     '  # Hardware snapshot + installed software (from Uninstall registry keys).',
-    '  $inv = @{ hardware = @{}; software = @() }',
+    '  $inv = @{ hardware = @{}; software = @(); patches = @{} }',
     '  try {',
     '    $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue',
     '    $bios = Get-CimInstance Win32_BIOS -ErrorAction SilentlyContinue',
@@ -250,6 +250,17 @@ function generateUniversalScript(serverUrl, regKey) {
     '      }',
     '    }',
     '  } catch { Write-Log "Inventory software error: $_" }',
+    '  try {',
+    '    # Patch status from Get-HotFix (local, no Windows Update network call).',
+    '    $hf = Get-HotFix -ErrorAction Stop | Where-Object { $_.HotFixID -match "KB" }',
+    '    $last = ($hf | Where-Object { $_.InstalledOn } | Sort-Object InstalledOn -Descending | Select-Object -First 1).InstalledOn',
+    '    $lastStr = ""; if ($last) { $lastStr = $last.ToString("yyyy-MM-dd") }',
+    '    $inv.patches = @{ last_installed = $lastStr; hotfixes = @() }',
+    '    $hf | Sort-Object InstalledOn -Descending | Select-Object -First 20 | ForEach-Object {',
+    '      $d = ""; if ($_.InstalledOn) { $d = $_.InstalledOn.ToString("yyyy-MM-dd") }',
+    '      $inv.patches.hotfixes += @{ id = "$($_.HotFixID)"; installed_on = $d }',
+    '    }',
+    '  } catch { Write-Log "Inventory patches error: $_" }',
     '  return $inv',
     '}',
     '',
@@ -383,7 +394,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '  if ($Token -and (-not $LastInv -or ($nowT - $LastInv).TotalMinutes -ge 1380)) {',
     '    try {',
     '      $inv = Get-Inventory',
-    '      $invBody = @{token=$Token;hostname=$FullHostname;hardware=$inv.hardware;software=$inv.software} | ConvertTo-Json -Depth 6',
+    '      $invBody = @{token=$Token;hostname=$FullHostname;hardware=$inv.hardware;software=$inv.software;patches=$inv.patches} | ConvertTo-Json -Depth 6',
     '      $r = Send-Body $InventoryUrl $invBody',
     '      if ($r) { Write-Log "Inventory sent: sw=$($inv.software.Count)" }',
     '    } catch { Write-Log "Inventory error: $_" }',

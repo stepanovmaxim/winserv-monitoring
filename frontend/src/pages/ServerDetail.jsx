@@ -343,6 +343,35 @@ export default function ServerDetail() {
                 </div>
               )}
 
+              {inventory.hardware && (() => {
+                const lp = inventory.hardware.last_patch_date;
+                const days = lp ? Math.floor((Date.now() - new Date(lp).getTime()) / 86400000) : null;
+                const col = days == null ? 'var(--text-muted)' : days > 60 ? 'var(--danger)' : days > 35 ? 'var(--warning)' : 'var(--success, #22c55e)';
+                const hf = inventory.hardware.hotfixes || [];
+                return (
+                  <div style={{ marginBottom: 24 }}>
+                    <h4 style={{ margin: '0 0 10px' }}>Windows patches</h4>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 10 }}>
+                      <span style={{ fontSize: 15 }}>Last installed:</span>
+                      <strong style={{ color: col }}>{lp ? new Date(lp).toLocaleDateString() : 'unknown'}</strong>
+                      {days != null && <span style={{ color: col, fontSize: 13 }}>({days} days ago{days > 35 ? ' — behind on patches' : ''})</span>}
+                    </div>
+                    {hf.length > 0 && (
+                      <details>
+                        <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>Recent hotfixes ({hf.length})</summary>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                          {hf.map((h, i) => (
+                            <span key={i} style={{ fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px' }} title={h.installed_on || ''}>
+                              {h.id}{h.installed_on ? ` · ${h.installed_on}` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
                 <h4 style={{ margin: 0 }}>Installed software ({inventory.software.length})</h4>
                 <input placeholder="Filter…" value={swFilter} onChange={e => setSwFilter(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />

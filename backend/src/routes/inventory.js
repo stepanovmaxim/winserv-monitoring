@@ -11,7 +11,7 @@ const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0;
 
 // Agent inventory report: hardware snapshot + installed-software list.
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname, hardware, software } = req.body;
+  const { token, registration_key, hostname, hardware, software, patches } = req.body;
 
   let serverId = null;
   if (token) {
@@ -29,16 +29,25 @@ router.post('/', async (req, res) => {
     model: s(d.model, 120), size_gb: num(d.size_gb), media: s(d.media, 40),
   })) : [];
 
+  // Patch status: last-installed date + recent hotfixes (KB id + date).
+  const pt = patches || {};
+  const validDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null;
+  const lastPatch = validDate(pt.last_installed);
+  const hotfixes = Array.isArray(pt.hotfixes) ? pt.hotfixes.slice(0, 40).map(h => ({
+    id: s(h.id, 30), installed_on: validDate(h.installed_on),
+  })).filter(h => h.id) : [];
+
   await db.query(
     `INSERT INTO server_hardware (server_id, manufacturer, model, serial, os_caption, os_version, os_build,
-        cpu, cpu_cores, cpu_logical, ram_gb, disks_json, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+        cpu, cpu_cores, cpu_logical, ram_gb, disks_json, last_patch_date, hotfixes_json, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
      ON CONFLICT (server_id) DO UPDATE SET
         manufacturer=$2, model=$3, serial=$4, os_caption=$5, os_version=$6, os_build=$7,
-        cpu=$8, cpu_cores=$9, cpu_logical=$10, ram_gb=$11, disks_json=$12, updated_at=NOW()`,
+        cpu=$8, cpu_cores=$9, cpu_logical=$10, ram_gb=$11, disks_json=$12,
+        last_patch_date=$13, hotfixes_json=$14, updated_at=NOW()`,
     [serverId, s(hw.manufacturer, 120), s(hw.model, 120), s(hw.serial, 120), s(hw.os_caption, 120),
      s(hw.os_version, 60), s(hw.os_build, 60), s(hw.cpu, 160), int(hw.cpu_cores), int(hw.cpu_logical),
-     num(hw.ram_gb), JSON.stringify(disks)]
+     num(hw.ram_gb), JSON.stringify(disks), lastPatch, JSON.stringify(hotfixes)]
   );
 
   // Replace the software snapshot atomically.
@@ -67,9 +76,10 @@ router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
     'SELECT name, version, publisher, installed_on FROM inventory_software WHERE server_id = $1 ORDER BY lower(name)',
     [req.params.serverId]
   );
-  let disks = [];
+  let disks = [], hotfixes = [];
   try { disks = hw ? JSON.parse(hw.disks_json || '[]') : []; } catch {}
-  res.json({ hardware: hw ? { ...hw, disks } : null, software });
+  try { hotfixes = hw ? JSON.parse(hw.hotfixes_json || '[]') : []; } catch {}
+  res.json({ hardware: hw ? { ...hw, disks, hotfixes } : null, software });
 });
 
 module.exports = router;

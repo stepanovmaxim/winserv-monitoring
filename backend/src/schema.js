@@ -360,6 +360,9 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_inv_soft_server ON inventory_software(server_id, name);
   `);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS inventory_at TIMESTAMPTZ`);
+  // Windows patch status (collected with inventory).
+  await db.exec(`ALTER TABLE server_hardware ADD COLUMN IF NOT EXISTS last_patch_date DATE`);
+  await db.exec(`ALTER TABLE server_hardware ADD COLUMN IF NOT EXISTS hotfixes_json TEXT DEFAULT '[]'`);
 
   // Top-processes snapshot (replaced on each agent report) — "what's loading it".
   await db.exec(`
