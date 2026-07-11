@@ -104,6 +104,11 @@ export const api = {
     return request(`/api/checks/${id}/history`);
   },
 
+  // Asset inventory
+  getInventory(serverId) {
+    return request(`/api/inventory-report/${serverId}`);
+  },
+
   // Alert journal
   getAlerts(params = '') {
     return request(`/api/alerts${params}`);

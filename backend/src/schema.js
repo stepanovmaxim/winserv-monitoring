@@ -329,6 +329,38 @@ async function initSchema() {
   // Metric scheduler interval (minutes) pushed to agents; they reschedule to it.
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS metric_interval INTEGER DEFAULT 1`);
 
+  // Asset inventory: hardware snapshot (one row per server) + installed
+  // software (replaced on each daily agent report).
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS server_hardware (
+      server_id INTEGER PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+      manufacturer TEXT DEFAULT '',
+      model TEXT DEFAULT '',
+      serial TEXT DEFAULT '',
+      os_caption TEXT DEFAULT '',
+      os_version TEXT DEFAULT '',
+      os_build TEXT DEFAULT '',
+      cpu TEXT DEFAULT '',
+      cpu_cores INTEGER DEFAULT 0,
+      cpu_logical INTEGER DEFAULT 0,
+      ram_gb DOUBLE PRECISION DEFAULT 0,
+      disks_json TEXT DEFAULT '[]',
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS inventory_software (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      name TEXT DEFAULT '',
+      version TEXT DEFAULT '',
+      publisher TEXT DEFAULT '',
+      installed_on TEXT DEFAULT ''
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_inv_soft_server ON inventory_software(server_id, name);
+  `);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS inventory_at TIMESTAMPTZ`);
+
   // Public per-customer status page: unguessable token + on/off toggle.
   await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_token TEXT`);
   await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_enabled INTEGER DEFAULT 0`);

@@ -22,6 +22,8 @@ export default function ServerDetail() {
   const [svc, setSvc] = useState('');
   const [secEvents, setSecEvents] = useState([]);
   const [health, setHealth] = useState([]);
+  const [inventory, setInventory] = useState(null);
+  const [swFilter, setSwFilter] = useState('');
 
   useEffect(() => {
     api.getServer(id).then(setServer);
@@ -53,6 +55,10 @@ export default function ServerDetail() {
 
   function loadHealth() {
     api.getServerHealth(id).then(setHealth);
+  }
+
+  function loadInventory() {
+    api.getInventory(id).then(setInventory).catch(() => setInventory({ hardware: null, software: [] }));
   }
 
   async function blockIp(ip) {
@@ -191,6 +197,7 @@ export default function ServerDetail() {
         <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>System Events</button>
         <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>Info</button>
         <button className={`tab ${tab === 'health' ? 'active' : ''}`} onClick={() => { setTab('health'); loadHealth(); }}>Health</button>
+        <button className={`tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => { setTab('inventory'); loadInventory(); }}>Inventory</button>
         {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>Agent</button>}
         {user?.role === 'admin' && <button className={`tab ${tab === 'control' ? 'active' : ''}`} onClick={() => { setTab('control'); loadCommands(); }}>Control</button>}
         {user?.role === 'admin' && <button className={`tab ${tab === 'security' ? 'active' : ''}`} onClick={() => { setTab('security'); loadSecurity(); }}>Security</button>}
@@ -293,6 +300,67 @@ export default function ServerDetail() {
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      )}
+
+      {tab === 'inventory' && (
+        <div className="card">
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>Inventory</h3>
+            {server.inventory_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>updated {new Date(server.inventory_at).toLocaleString()}</span>}
+          </div>
+          {!inventory ? (
+            <div className="empty"><p>Loading…</p></div>
+          ) : !server.inventory_at ? (
+            <div className="empty"><p>No inventory yet — requires agent v2.12+ on this host (collected once a day).</p></div>
+          ) : (
+            <>
+              {inventory.hardware && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 24 }}>
+                  {[
+                    ['Manufacturer', inventory.hardware.manufacturer],
+                    ['Model', inventory.hardware.model],
+                    ['Serial', inventory.hardware.serial],
+                    ['OS', `${inventory.hardware.os_caption || ''} ${inventory.hardware.os_build ? '(build ' + inventory.hardware.os_build + ')' : ''}`.trim()],
+                    ['CPU', inventory.hardware.cpu],
+                    ['Cores / threads', `${inventory.hardware.cpu_cores || '?'} / ${inventory.hardware.cpu_logical || '?'}`],
+                    ['RAM', inventory.hardware.ram_gb ? `${inventory.hardware.ram_gb} GB` : '-'],
+                    ['Disks', (inventory.hardware.disks || []).map(d => `${d.model || 'disk'} ${d.size_gb ? d.size_gb + ' GB' : ''}`.trim()).join('; ') || '-'],
+                  ].map(([k, v]) => (
+                    <div key={k} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text-muted)' }}>{k}</div>
+                      <div style={{ fontSize: 14, marginTop: 3, wordBreak: 'break-word' }}>{v || '-'}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                <h4 style={{ margin: 0 }}>Installed software ({inventory.software.length})</h4>
+                <input placeholder="Filter…" value={swFilter} onChange={e => setSwFilter(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />
+              </div>
+              {inventory.software.length === 0 ? (
+                <div className="empty"><p>No software list collected.</p></div>
+              ) : (
+                <div style={{ maxHeight: 480, overflowY: 'auto' }}>
+                  <table>
+                    <thead><tr><th>Name</th><th>Version</th><th>Publisher</th></tr></thead>
+                    <tbody>
+                      {inventory.software
+                        .filter(s => !swFilter || (s.name + ' ' + (s.publisher || '')).toLowerCase().includes(swFilter.toLowerCase()))
+                        .map((s, i) => (
+                          <tr key={i}>
+                            <td>{s.name}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.version || '-'}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.publisher || '-'}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

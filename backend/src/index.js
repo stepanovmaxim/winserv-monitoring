@@ -27,6 +27,7 @@ const healthReportRoutes = require('./routes/health');
 const checkRoutes = require('./routes/checks');
 const alertRoutes = require('./routes/alerts');
 const publicRoutes = require('./routes/public');
+const inventoryRoutes = require('./routes/inventory');
 const streamRoutes = require('./routes/stream');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
@@ -98,6 +99,7 @@ async function start() {
   app.use('/api/reports', reportRoutes);
   app.use('/api/security', securityRoutes);
   app.use('/api/health-report', healthReportRoutes);
+  app.use('/api/inventory-report', inventoryRoutes);
   app.use('/api/checks', checkRoutes);
   app.use('/api/alerts', alertRoutes);
   app.use('/api/stream', streamRoutes);
