@@ -59,8 +59,8 @@ router.post('/:id/run', requireAuth, requireAdmin, async (req, res) => {
   const c = await db.queryOne('SELECT * FROM checks WHERE id = $1', [req.params.id]);
   if (!c) return res.status(404).json({ error: 'not found' });
   const r = await runCheck(c);
-  await db.query('UPDATE checks SET status=$1, last_latency_ms=$2, last_checked=NOW(), last_error=$3 WHERE id=$4',
-    [r.status, r.latency, String(r.error || '').slice(0, 200), c.id]);
+  await db.query('UPDATE checks SET status=$1, last_latency_ms=$2, last_checked=NOW(), last_error=$3, cert_expires_at=COALESCE($4, cert_expires_at) WHERE id=$5',
+    [r.status, r.latency, String(r.error || '').slice(0, 200), r.cert_expires_at || null, c.id]);
   res.json(r);
 });
 

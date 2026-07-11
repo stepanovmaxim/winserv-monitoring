@@ -1,9 +1,14 @@
 const net = require('net');
+const tls = require('tls');
 const { execFile } = require('child_process');
+const nodeFetch = require('node-fetch');
 const db = require('../db');
 const { sendTelegramMessage } = require('./telegram');
 const { sendWebhookAlert } = require('./webhookService');
 const { isMuted } = require('./maintenanceService');
+
+const CERT_WARN_DAYS = 14;
+const certWarned = new Map();
 
 // ICMP ping via the system binary (Node can't do raw ICMP without privileges).
 // execFile passes host as an argv element, so there's no shell to inject into.
@@ -36,17 +41,46 @@ function tcpCheck(host, port) {
   });
 }
 
+// HTTP: GET the URL (stored in host), up if it answers < 400.
+async function httpCheck(c) {
+  const url = /^https?:\/\//i.test(c.host) ? c.host : 'http://' + c.host;
+  const start = Date.now();
+  try {
+    const res = await nodeFetch(url, { method: 'GET', timeout: 9000, redirect: 'follow', headers: { 'User-Agent': 'WinServ-Monitor' } });
+    const latency = Date.now() - start;
+    const ok = res.status < 400;
+    return { status: ok ? 'up' : 'down', latency, error: ok ? '' : 'HTTP ' + res.status };
+  } catch (e) {
+    return { status: 'down', latency: null, error: (e.code || e.message || 'error').toString().slice(0, 60) };
+  }
+}
+
+// TLS: read the peer cert (even if expired/self-signed) and report expiry.
+function tlsCheck(c) {
+  return new Promise((resolve) => {
+    const host = c.host, port = c.port || 443;
+    const start = Date.now();
+    let done = false;
+    const finish = (o) => { if (done) return; done = true; try { socket.destroy(); } catch {} resolve(o); };
+    const socket = tls.connect({ host, port, servername: host, timeout: 9000, rejectUnauthorized: false }, () => {
+      const cert = socket.getPeerCertificate();
+      if (!cert || !cert.valid_to) return finish({ status: 'down', latency: null, error: 'no certificate' });
+      const expires = new Date(cert.valid_to);
+      const daysLeft = Math.floor((expires.getTime() - Date.now()) / 86400000);
+      finish({ status: daysLeft > 0 ? 'up' : 'down', latency: Date.now() - start, error: daysLeft > 0 ? '' : 'certificate expired', cert_expires_at: expires.toISOString(), daysLeft });
+    });
+    socket.once('timeout', () => finish({ status: 'down', latency: null, error: 'timeout' }));
+    socket.once('error', (e) => finish({ status: 'down', latency: null, error: (e.code || 'error').toString() }));
+  });
+}
+
 async function runCheck(c) {
   if (c.kind === 'ping') return pingHost(c.host);
   if (c.kind === 'tcp') return tcpCheck(c.host, c.port || 0);
-  // http/tls are handled by httpCheckService (registered later); default down.
-  if (checkExtra[c.kind]) return checkExtra[c.kind](c);
+  if (c.kind === 'http') return httpCheck(c);
+  if (c.kind === 'tls') return tlsCheck(c);
   return { status: 'down', latency: null, error: 'unsupported' };
 }
-
-// Lets other modules (item 3: http/tls) plug in without a circular require.
-const checkExtra = {};
-function registerCheckKind(kind, fn) { checkExtra[kind] = fn; }
 
 async function notifyCheck(c, r) {
   try {
@@ -77,8 +111,9 @@ async function runDueChecks() {
       try { r = await runCheck(c); } catch (e) { r = { status: 'down', latency: null, error: e.message }; }
       const prev = c.status;
       await db.query(
-        'UPDATE checks SET status = $1, last_latency_ms = $2, last_checked = NOW(), last_error = $3 WHERE id = $4',
-        [r.status, r.latency, String(r.error || '').slice(0, 200), c.id]
+        `UPDATE checks SET status = $1, last_latency_ms = $2, last_checked = NOW(), last_error = $3,
+           cert_expires_at = COALESCE($4, cert_expires_at) WHERE id = $5`,
+        [r.status, r.latency, String(r.error || '').slice(0, 200), r.cert_expires_at || null, c.id]
       );
       if (r.status !== prev) {
         await db.query(
@@ -88,10 +123,23 @@ async function runDueChecks() {
         // Alert on any real transition, and on a target that starts already down.
         if (prev !== 'unknown' || r.status === 'down') await notifyCheck(c, r);
       }
+      // Certificate-expiry warning (separate from up/down), once per day per check.
+      if (c.kind === 'tls' && r.daysLeft != null && r.daysLeft > 0 && r.daysLeft <= CERT_WARN_DAYS) {
+        const last = certWarned.get(c.id) || 0;
+        if (Date.now() - last > 24 * 60 * 60 * 1000) {
+          certWarned.set(c.id, Date.now());
+          const cfg = await db.queryOne('SELECT id FROM telegram_config WHERE enabled = 1 LIMIT 1');
+          if (cfg && !(await isMuted({ id: 0, group_id: 0, customer_id: c.customer_id }))) {
+            const m = `<b>TLS expiring</b> ${c.name} (${c.host}): ${r.daysLeft} day(s) left`;
+            sendTelegramMessage(m).catch(() => {});
+            sendWebhookAlert(m);
+          }
+        }
+      }
     }));
   } catch (err) {
     console.error('[Checks]', err.message);
   }
 }
 
-module.exports = { runDueChecks, runCheck, pingHost, tcpCheck, registerCheckKind };
+module.exports = { runDueChecks, runCheck, pingHost, tcpCheck };
