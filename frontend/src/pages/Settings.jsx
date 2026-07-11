@@ -8,10 +8,30 @@ export default function Settings() {
   const [message, setMessage] = useState('');
   const [agentScripts, setAgentScripts] = useState('');
   const [showAgent, setShowAgent] = useState(false);
+  const [triggers, setTriggers] = useState([]);
+  const [trigForm, setTrigForm] = useState({ event_id: '', log_name: 'System', source_match: '', label: '', severity: 'warning' });
 
   useEffect(() => {
     api.getTelegramConfig().then(data => setConfig(prev => ({ ...prev, ...data }))).finally(() => setLoading(false));
+    api.getEventTriggers().then(setTriggers).catch(() => {});
   }, []);
+
+  async function addTrigger(e) {
+    e.preventDefault();
+    if (!trigForm.event_id) return;
+    await api.createEventTrigger(trigForm);
+    setTrigForm({ event_id: '', log_name: 'System', source_match: '', label: '', severity: 'warning' });
+    api.getEventTriggers().then(setTriggers);
+  }
+  async function toggleTrigger(t) {
+    await api.updateEventTrigger(t.id, { enabled: t.enabled ? 0 : 1 });
+    api.getEventTriggers().then(setTriggers);
+  }
+  async function removeTrigger(id) {
+    if (!confirm('Delete this trigger?')) return;
+    await api.deleteEventTrigger(id);
+    api.getEventTriggers().then(setTriggers);
+  }
 
   async function handleSave(e) {
     e.preventDefault();
@@ -184,6 +204,43 @@ export default function Settings() {
             {message && <span style={{ fontSize: 13, color: message.startsWith('Error') ? 'var(--danger)' : 'var(--success)', alignSelf: 'center' }}>{message}</span>}
           </div>
         </form>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h3>Event ID triggers</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
+          Alert when a specific Windows Event Log ID appears on any server — e.g. <b>6008</b> unexpected shutdown,
+          <b> 55</b> NTFS corruption, <b>7</b> disk bad block, <b>41</b> kernel power. The agent collects these from
+          the chosen log regardless of level (agent v2.15+).
+        </p>
+        <form onSubmit={addTrigger} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Event ID *</label><input type="number" value={trigForm.event_id} onChange={e => setTrigForm({ ...trigForm, event_id: e.target.value })} required style={{ width: 100 }} placeholder="6008" /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Log</label><select value={trigForm.log_name} onChange={e => setTrigForm({ ...trigForm, log_name: e.target.value })} style={{ width: 130 }}><option>System</option><option>Application</option><option>Security</option><option>Setup</option></select></div>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Source contains</label><input value={trigForm.source_match} onChange={e => setTrigForm({ ...trigForm, source_match: e.target.value })} style={{ width: 130 }} placeholder="optional" /></div>
+          <div style={{ flex: '1 1 160px' }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Label</label><input value={trigForm.label} onChange={e => setTrigForm({ ...trigForm, label: e.target.value })} placeholder="Unexpected shutdown" /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Severity</label><select value={trigForm.severity} onChange={e => setTrigForm({ ...trigForm, severity: e.target.value })} style={{ width: 110 }}><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select></div>
+          <button type="submit">Add</button>
+        </form>
+        {triggers.length === 0 ? (
+          <div className="empty"><p>No triggers yet.</p></div>
+        ) : (
+          <table>
+            <thead><tr><th>Event ID</th><th>Log</th><th>Source</th><th>Label</th><th>Severity</th><th>State</th><th></th></tr></thead>
+            <tbody>
+              {triggers.map(t => (
+                <tr key={t.id} style={t.enabled ? {} : { opacity: 0.5 }}>
+                  <td><strong>{t.event_id}</strong></td>
+                  <td style={{ fontSize: 13 }}>{t.log_name}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.source_match || '-'}</td>
+                  <td style={{ fontSize: 13 }}>{t.label || '-'}</td>
+                  <td style={{ fontSize: 12 }}>{t.severity}</td>
+                  <td><button className="secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => toggleTrigger(t)}>{t.enabled ? 'On' : 'Off'}</button></td>
+                  <td><button className="danger" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => removeTrigger(t.id)}>Del</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="card">

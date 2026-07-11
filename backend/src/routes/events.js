@@ -3,9 +3,41 @@ const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { assignCustomerByDomain } = require('../services/tenantService');
+const { sendTelegramMessage } = require('../services/telegram');
+const { sendWebhookAlert } = require('../services/webhookService');
+const { isMuted } = require('../services/maintenanceService');
+const { logAlert } = require('../services/alertLog');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
+
+// Dedupe event-trigger alerts: fire at most once per (server, event_id) / hour.
+const triggerAlerted = new Map();
+
+// Fire an alert for any newly-stored events matching an enabled Event ID trigger.
+async function checkEventTriggers(serverId, newEvents) {
+  if (!newEvents.length) return;
+  const triggers = await db.queryAll('SELECT * FROM event_triggers WHERE enabled = 1');
+  if (!triggers.length) return;
+  const cfg = await db.queryOne('SELECT id FROM telegram_config WHERE enabled = 1 LIMIT 1');
+  if (!cfg) return;
+  const server = await db.queryOne('SELECT id, hostname, group_id, customer_id FROM servers WHERE id = $1', [serverId]);
+  if (!server || await isMuted(server)) return;
+
+  for (const ev of newEvents) {
+    const t = triggers.find(tr => tr.event_id === (ev.event_id || 0) &&
+      (!tr.source_match || String(ev.source || '').toLowerCase().includes(tr.source_match.toLowerCase())));
+    if (!t) continue;
+    const key = serverId + ':' + t.event_id;
+    if (Date.now() - (triggerAlerted.get(key) || 0) < 60 * 60 * 1000) continue;
+    triggerAlerted.set(key, Date.now());
+    const short = String(ev.message || '').replace(/\s+/g, ' ').slice(0, 200);
+    const msg = `<b>Event ${t.event_id}</b> on ${server.hostname}${t.label ? ' — ' + t.label : ''}${short ? ': ' + short : ''}`;
+    sendTelegramMessage(msg).catch(() => {});
+    sendWebhookAlert(msg);
+    logAlert({ severity: t.severity, kind: 'event', message: msg, server_id: server.id, customer_id: server.customer_id });
+  }
+}
 
 router.post('/', async (req, res) => {
   const { token, registration_key, hostname } = req.body;
@@ -67,6 +99,7 @@ router.post('/', async (req, res) => {
 
   const validLevels = ['Critical', 'Error', 'Warning', 'Information'];
   let inserted = 0;
+  const newEvents = [];
 
   for (const ev of events) {
     let lvl = ev.level || 'Error';
@@ -89,8 +122,10 @@ router.post('/', async (req, res) => {
        )`,
       [serverId, ev.source || '', ev.event_id || 0, lvl, ev.message || '', ev.recorded_at || null]
     );
-    if (r.rowCount > 0) inserted++;
+    if (r.rowCount > 0) { inserted++; newEvents.push({ source: ev.source || '', event_id: ev.event_id || 0, message: ev.message || '' }); }
   }
+
+  try { await checkEventTriggers(serverId, newEvents); } catch (e) { console.error('[EventTrigger]', e.message); }
 
   res.json({ success: true, count: inserted });
 });

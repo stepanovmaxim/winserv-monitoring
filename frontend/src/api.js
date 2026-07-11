@@ -112,6 +112,20 @@ export const api = {
     return request(`/api/process-report/${serverId}`);
   },
 
+  // Event ID triggers
+  getEventTriggers() {
+    return request('/api/event-triggers');
+  },
+  createEventTrigger(data) {
+    return request('/api/event-triggers', { method: 'POST', body: JSON.stringify(data) });
+  },
+  updateEventTrigger(id, data) {
+    return request(`/api/event-triggers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  deleteEventTrigger(id) {
+    return request(`/api/event-triggers/${id}`, { method: 'DELETE' });
+  },
+
   // Alert journal
   getAlerts(params = '') {
     return request(`/api/alerts${params}`);

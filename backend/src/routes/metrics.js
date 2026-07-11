@@ -150,7 +150,9 @@ router.post('/', async (req, res) => {
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
   const cfgIv = await db.queryOne('SELECT metric_interval FROM telegram_config LIMIT 1');
   const metric_interval = (cfgIv && cfgIv.metric_interval) ? cfgIv.metric_interval : 1;
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: AGENT_VERSION, metric_interval });
+  // Watched Event IDs the agent should also collect (beyond critical/error).
+  const event_triggers = await db.queryAll('SELECT event_id, log_name FROM event_triggers WHERE enabled = 1');
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: AGENT_VERSION, metric_interval, event_triggers });
 
   // Push the fresh reading to any live dashboards.
   const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);

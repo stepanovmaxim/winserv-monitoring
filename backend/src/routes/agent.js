@@ -3,7 +3,7 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.14';
+const AGENT_VERSION = '2.15';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -124,6 +124,34 @@ function generateUniversalScript(serverUrl, regKey) {
     '    $result += @{source=$source;event_id=$eid;level=$lvl;message=$msg;recorded_at=$time}',
     '  }',
     '  Write-Log "Events collected: $($result.Count)"',
+    '  return $result',
+    '}',
+    '',
+    'function Get-TriggeredEvents($triggers) {',
+    '  # Collect user-configured Event IDs regardless of level, from their logs.',
+    '  if (-not $triggers) { return @() }',
+    '  $since = (Get-Date).AddMinutes(-30)',
+    '  $byLog = @{}',
+    '  foreach ($t in $triggers) {',
+    '    $log = if ($t.log_name) { "$($t.log_name)" } else { "System" }',
+    '    if (-not $byLog.ContainsKey($log)) { $byLog[$log] = @() }',
+    '    $byLog[$log] += [int]$t.event_id',
+    '  }',
+    '  $result = @()',
+    '  foreach ($log in $byLog.Keys) {',
+    '    $ids = @($byLog[$log] | Select-Object -Unique)',
+    '    try {',
+    '      $evs = Get-WinEvent -FilterHashtable @{LogName=$log;Id=$ids;StartTime=$since} -MaxEvents 100 -ErrorAction Stop',
+    '      foreach ($e in $evs) {',
+    '        $src = if ($e.ProviderName) { $e.ProviderName } else { "" }',
+    '        $lvlNum = if ($e.Level) { $e.Level } else { 4 }',
+    '        if ($lvlNum -le 1) { $lvl = "Critical" } elseif ($lvlNum -le 2) { $lvl = "Error" } elseif ($lvlNum -le 3) { $lvl = "Warning" } else { $lvl = "Information" }',
+    '        $m = ""; try { if ($e.Message) { $m = if ($e.Message.Length -gt 2000) { $e.Message.Substring(0,2000) } else { $e.Message } } } catch {}',
+    '        $tm = if ($e.TimeCreated) { $e.TimeCreated.ToString("yyyy-MM-ddTHH:mm:ss") } else { (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss") }',
+    '        $result += @{source=$src;event_id=$e.Id;level=$lvl;message=$m;recorded_at=$tm}',
+    '      }',
+    '    } catch {}',
+    '  }',
     '  return $result',
     '}',
     '',
@@ -355,6 +383,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '  }',
     '',
     '  try { $events = Get-CriticalEvents } catch { Write-Log "Events collection error: $_"; $events = @() }',
+    '  if ($lastResponse -and $lastResponse.event_triggers) { try { $events = @($events) + @(Get-TriggeredEvents $lastResponse.event_triggers) } catch { Write-Log "Trigger events error: $_" } }',
     '  Write-Log "Events found: $($events.Count)"',
     '',
     '  if ($events.Count -gt 0) {',

@@ -378,6 +378,21 @@ async function initSchema() {
   `);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS processes_at TIMESTAMPTZ`);
 
+  // User-defined Event Log triggers: alert when a specific Event ID appears
+  // (e.g. 6008 unexpected shutdown, 55 NTFS corruption, 7 disk bad block).
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS event_triggers (
+      id SERIAL PRIMARY KEY,
+      event_id INTEGER NOT NULL,
+      log_name TEXT DEFAULT 'System',
+      source_match TEXT DEFAULT '',
+      label TEXT DEFAULT '',
+      severity TEXT DEFAULT 'warning' CHECK(severity IN ('info','warning','critical')),
+      enabled INTEGER DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
   // Public per-customer status page: unguessable token + on/off toggle.
   await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_token TEXT`);
   await db.exec(`ALTER TABLE customers ADD COLUMN IF NOT EXISTS status_enabled INTEGER DEFAULT 0`);
