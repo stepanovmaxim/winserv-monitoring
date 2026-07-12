@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # The unit tests exercise pure lib modules only (no external deps, no DB),
+      # so they run without an install step. Install is best-effort for future
+      # tests that might need dependencies.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+        continue-on-error: true
+      - name: Run tests
+        run: npm test

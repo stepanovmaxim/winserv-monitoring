@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const { normalizeStatus, overallStatus } = require('../lib/status');
 
 const router = express.Router();
 
@@ -26,21 +27,12 @@ router.get('/status/:token', async (req, res) => {
   );
 
   // Normalise everything to operational | degraded | down | unknown.
-  const norm = (s) => {
-    if (s === 'online' || s === 'up') return 'operational';
-    if (s === 'warning') return 'degraded';
-    if (s === 'offline' || s === 'down' || s === 'critical') return 'down';
-    return 'unknown';
-  };
-
   const components = [
-    ...servers.map(s => ({ name: s.hostname, group: 'Servers', status: norm(s.status), updated: s.last_seen })),
-    ...checks.map(ck => ({ name: ck.name, group: 'Services', status: norm(ck.status), updated: ck.last_checked })),
+    ...servers.map(s => ({ name: s.hostname, group: 'Servers', status: normalizeStatus(s.status), updated: s.last_seen })),
+    ...checks.map(ck => ({ name: ck.name, group: 'Services', status: normalizeStatus(ck.status), updated: ck.last_checked })),
   ];
 
-  const anyDown = components.some(x => x.status === 'down');
-  const anyDegraded = components.some(x => x.status === 'degraded');
-  const overall = components.length === 0 ? 'unknown' : anyDown ? 'down' : anyDegraded ? 'degraded' : 'operational';
+  const overall = overallStatus(components);
 
   res.set('Cache-Control', 'no-store');
   res.json({ name: c.name, overall, components, generated_at: new Date().toISOString() });

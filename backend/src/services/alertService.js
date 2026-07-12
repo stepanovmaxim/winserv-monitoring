@@ -4,22 +4,13 @@ const { broadcast } = require('./sseService');
 const { isMuted } = require('./maintenanceService');
 const { sendWebhookAlert } = require('./webhookService');
 const { logAlert } = require('./alertLog');
+const { firstNum, thresholdTransition } = require('../lib/thresholds');
 
 const alertActive = new Map();
 const onlineCooldown = new Map();
 const flapAlerted = new Map();
 const serverStart = Date.now();
 const GRACE_MS = 2 * 60 * 1000;
-
-// First value that parses to a finite integer — used to walk the threshold
-// inheritance chain (server → group → customer → global).
-function firstNum(...vals) {
-  for (const v of vals) {
-    const n = parseInt(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
 
 // Mirror flag changes to the DB so a restart doesn't re-fire alerts that were
 // already active (or miss recoveries that happened while we were down).
@@ -43,17 +34,10 @@ async function loadAlertState() {
 
 function checkThreshold(key, currentValue, triggerAt, recoverAt) {
   const wasAbove = alertActive.get(key) || false;
-  if (!wasAbove && currentValue > triggerAt) {
-    alertActive.set(key, true);
-    persistState(key, true);
-    return 'triggered';
-  }
-  if (wasAbove && currentValue < recoverAt) {
-    alertActive.set(key, false);
-    persistState(key, false);
-    return 'recovered';
-  }
-  return null;
+  const t = thresholdTransition(wasAbove, currentValue, triggerAt, recoverAt);
+  if (t === 'triggered') { alertActive.set(key, true); persistState(key, true); }
+  else if (t === 'recovered') { alertActive.set(key, false); persistState(key, false); }
+  return t;
 }
 
 function logStatus(serverId, status) {

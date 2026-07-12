@@ -5,6 +5,7 @@ const { checkAlerts, handleBackOnline } = require('../services/alertService');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { broadcast } = require('../services/sseService');
 const { assignCustomerByDomain } = require('../services/tenantService');
+const { filterValidDisks, diskAggregate } = require('../lib/disk');
 const { AGENT_VERSION } = require('./agent');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -94,19 +95,13 @@ router.post('/', async (req, res) => {
       // Mount-point / reparse volumes report free > total (impossible), which
       // dragged the aggregate negative. Keep only real fixed disks, then
       // recompute the totals from them so the numbers are always sane.
-      let disksJson = '[]';
-      let validDisks = [];
-      if (Array.isArray(metrics.disks)) {
-        validDisks = metrics.disks.filter(d => {
-          const t = Number(d.total_gb), f = Number(d.free_gb);
-          return t > 0 && f >= 0 && f <= t + 0.5;
-        });
-        disksJson = JSON.stringify(validDisks);
-        if (validDisks.length) {
-          disk_total_gb = validDisks.reduce((a, d) => a + Number(d.total_gb), 0);
-          disk_free_gb = validDisks.reduce((a, d) => a + Number(d.free_gb), 0);
-          disk_used_gb = disk_total_gb - disk_free_gb;
-        }
+      const validDisks = filterValidDisks(metrics.disks);
+      const disksJson = JSON.stringify(validDisks);
+      const agg = diskAggregate(validDisks);
+      if (agg) {
+        disk_total_gb = agg.total_gb;
+        disk_free_gb = agg.free_gb;
+        disk_used_gb = agg.used_gb;
       }
 
       await db.query(
