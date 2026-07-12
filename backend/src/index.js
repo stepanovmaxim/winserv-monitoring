@@ -84,13 +84,29 @@ async function start() {
   const publicLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: 'Too many requests' } });
   app.use('/api/public', publicLimiter, publicRoutes);
 
+  // Agent ingest endpoints. Agents reach these through the Cloudflare tunnel, so
+  // req.ip is the tunnel address (identical for every agent) — keying on it would
+  // throttle the whole fleet together. Key on the agent TOKEN instead (fall back
+  // to IP for token-less onboarding). One shared instance caps each agent's TOTAL
+  // ingest rate across all six endpoints: generous vs a legit agent (~6 req/run),
+  // tight vs a flood from a stolen token or a buggy loop.
+  const ingestLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: false,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator: (req) => (req.body && req.body.token) ? 'tok:' + req.body.token : 'ip:' + (req.ip || 'x'),
+    message: { error: 'ingest rate limit exceeded' },
+  });
+
   app.use(passport.initialize());
 
   app.use('/api/auth', authRoutes);
   app.use('/api/servers', serverRoutes);
   app.use('/api/groups', groupRoutes);
-  app.use('/api/metrics', metricsRoutes);
-  app.use('/api/events', eventsRoutes);
+  app.use('/api/metrics', ingestLimiter, metricsRoutes);
+  app.use('/api/events', ingestLimiter, eventsRoutes);
   app.use('/api/telegram', telegramRoutes);
   app.use('/api/agent', agentRoutes);
   app.use('/api/deploy', deployRoutes);
@@ -99,10 +115,10 @@ async function start() {
   app.use('/api/maintenance', maintenanceRoutes);
   app.use('/api/commands', commandRoutes);
   app.use('/api/reports', reportRoutes);
-  app.use('/api/security', securityRoutes);
-  app.use('/api/health-report', healthReportRoutes);
-  app.use('/api/inventory-report', inventoryRoutes);
-  app.use('/api/process-report', processRoutes);
+  app.use('/api/security', ingestLimiter, securityRoutes);
+  app.use('/api/health-report', ingestLimiter, healthReportRoutes);
+  app.use('/api/inventory-report', ingestLimiter, inventoryRoutes);
+  app.use('/api/process-report', ingestLimiter, processRoutes);
   app.use('/api/event-triggers', eventTriggerRoutes);
   app.use('/api/checks', checkRoutes);
   app.use('/api/alerts', alertRoutes);

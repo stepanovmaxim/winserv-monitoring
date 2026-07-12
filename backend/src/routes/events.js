@@ -50,6 +50,8 @@ router.post('/', async (req, res) => {
   if (!Array.isArray(events)) {
     events = [];
   }
+  // Cap the batch so a malformed/hostile agent can't push an unbounded payload.
+  if (events.length > 500) events = events.slice(0, 500);
 
   if (events.length === 0) {
     return res.json({ success: true, count: 0 });

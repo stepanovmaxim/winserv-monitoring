@@ -15,6 +15,7 @@ router.post('/', async (req, res) => {
   let { events } = req.body;
   if (typeof events === 'string') { try { events = JSON.parse(events); } catch { events = []; } }
   if (!Array.isArray(events)) events = [];
+  if (events.length > 500) events = events.slice(0, 500);
   if (events.length === 0) return res.json({ success: true, count: 0 });
 
   let serverId = null;

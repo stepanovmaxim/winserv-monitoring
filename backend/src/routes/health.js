@@ -36,9 +36,9 @@ router.post('/', async (req, res) => {
 
   const ignoreRow = await db.queryOne('SELECT service_ignore FROM telegram_config LIMIT 1');
   const ignoreList = parseIgnore(ignoreRow ? ignoreRow.service_ignore : undefined);
-  services = (Array.isArray(services) ? services : []).filter(s => !isIgnoredService(s && s.name, ignoreList));
-  certs = Array.isArray(certs) ? certs : [];
-  tasks = Array.isArray(tasks) ? tasks : [];
+  services = (Array.isArray(services) ? services : []).filter(s => !isIgnoredService(s && s.name, ignoreList)).slice(0, 500);
+  certs = (Array.isArray(certs) ? certs : []).slice(0, 500);
+  tasks = (Array.isArray(tasks) ? tasks : []).slice(0, 500);
 
   const server = await db.queryOne('SELECT id, hostname, group_id, customer_id, health_at FROM servers WHERE id = $1', [serverId]);
   if (!server) return res.status(404).json({ error: 'server not found' });
