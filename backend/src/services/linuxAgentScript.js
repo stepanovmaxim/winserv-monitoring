@@ -80,10 +80,40 @@ if [ -n "\$NEWTOK" ] && [ "\$NEWTOK" != "\$TOKEN" ]; then
 fi
 [ -z "\$TOKEN" ] && { log "no token"; exit 0; }
 
-# --- processes (~every 3 min): top by CPU, normalised across cores like Windows ---
+# --- processes (~every 3 min) ---
+# CPU is a real delta over 1s from /proc/<pid>/stat, not ps's lifetime average,
+# so it shows what is loading the box RIGHT NOW. The comm field is read from
+# between the parentheses, so process titles containing spaces (e.g. renamed
+# node/PM2 workers) can't shift the columns.
 if due proc_at 150; then
-  PROCS=\$(ps -eo comm=,pid=,pcpu=,rss= --sort=-pcpu 2>/dev/null | head -15 \\
-    | awk -v n="\$NPROC" '{gsub(/"/,"",\$1); printf "%s{\\"name\\":\\"%s\\",\\"pid\\":%d,\\"cpu_pct\\":%.1f,\\"mem_mb\\":%.1f}", (c++?",":""), \$1, \$2, \$3/n, \$4/1024}')
+  HZ=\$(getconf CLK_TCK 2>/dev/null || echo 100)
+  PGSZ=\$(getconf PAGESIZE 2>/dev/null || echo 4096)
+  psnap() {
+    awk '{ f=FILENAME; sub("/proc/","",f); sub("/stat","",f);
+           l=\$0; a=index(l,"("); b=0;
+           for(i=length(l); i>0; i--) if (substr(l,i,1)==")") { b=i; break }
+           if (a==0 || b==0 || b<a) next;
+           c=substr(l,a+1,b-a-1); gsub(/[^A-Za-z0-9._:@-]/,"_",c);
+           r=substr(l,b+2); split(r,F," ");
+           print f"|"(F[12]+F[13])"|"c }' /proc/[0-9]*/stat 2>/dev/null
+  }
+  PA=\$(mktemp); PB=\$(mktemp)
+  psnap > "\$PA"; sleep 1; psnap > "\$PB"
+  ALL=\$(awk -v hz="\$HZ" -v np="\$NPROC" -v pg="\$PGSZ" -F'|' '
+    NR==FNR { t[\$1]=\$2; next }
+    {
+      pid=\$1; d=\$2-((pid in t) ? t[pid] : \$2); if (d<0) d=0;
+      cpu=d*100/hz/np;
+      rss=0; sf="/proc/" pid "/statm";
+      if ((getline line < sf) > 0) { split(line,m," "); rss=m[2]*pg/1048576 }
+      close(sf);
+      if (rss>0 || cpu>0) printf "%.2f|%.1f|%s|%s\\n", cpu, rss, pid, \$3
+    }' "\$PA" "\$PB")
+  rm -f "\$PA" "\$PB"
+  # Top 15 by CPU plus top 10 by memory, deduped — so both UI sorts are useful.
+  PICK=\$( { printf '%s\\n' "\$ALL" | sort -t'|' -k1 -rn | head -15
+             printf '%s\\n' "\$ALL" | sort -t'|' -k2 -rn | head -10; } | awk -F'|' '!seen[\$3]++')
+  PROCS=\$(printf '%s\\n' "\$PICK" | awk -F'|' 'NF==4 {printf "%s{\\"name\\":\\"%s\\",\\"pid\\":%d,\\"cpu_pct\\":%.1f,\\"mem_mb\\":%.1f}", (c++?",":""), substr(\$4,1,60), \$3, \$1, \$2}')
   [ -n "\$PROCS" ] && post "\$SERVER_URL/api/process-report" "{\\"token\\":\\"\$TOKEN\\",\\"hostname\\":\\"\$(esc "\$HOST")\\",\\"processes\\":[\$PROCS]}" >/dev/null
   st_set proc_at "\$NOW"
 fi
