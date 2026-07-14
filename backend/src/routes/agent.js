@@ -623,7 +623,7 @@ router.get('/self-update', async (req, res) => {
 });
 
 // Latest agent version, so the UI can flag outdated hosts.
-router.get('/version', requireAuth, (req, res) => res.json({ latest: AGENT_VERSION }));
+router.get('/version', requireAuth, (req, res) => res.json({ latest: AGENT_VERSION, linux_latest: LINUX_AGENT_VERSION }));
 
 module.exports = router;
 module.exports.generateUniversalScript = generateUniversalScript;

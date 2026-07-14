@@ -104,6 +104,11 @@ export const api = {
     return request(`/api/checks/${id}/history`);
   },
 
+  // Linux agent install one-liner (admin only — contains the registration key)
+  getLinuxOneLiner() {
+    return request('/api/agent/linux-oneliner');
+  },
+
   // Asset inventory
   getInventory(serverId) {
     return request(`/api/inventory-report/${serverId}`);

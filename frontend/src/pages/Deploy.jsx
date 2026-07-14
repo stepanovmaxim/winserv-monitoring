@@ -1,7 +1,20 @@
 import { useState } from 'react';
+import { api } from '../api';
 
 export default function Deploy() {
   const [copied, setCopied] = useState(false);
+  const [linuxCmd, setLinuxCmd] = useState('');
+  const [linuxCopied, setLinuxCopied] = useState(false);
+
+  async function loadLinuxCmd() {
+    const d = await api.getLinuxOneLiner();
+    setLinuxCmd(d.command);
+  }
+  function copyLinux() {
+    navigator.clipboard?.writeText(linuxCmd);
+    setLinuxCopied(true);
+    setTimeout(() => setLinuxCopied(false), 1500);
+  }
 
   async function download(path, filename) {
     const token = localStorage.getItem('token');
@@ -76,6 +89,27 @@ export default function Deploy() {
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
+        <h3>🐧 Linux agent (Ubuntu / Debian)</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>
+          Run this one-liner on the Linux host as root. It installs the agent and a systemd timer;
+          the host registers itself and appears in the dashboard within 1–2 minutes. Same features as
+          the Windows agent: metrics, processes, failed services, SSH brute-force, inventory, self-update.
+        </p>
+        {linuxCmd ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input readOnly value={linuxCmd} onFocus={e => e.target.select()}
+              style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }} />
+            <button type="button" className="secondary" onClick={copyLinux}>{linuxCopied ? 'Copied!' : 'Copy'}</button>
+          </div>
+        ) : (
+          <button onClick={loadLinuxCmd}>Show install command</button>
+        )}
+        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 10 }}>
+          Needs only outbound HTTPS from the host. The command contains the registration key — treat it as a secret.
+        </p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
         <h3>Update Agents</h3>
         <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>
           To update agents on all servers: download the deployer script and re-run it.
@@ -91,9 +125,11 @@ export default function Deploy() {
         <h3>Requirements</h3>
         <ul style={{ color: 'var(--text-muted)', paddingLeft: 20, lineHeight: 2 }}>
           <li><b>Active Directory PowerShell module</b> — on DC it's available; on Win10/11 run: <code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>Install-WindowsFeature RSAT-AD-PowerShell</code></li>
-          <li><b>Domain Admin rights</b> — needed for remote scheduled task creation</li>
-          <li><b>Admin shares enabled</b> (C$) — default on Windows Server</li>
-          <li><b>WinRM</b> (optional) — not required, script uses SMB + schtasks</li>
+          <li><b>Domain Admin rights</b> — local admin on each target (remote task creation)</li>
+          <li><b>Admin share C$</b> reachable — <b>TCP 445 (SMB)</b>, used to copy the agent</li>
+          <li><b>WinRM enabled</b> — <b>TCP 5985</b>. Required: the deployer creates the scheduled task via <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>Invoke-Command</code>. Enable with <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>Enable-PSRemoting -Force</code></li>
+          <li><b>ICMP not required</b> — hardened hosts often block ping; the deployer no longer gates on it</li>
+          <li>After install the agent needs <b>outbound HTTPS only</b> — no inbound ports</li>
         </ul>
       </div>
     </div>

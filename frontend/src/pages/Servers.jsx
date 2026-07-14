@@ -10,6 +10,7 @@ export default function Servers() {
   const [groups, setGroups] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [latestAgent, setLatestAgent] = useState('');
+  const [latestLinux, setLatestLinux] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(searchParams.get('group_id') || '');
   const [selectedCustomer, setSelectedCustomer] = useState(searchParams.get('customer_id') || '');
   const [loading, setLoading] = useState(true);
@@ -45,7 +46,9 @@ export default function Servers() {
     if (sortKey === k) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(k); setSortDir('asc'); }
   }
-  const outdated = servers.filter(s => s.agent_version && latestAgent && s.agent_version !== latestAgent);
+  // Each platform has its own agent line — compare against the matching latest.
+  const latestFor = (s) => (s.platform === 'linux' ? latestLinux : latestAgent);
+  const outdated = servers.filter(s => s.agent_version && latestFor(s) && s.agent_version !== latestFor(s));
   const outdatedCount = outdated.length;
   async function forceUpdateOutdated() {
     if (!confirm(`Queue a forced update for ${outdatedCount} outdated agent(s)? Works on agent v2.11+; older ones must be redeployed.`)) return;
@@ -78,7 +81,7 @@ export default function Servers() {
   useEffect(() => {
     api.getGroups().then(setGroups);
     api.getCustomers().then(setCustomers);
-    api.getAgentVersion().then(d => setLatestAgent(d.latest)).catch(() => {});
+    api.getAgentVersion().then(d => { setLatestAgent(d.latest); setLatestLinux(d.linux_latest || ''); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -208,6 +211,7 @@ export default function Servers() {
                 <tr key={s.id}>
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
                   <td>
+                    <span title={s.platform === 'linux' ? 'Linux' : 'Windows'} style={{ marginRight: 5 }}>{s.platform === 'linux' ? '🐧' : '🪟'}</span>
                     <Link to={`/servers/${s.id}`}>{s.hostname}</Link>
                     {s.health_issues > 0 && <span title="health issues" style={{ marginLeft: 6, color: 'var(--danger)', fontSize: 12 }}>⚠{s.health_issues}</span>}
                     {s.pending_reboot ? <span title="reboot pending" style={{ marginLeft: 4 }}>🔄</span> : null}

@@ -63,12 +63,13 @@ async function detectBruteforce(serverId) {
       [serverId, threshold]
     );
     if (rows.length === 0) return;
-    const server = await db.queryOne('SELECT id, hostname, customer_id FROM servers WHERE id = $1', [serverId]);
+    const server = await db.queryOne('SELECT id, hostname, customer_id, platform FROM servers WHERE id = $1', [serverId]);
     for (const r of rows) {
       const key = serverId + ':' + r.ip;
       if (Date.now() - (bruteAlerted.get(key) || 0) < 60 * 60 * 1000) continue;
       bruteAlerted.set(key, Date.now());
-      const msg = `<b>RDP brute-force</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} in the last hour`;
+      const kind = server.platform === 'linux' ? 'SSH' : 'RDP';
+      const msg = `<b>${kind} brute-force</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} in the last hour`;
       sendTelegramMessage(msg).catch(() => {});
       sendWebhookAlert(msg);
       logAlert({ severity: 'critical', kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
