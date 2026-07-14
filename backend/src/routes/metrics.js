@@ -6,13 +6,14 @@ const { requireAuth, requireApproved } = require('../middleware/authMiddleware')
 const { broadcast } = require('../services/sseService');
 const { assignCustomerByDomain } = require('../services/tenantService');
 const { filterValidDisks, diskAggregate } = require('../lib/disk');
-const { AGENT_VERSION } = require('./agent');
+const { AGENT_VERSION, LINUX_AGENT_VERSION } = require('./agent');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
 
 router.post('/', async (req, res) => {
   const { token, registration_key, hostname, ip_address, os_info, agent_version } = req.body;
+  const platform = req.body.platform === 'linux' ? 'linux' : null;
   let { metrics } = req.body;
   const h = hostname || req.body.host || '';
 
@@ -58,6 +59,9 @@ router.post('/', async (req, res) => {
   }
   if (agent_version) {
     await db.query('UPDATE servers SET agent_version = $1 WHERE id = $2', [agent_version, serverId]);
+  }
+  if (platform) {
+    await db.query('UPDATE servers SET platform = $1 WHERE id = $2', [platform, serverId]);
   }
 
   const currentHostname = h || server.hostname;
@@ -147,7 +151,8 @@ router.post('/', async (req, res) => {
   const metric_interval = (cfgIv && cfgIv.metric_interval) ? cfgIv.metric_interval : 1;
   // Watched Event IDs the agent should also collect (beyond critical/error).
   const event_triggers = await db.queryAll('SELECT event_id, log_name FROM event_triggers WHERE enabled = 1');
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: AGENT_VERSION, metric_interval, event_triggers });
+  // agent_latest is the Windows agent; Linux agents compare against their own.
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: AGENT_VERSION, linux_agent_latest: LINUX_AGENT_VERSION, metric_interval, event_triggers });
 
   // Push the fresh reading to any live dashboards.
   const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);

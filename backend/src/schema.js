@@ -310,6 +310,8 @@ async function initSchema() {
 
   // Agent self-reported version, for the fleet update view.
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS agent_version TEXT DEFAULT ''`);
+  // windows | linux — agents report it; drives the icon and the "outdated" check.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS platform TEXT DEFAULT 'windows'`);
 
   // Deep-health fields reported by the agent.
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS pending_reboot INTEGER DEFAULT 0`);

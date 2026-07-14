@@ -1,5 +1,7 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
+const db = require('../db');
+const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = require('../services/linuxAgentScript');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -568,6 +570,35 @@ router.get('/script', requireAuth, requireAdmin, async (req, res) => {
   res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
 });
 
+// --- Linux agent (Ubuntu/Debian) ---
+const publicUrl = () => (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
+
+// Installer, fetched by the one-liner. Gated on the registration key so the key
+// (embedded in the agent it pulls) is never served to an anonymous caller.
+router.get('/linux-install', (req, res) => {
+  if (req.query.key !== REGISTRATION_KEY) return res.status(401).type('text/plain').send('# invalid key');
+  res.type('text/plain; charset=utf-8');
+  res.send(generateLinuxInstaller(publicUrl(), REGISTRATION_KEY));
+});
+
+// The agent script itself: for install (registration key) or self-update (agent token).
+router.get('/linux-script', async (req, res) => {
+  let ok = req.query.key === REGISTRATION_KEY;
+  if (!ok && req.query.token) {
+    const a = await db.queryOne('SELECT server_id FROM agent_tokens WHERE token = $1', [req.query.token]);
+    ok = !!a;
+  }
+  if (!ok) return res.status(401).type('text/plain').send('# unauthorized');
+  res.type('text/plain; charset=utf-8');
+  res.send(generateLinuxScript(publicUrl(), REGISTRATION_KEY));
+});
+
+// The one-liner shown on the Deploy page (admin only — it contains the key).
+router.get('/linux-oneliner', requireAuth, requireAdmin, (req, res) => {
+  const url = `${publicUrl()}/api/agent/linux-install?key=${encodeURIComponent(REGISTRATION_KEY)}`;
+  res.json({ command: `curl -fsSL "${url}" | sudo bash`, version: LINUX_AGENT_VERSION });
+});
+
 router.get('/script/:serverId', requireAuth, requireAdmin, async (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
@@ -577,7 +608,6 @@ router.get('/script/:serverId', requireAuth, requireAdmin, async (req, res) => {
 // Agent self-update: returns the latest script to an agent presenting a valid
 // token. The reg key it embeds is already baked into that agent, so this
 // exposes nothing new.
-const db = require('../db');
 router.get('/self-update', async (req, res) => {
   const token = req.query.token;
   if (!token) return res.status(401).type('text/plain').send('# token required');
@@ -598,3 +628,4 @@ router.get('/version', requireAuth, (req, res) => res.json({ latest: AGENT_VERSI
 module.exports = router;
 module.exports.generateUniversalScript = generateUniversalScript;
 module.exports.AGENT_VERSION = AGENT_VERSION;
+module.exports.LINUX_AGENT_VERSION = LINUX_AGENT_VERSION;
