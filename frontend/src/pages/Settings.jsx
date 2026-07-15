@@ -9,11 +9,13 @@ export default function Settings() {
   const [agentScripts, setAgentScripts] = useState('');
   const [showAgent, setShowAgent] = useState(false);
   const [triggers, setTriggers] = useState([]);
+  const [protectedRanges, setProtectedRanges] = useState([]);
   const [trigForm, setTrigForm] = useState({ event_id: '', log_name: 'System', source_match: '', label: '', severity: 'warning' });
 
   useEffect(() => {
     api.getTelegramConfig().then(data => setConfig(prev => ({ ...prev, ...data }))).finally(() => setLoading(false));
     api.getEventTriggers().then(setTriggers).catch(() => {});
+    api.getProtectedRanges().then(setProtectedRanges).catch(() => {});
   }, []);
 
   async function addTrigger(e) {
@@ -237,7 +239,23 @@ export default function Settings() {
           password-spray across many accounts is. This is what tells a broken client apart from a real attack.
         </p>
         <div className="form-group">
-          <label>Allowlist — never ban these (IP or CIDR, one per line)</label>
+          <label>Always protected (built-in — cannot be banned)</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            {protectedRanges.map(p => (
+              <span key={p.cidr} title={p.label}
+                style={{ fontSize: 12, fontFamily: 'monospace', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px', color: 'var(--success, #22c55e)' }}>
+                🛡 {p.cidr}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+            Private (10/8, 172.16/12, 192.168/16), loopback, link-local, CGNAT and IPv6-local ranges are enforced in
+            code — they are never banned even if the allowlist below is empty, and can't be removed.
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Additional allowlist — your public IPs (IP or CIDR, one per line)</label>
           <textarea value={config.autoban_allowlist || ''} onChange={e => setConfig({ ...config, autoban_allowlist: e.target.value })} rows={4}
             placeholder={'203.0.113.7\n45.10.20.0/24  (office egress)\n2a01:4f8::/29'} style={{ fontFamily: 'monospace', fontSize: 13 }} />
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>

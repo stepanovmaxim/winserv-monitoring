@@ -5,6 +5,7 @@ const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { logAlert } = require('../services/alertLog');
 const { autoBanFromBruteforce, queueBlock, queueUnblock, canBan } = require('../services/banService');
+const { PROTECTED } = require('../lib/ipGuard');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -100,6 +101,11 @@ router.get('/top', requireAuth, requireApproved, async (req, res) => {
     [String(hours)]
   );
   res.json(rows);
+});
+
+// Built-in never-ban ranges — always protected, shown read-only in Settings.
+router.get('/protected-ranges', requireAuth, requireApproved, (req, res) => {
+  res.json(PROTECTED);
 });
 
 // Active IP blocks across the fleet.

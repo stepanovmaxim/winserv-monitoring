@@ -169,6 +169,9 @@ export const api = {
   getBlocks() {
     return request('/api/security/blocks');
   },
+  getProtectedRanges() {
+    return request('/api/security/protected-ranges');
+  },
   blockIp(ip, server_ids, minutes) {
     return request('/api/security/block', { method: 'POST', body: JSON.stringify({ ip, server_ids, minutes }) });
   },

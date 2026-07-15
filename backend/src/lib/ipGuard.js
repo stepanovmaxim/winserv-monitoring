@@ -97,14 +97,29 @@ function inCidr(ip, cidr) {
 }
 
 // Networks that must never be firewalled off by an automatic (or accidental
-// manual) ban: private, loopback, link-local, CGNAT, multicast, reserved.
-const NEVER_BAN = [
-  '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16',
-  '127.0.0.0/8', '169.254.0.0/16', '100.64.0.0/10',
-  '0.0.0.0/8', '192.0.0.0/24', '198.18.0.0/15', '224.0.0.0/4', '240.0.0.0/4',
-  '255.255.255.255/32',
-  '::1/128', '::/128', 'fe80::/10', 'fc00::/7', 'ff00::/8',
+// manual) ban: private, loopback, link-local, CGNAT, multicast, reserved. These
+// are enforced in code (stronger than the operator allowlist — they cannot be
+// removed) and surfaced read-only in the UI so operators can see the coverage.
+const PROTECTED = [
+  { cidr: '10.0.0.0/8', label: 'Private (RFC1918)' },
+  { cidr: '172.16.0.0/12', label: 'Private (RFC1918)' },
+  { cidr: '192.168.0.0/16', label: 'Private (RFC1918)' },
+  { cidr: '127.0.0.0/8', label: 'Loopback' },
+  { cidr: '169.254.0.0/16', label: 'Link-local (APIPA)' },
+  { cidr: '100.64.0.0/10', label: 'Carrier-grade NAT' },
+  { cidr: '0.0.0.0/8', label: 'This network' },
+  { cidr: '192.0.0.0/24', label: 'IETF reserved' },
+  { cidr: '198.18.0.0/15', label: 'Benchmarking' },
+  { cidr: '224.0.0.0/4', label: 'Multicast' },
+  { cidr: '240.0.0.0/4', label: 'Reserved' },
+  { cidr: '255.255.255.255/32', label: 'Broadcast' },
+  { cidr: '::1/128', label: 'IPv6 loopback' },
+  { cidr: '::/128', label: 'IPv6 unspecified' },
+  { cidr: 'fe80::/10', label: 'IPv6 link-local' },
+  { cidr: 'fc00::/7', label: 'IPv6 unique-local (ULA)' },
+  { cidr: 'ff00::/8', label: 'IPv6 multicast' },
 ];
+const NEVER_BAN = PROTECTED.map(p => p.cidr);
 
 function isPrivateOrReserved(ip) {
   if (!ipToBig(ip)) return false; // not a valid IP — caller treats as unbannable
@@ -134,4 +149,4 @@ function isBannable(ip, allowlistCidrs = []) {
   return true;
 }
 
-module.exports = { ipToBig, inCidr, isPrivateOrReserved, isBannable, parseAllowlist, inAllowlist, NEVER_BAN };
+module.exports = { ipToBig, inCidr, isPrivateOrReserved, isBannable, parseAllowlist, inAllowlist, NEVER_BAN, PROTECTED };
