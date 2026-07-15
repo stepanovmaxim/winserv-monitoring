@@ -338,6 +338,9 @@ async function initSchema() {
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_threshold INTEGER DEFAULT 30`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_minutes INTEGER DEFAULT 1440`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_allowlist TEXT DEFAULT ''`);
+  // Min distinct accounts for a ban: below this it's treated as a broken client
+  // (e.g. an employee's stale password), not a spray — and is never auto-banned.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_min_accounts INTEGER DEFAULT 3`);
 
   // Active/expired IP blocks (firewall rules pushed to agents). auto=1 means the
   // block was placed by the auto-ban engine; expires_at NULL = permanent.

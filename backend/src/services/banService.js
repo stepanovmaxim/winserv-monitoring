@@ -3,6 +3,7 @@ const { sendTelegramMessage } = require('./telegram');
 const { sendWebhookAlert } = require('./webhookService');
 const { logAlert } = require('./alertLog');
 const { isBannable, parseAllowlist } = require('../lib/ipGuard');
+const { shouldAutoBan } = require('../lib/banPolicy');
 
 // Load the allowlist once per call — small table, keeps callers simple.
 async function allowlist() {
@@ -69,10 +70,32 @@ async function expireBans() {
 // is far more likely a real user fat-fingering a password than an attacker.
 async function autoBanFromBruteforce(server, ip, count, config) {
   if (!config.autoban_enabled) return;
-  const threshold = parseInt(config.autoban_threshold) || 30;
-  if (count < threshold) return;
-  if (!(await canBan(ip))) return; // protected — silently skip (alert already fired)
+  if (!(await canBan(ip))) return; // protected (local/allowlisted) — silently skip
 
+  // Diversity check: a single/few-account hammer is a broken client (e.g. an
+  // employee's stale Outlook password), not an attack. Only a spray across many
+  // distinct accounts is auto-banned.
+  const accRow = await db.queryOne(
+    `SELECT COUNT(DISTINCT account)::int AS n FROM security_events
+       WHERE server_id = $1 AND ip = $2 AND event = 'fail' AND account <> ''
+         AND created_at > NOW() - INTERVAL '1 hour'`,
+    [server.id, ip]
+  );
+  const decision = shouldAutoBan({
+    enabled: !!config.autoban_enabled,
+    count,
+    threshold: parseInt(config.autoban_threshold) || 30,
+    distinctAccounts: accRow ? accRow.n : 0,
+    minAccounts: parseInt(config.autoban_min_accounts) || 3,
+  });
+  if (!decision.ban) {
+    if (decision.reason === 'single-account') {
+      console.log(`[Ban] Skipped ${ip} on ${server.hostname}: ${count} fails but only ${accRow ? accRow.n : 0} account(s) — likely a misconfigured client, not an attack`);
+    }
+    return;
+  }
+
+  // Extra guard: never ban an IP that also authenticated successfully here recently.
   const recentSuccess = await db.queryOne(
     `SELECT 1 FROM security_events WHERE server_id = $1 AND ip = $2 AND event = 'success'
        AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1`,
@@ -85,7 +108,7 @@ async function autoBanFromBruteforce(server, ip, count, config) {
 
   const mins = parseInt(config.autoban_minutes);
   const r = await queueBlock(server, ip, {
-    reason: `auto: ${count} failed logons/hour`,
+    reason: `auto: spray — ${count} fails across ${accRow ? accRow.n : '?'} accounts/hour`,
     auto: true,
     minutes: Number.isFinite(mins) ? mins : 1440,
     requestedBy: 'auto-ban',

@@ -226,7 +226,16 @@ export default function Settings() {
             <label>Ban duration (minutes, 0 = permanent)</label>
             <input type="number" min="0" value={config.autoban_minutes ?? 1440} onChange={e => setConfig({ ...config, autoban_minutes: e.target.value })} style={{ width: 180 }} />
           </div>
+          <div className="form-group">
+            <label>Min distinct accounts to ban</label>
+            <input type="number" min="1" value={config.autoban_min_accounts ?? 3} onChange={e => setConfig({ ...config, autoban_min_accounts: e.target.value })} style={{ width: 160 }} />
+          </div>
         </div>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
+          <b>Account diversity guard:</b> failures against fewer than this many distinct accounts are treated as a
+          misconfigured client (e.g. an employee's stale Outlook password) and are <b>never</b> banned — only a
+          password-spray across many accounts is. This is what tells a broken client apart from a real attack.
+        </p>
         <div className="form-group">
           <label>Allowlist — never ban these (IP or CIDR, one per line)</label>
           <textarea value={config.autoban_allowlist || ''} onChange={e => setConfig({ ...config, autoban_allowlist: e.target.value })} rows={4}

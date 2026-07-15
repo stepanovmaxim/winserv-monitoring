@@ -82,16 +82,17 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
 
   // Auto-ban settings — separate targeted update (keeps the positional list above intact).
   const ab = req.body;
-  if (['autoban_enabled', 'autoban_threshold', 'autoban_minutes', 'autoban_allowlist'].some(k => ab[k] !== undefined)) {
+  if (['autoban_enabled', 'autoban_threshold', 'autoban_minutes', 'autoban_allowlist', 'autoban_min_accounts'].some(k => ab[k] !== undefined)) {
     const cur = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
     if (cur) {
       await db.query(
-        `UPDATE telegram_config SET autoban_enabled=$1, autoban_threshold=$2, autoban_minutes=$3, autoban_allowlist=$4 WHERE id=$5`,
+        `UPDATE telegram_config SET autoban_enabled=$1, autoban_threshold=$2, autoban_minutes=$3, autoban_allowlist=$4, autoban_min_accounts=$5 WHERE id=$6`,
         [
           ab.autoban_enabled !== undefined ? (ab.autoban_enabled ? 1 : 0) : cur.autoban_enabled,
           ab.autoban_threshold !== undefined ? Math.max(5, parseInt(ab.autoban_threshold) || 30) : cur.autoban_threshold,
           ab.autoban_minutes !== undefined ? Math.max(0, parseInt(ab.autoban_minutes) || 0) : cur.autoban_minutes,
           ab.autoban_allowlist !== undefined ? String(ab.autoban_allowlist).slice(0, 4000) : cur.autoban_allowlist,
+          ab.autoban_min_accounts !== undefined ? Math.max(1, parseInt(ab.autoban_min_accounts) || 3) : cur.autoban_min_accounts,
           cur.id,
         ]
       );
