@@ -38,6 +38,7 @@ const { heartbeat } = require('./services/sseService');
 const { maybeSendDigest } = require('./services/digestService');
 const { runScheduledActions } = require('./services/scheduleService');
 const { runDueChecks } = require('./services/checkService');
+const { expireBans } = require('./services/banService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -179,6 +180,9 @@ async function start() {
   // Agentless external checks (ping/tcp/http/tls) — tick every 15s; each check
   // respects its own interval.
   setInterval(runDueChecks, 15 * 1000);
+
+  // Lift expired IP bans (queue unblock_ip when a ban's TTL passes).
+  setInterval(expireBans, 60 * 1000);
 }
 
 // Last-resort guards. Only benign client disconnects are swallowed; any other

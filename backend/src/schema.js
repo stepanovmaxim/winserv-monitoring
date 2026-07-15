@@ -331,6 +331,33 @@ async function initSchema() {
   // Metric scheduler interval (minutes) pushed to agents; they reschedule to it.
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS metric_interval INTEGER DEFAULT 1`);
 
+  // Automatic ban of brute-force / DoS source IPs. Off by default. The allowlist
+  // and the built-in private/reserved guard ensure own/local networks are never
+  // banned. autoban_minutes 0 = permanent (until manually unblocked).
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_enabled INTEGER DEFAULT 0`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_threshold INTEGER DEFAULT 30`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_minutes INTEGER DEFAULT 1440`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_allowlist TEXT DEFAULT ''`);
+
+  // Active/expired IP blocks (firewall rules pushed to agents). auto=1 means the
+  // block was placed by the auto-ban engine; expires_at NULL = permanent.
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS ip_blocks (
+      id SERIAL PRIMARY KEY,
+      ip TEXT NOT NULL,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      customer_id INTEGER,
+      reason TEXT DEFAULT '',
+      auto INTEGER DEFAULT 0,
+      requested_by TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      expires_at TIMESTAMPTZ,
+      unblocked_at TIMESTAMPTZ
+    );
+  `);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_ipblocks_active ON ip_blocks(server_id, ip) WHERE unblocked_at IS NULL`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_ipblocks_expiry ON ip_blocks(expires_at) WHERE unblocked_at IS NULL`);
+
   // Asset inventory: hardware snapshot (one row per server) + installed
   // software (replaced on each daily agent report).
   await db.exec(`
@@ -402,7 +429,7 @@ async function initSchema() {
 
   // Allow the manual "block IP" command type.
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
-  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update'))`);
+  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip'))`);
 
   console.log('PostgreSQL schema initialized');
 }

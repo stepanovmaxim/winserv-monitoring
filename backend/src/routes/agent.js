@@ -5,7 +5,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.15';
+const AGENT_VERSION = '2.16';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -512,6 +512,11 @@ function generateUniversalScript(serverUrl, regKey) {
     '          }',
     '          $ok = $true; $msg = "blocked $($cmd.param)"',
     '          Write-Log "Command: blocked IP $($cmd.param)"',
+    '        } elseif ($cmd.ctype -eq "unblock_ip") {',
+    '          $rule = "WinServ Block $($cmd.param)"',
+    '          Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue',
+    '          $ok = $true; $msg = "unblocked $($cmd.param)"',
+    '          Write-Log "Command: unblocked IP $($cmd.param)"',
     '        } elseif ($cmd.ctype -eq "force_update") {',
     '          $selfPath = $PSCommandPath; if (-not $selfPath) { $selfPath = "C:\\winserv-agent\\agent.ps1" }',
     '          $new = Get-UpdateScript',

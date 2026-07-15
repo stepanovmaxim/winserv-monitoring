@@ -1,9 +1,10 @@
 const express = require('express');
 const db = require('../db');
-const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { requireAuth, requireApproved, requireAdmin } = require('../middleware/authMiddleware');
 const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { logAlert } = require('../services/alertLog');
+const { autoBanFromBruteforce, queueBlock, queueUnblock, canBan } = require('../services/banService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -66,13 +67,18 @@ async function detectBruteforce(serverId) {
     const server = await db.queryOne('SELECT id, hostname, customer_id, platform FROM servers WHERE id = $1', [serverId]);
     for (const r of rows) {
       const key = serverId + ':' + r.ip;
-      if (Date.now() - (bruteAlerted.get(key) || 0) < 60 * 60 * 1000) continue;
-      bruteAlerted.set(key, Date.now());
-      const kind = server.platform === 'linux' ? 'SSH' : 'RDP';
-      const msg = `<b>${kind} brute-force</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} in the last hour`;
-      sendTelegramMessage(msg).catch(() => {});
-      sendWebhookAlert(msg);
-      logAlert({ severity: 'critical', kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
+      // Alert is rate-limited to once/hour per IP...
+      if (Date.now() - (bruteAlerted.get(key) || 0) >= 60 * 60 * 1000) {
+        bruteAlerted.set(key, Date.now());
+        const kind = server.platform === 'linux' ? 'SSH' : 'RDP';
+        const msg = `<b>${kind} brute-force</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} in the last hour`;
+        sendTelegramMessage(msg).catch(() => {});
+        sendWebhookAlert(msg);
+        logAlert({ severity: 'critical', kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
+      }
+      // ...but auto-ban is evaluated every time (own dedupe via active ip_blocks),
+      // so an IP that climbs past the ban threshold later still gets banned.
+      await autoBanFromBruteforce(server, r.ip, r.n, config);
     }
   } catch (err) {
     console.error('[Bruteforce]', err.message);
@@ -94,6 +100,37 @@ router.get('/top', requireAuth, requireApproved, async (req, res) => {
     [String(hours)]
   );
   res.json(rows);
+});
+
+// Active IP blocks across the fleet.
+router.get('/blocks', requireAuth, requireApproved, async (req, res) => {
+  const rows = await db.queryAll(
+    `SELECT b.*, s.hostname FROM ip_blocks b LEFT JOIN servers s ON s.id = b.server_id
+     WHERE b.unblocked_at IS NULL ORDER BY b.created_at DESC LIMIT 500`
+  );
+  res.json(rows);
+});
+
+// Manual block: guarded like auto-ban — local/allowlisted IPs are refused.
+router.post('/block', requireAuth, requireAdmin, async (req, res) => {
+  const { ip, server_ids, minutes } = req.body;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  if (!(await canBan(ip))) return res.status(400).json({ error: `${ip} is a local/reserved/allowlisted address and cannot be blocked` });
+  const ids = Array.isArray(server_ids) ? server_ids : [];
+  let queued = 0;
+  for (const sid of ids) {
+    const server = await db.queryOne('SELECT id, hostname, customer_id FROM servers WHERE id = $1', [sid]);
+    if (!server) continue;
+    const r = await queueBlock(server, ip, { reason: 'manual', minutes: minutes || 0, requestedBy: req.user.email });
+    if (r.ok) queued++;
+  }
+  res.json({ success: true, queued });
+});
+
+router.post('/unblock/:id', requireAuth, requireAdmin, async (req, res) => {
+  const r = await queueUnblock(parseInt(req.params.id), req.user.email);
+  if (!r.ok) return res.status(404).json({ error: r.why });
+  res.json({ success: true });
 });
 
 // Per-server recent logons (success + fail).

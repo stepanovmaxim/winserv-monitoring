@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
 const { logAction } = require('../services/auditService');
+const { canBan } = require('../services/banService');
 
 const router = express.Router();
 
@@ -18,9 +19,11 @@ router.get('/:serverId', requireAuth, requireAdmin, async (req, res) => {
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { server_id, ctype, param } = req.body;
   if (!server_id) return res.status(400).json({ error: 'server_id required' });
-  if (!['reboot', 'restart_service', 'block_ip', 'uninstall_agent', 'force_update'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
+  if (!['reboot', 'restart_service', 'block_ip', 'unblock_ip', 'uninstall_agent', 'force_update'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
   if (ctype === 'restart_service' && !param) return res.status(400).json({ error: 'service name required' });
-  if (ctype === 'block_ip' && !param) return res.status(400).json({ error: 'ip required' });
+  if ((ctype === 'block_ip' || ctype === 'unblock_ip') && !param) return res.status(400).json({ error: 'ip required' });
+  // Never let any path firewall a local/reserved/allowlisted address.
+  if (ctype === 'block_ip' && !(await canBan(param))) return res.status(400).json({ error: `${param} is a local/reserved/allowlisted address and cannot be blocked` });
 
   const server = await db.queryOne('SELECT hostname FROM servers WHERE id = $1', [server_id]);
   if (!server) return res.status(404).json({ error: 'server not found' });

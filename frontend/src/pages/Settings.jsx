@@ -207,6 +207,39 @@ export default function Settings() {
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
+        <h3>Automatic IP ban (brute-force / DoS)</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
+          When a source IP exceeds the threshold of failed logons within an hour, a firewall block is pushed to the
+          attacked server automatically. <b>Local, reserved, and allowlisted IPs are never banned</b>, and an IP that
+          also logged in successfully in the last 24h is skipped (likely a real user). Requires agent v2.16+ / Linux v1.1+.
+        </p>
+        <div className="toggle-wrapper" onClick={() => setConfig({ ...config, autoban_enabled: !config.autoban_enabled })} style={{ marginBottom: 12 }}>
+          <div className={`toggle ${config.autoban_enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
+          <label>Enable auto-ban</label>
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div className="form-group">
+            <label>Ban threshold (failed logons / hour)</label>
+            <input type="number" min="5" value={config.autoban_threshold ?? 30} onChange={e => setConfig({ ...config, autoban_threshold: e.target.value })} style={{ width: 140 }} />
+          </div>
+          <div className="form-group">
+            <label>Ban duration (minutes, 0 = permanent)</label>
+            <input type="number" min="0" value={config.autoban_minutes ?? 1440} onChange={e => setConfig({ ...config, autoban_minutes: e.target.value })} style={{ width: 180 }} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label>Allowlist — never ban these (IP or CIDR, one per line)</label>
+          <textarea value={config.autoban_allowlist || ''} onChange={e => setConfig({ ...config, autoban_allowlist: e.target.value })} rows={4}
+            placeholder={'203.0.113.7\n45.10.20.0/24  (office egress)\n2a01:4f8::/29'} style={{ fontFamily: 'monospace', fontSize: 13 }} />
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            Put your office public IPs, VPN, and admin ranges here so they can never be auto-banned. Private ranges
+            (10/8, 172.16/12, 192.168/16), loopback, and link-local are already protected automatically.
+          </div>
+        </div>
+        <button type="button" onClick={handleSave} disabled={saving}>Save auto-ban settings</button>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
         <h3>Event ID triggers</h3>
         <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
           Alert when a specific Windows Event Log ID appears on any server — e.g. <b>6008</b> unexpected shutdown,

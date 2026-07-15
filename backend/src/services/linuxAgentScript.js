@@ -1,4 +1,4 @@
-const LINUX_AGENT_VERSION = '1.0';
+const LINUX_AGENT_VERSION = '1.1';
 
 // Bash agent for Ubuntu/Debian (systemd). Reports into the same ingest endpoints
 // as the Windows agent, so it lands in the existing tables/UI unchanged.
@@ -176,6 +176,18 @@ if [ -n "\$CMDS" ]; then
     case "\$CT" in
       restart_service)
         if systemctl restart "\$CP" 2>>"\$LOG"; then OK=true; MSG="restarted \$CP"; else MSG="failed to restart \$CP"; fi ;;
+      block_ip)
+        IPT=iptables; case "\$CP" in *:*) IPT=ip6tables;; esac
+        if command -v "\$IPT" >/dev/null 2>&1; then
+          "\$IPT" -C INPUT -s "\$CP" -j DROP 2>/dev/null || "\$IPT" -I INPUT -s "\$CP" -j DROP 2>>"\$LOG"
+          OK=true; MSG="blocked \$CP"
+        else MSG="no iptables"; fi ;;
+      unblock_ip)
+        IPT=iptables; case "\$CP" in *:*) IPT=ip6tables;; esac
+        if command -v "\$IPT" >/dev/null 2>&1; then
+          while "\$IPT" -C INPUT -s "\$CP" -j DROP 2>/dev/null; do "\$IPT" -D INPUT -s "\$CP" -j DROP 2>>"\$LOG"; done
+          OK=true; MSG="unblocked \$CP"
+        else MSG="no iptables"; fi ;;
       reboot) OK=true; MSG="rebooting" ;;
       force_update) OK=true; MSG="update queued" ;;
       uninstall_agent) OK=true; MSG="uninstalling" ;;

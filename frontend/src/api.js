@@ -166,6 +166,15 @@ export const api = {
   getServerSecurity(serverId) {
     return request(`/api/security/${serverId}`);
   },
+  getBlocks() {
+    return request('/api/security/blocks');
+  },
+  blockIp(ip, server_ids, minutes) {
+    return request('/api/security/block', { method: 'POST', body: JSON.stringify({ ip, server_ids, minutes }) });
+  },
+  unblockIp(id) {
+    return request(`/api/security/unblock/${id}`, { method: 'POST' });
+  },
 
   // Agent version + reports
   getAgentVersion() {
