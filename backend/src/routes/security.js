@@ -4,7 +4,7 @@ const { requireAuth, requireApproved, requireAdmin } = require('../middleware/au
 const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { logAlert } = require('../services/alertLog');
-const { autoBanFromBruteforce, queueBlock, queueUnblock, canBan } = require('../services/banService');
+const { runAutoban, queueBlock, queueUnblock, canBan } = require('../services/banService');
 const { PROTECTED } = require('../lib/ipGuard');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -55,21 +55,23 @@ router.post('/', async (req, res) => {
 async function detectBruteforce(serverId) {
   try {
     const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
-    if (!config || !config.notify_bruteforce) return;
-    const threshold = parseInt(config.bruteforce_threshold) || 10;
-    const rows = await db.queryAll(
-      `SELECT ip, COUNT(*)::int n FROM security_events
-       WHERE server_id = $1 AND event = 'fail' AND ip <> '' AND ip <> '-'
-         AND created_at > NOW() - INTERVAL '1 hour'
-       GROUP BY ip HAVING COUNT(*) >= $2`,
-      [serverId, threshold]
-    );
-    if (rows.length === 0) return;
+    if (!config) return;
     const server = await db.queryOne('SELECT id, hostname, customer_id, platform FROM servers WHERE id = $1', [serverId]);
-    for (const r of rows) {
-      const key = serverId + ':' + r.ip;
-      // Alert is rate-limited to once/hour per IP...
-      if (Date.now() - (bruteAlerted.get(key) || 0) >= 60 * 60 * 1000) {
+    if (!server) return;
+
+    // Alerts: fixed 1h window, once/hour per IP.
+    if (config.notify_bruteforce) {
+      const threshold = parseInt(config.bruteforce_threshold) || 10;
+      const rows = await db.queryAll(
+        `SELECT ip, COUNT(*)::int n FROM security_events
+         WHERE server_id = $1 AND event = 'fail' AND ip <> '' AND ip <> '-'
+           AND created_at > NOW() - INTERVAL '1 hour'
+         GROUP BY ip HAVING COUNT(*) >= $2`,
+        [serverId, threshold]
+      );
+      for (const r of rows) {
+        const key = serverId + ':' + r.ip;
+        if (Date.now() - (bruteAlerted.get(key) || 0) < 60 * 60 * 1000) continue;
         bruteAlerted.set(key, Date.now());
         const kind = server.platform === 'linux' ? 'SSH' : 'RDP';
         const msg = `<b>${kind} brute-force</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} in the last hour`;
@@ -77,10 +79,11 @@ async function detectBruteforce(serverId) {
         sendWebhookAlert(msg);
         logAlert({ severity: 'critical', kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
       }
-      // ...but auto-ban is evaluated every time (own dedupe via active ip_blocks),
-      // so an IP that climbs past the ban threshold later still gets banned.
-      await autoBanFromBruteforce(server, r.ip, r.n, config);
     }
+
+    // Auto-ban: independent, over its own configurable window. Runs even if the
+    // Telegram brute-force alert is disabled. queueBlock dedupes active blocks.
+    if (config.autoban_enabled) await runAutoban(server, config);
   } catch (err) {
     console.error('[Bruteforce]', err.message);
   }

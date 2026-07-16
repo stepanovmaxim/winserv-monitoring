@@ -211,7 +211,7 @@ export default function Settings() {
       <div className="card" style={{ marginBottom: 24 }}>
         <h3>Automatic IP ban (brute-force / DoS)</h3>
         <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
-          When a source IP exceeds the threshold of failed logons within an hour, a firewall block is pushed to the
+          When a source IP exceeds the threshold of failed logons within the detection window, a firewall block is pushed to the
           attacked server automatically. <b>Local, reserved, and allowlisted IPs are never banned</b>, and an IP that
           also logged in successfully in the last 24h is skipped (likely a real user). Requires agent v2.16+ / Linux v1.1+.
         </p>
@@ -221,8 +221,12 @@ export default function Settings() {
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <div className="form-group">
-            <label>Ban threshold (failed logons / hour)</label>
+            <label>Ban threshold (failed logons)</label>
             <input type="number" min="5" value={config.autoban_threshold ?? 30} onChange={e => setConfig({ ...config, autoban_threshold: e.target.value })} style={{ width: 140 }} />
+          </div>
+          <div className="form-group">
+            <label>...within this window (minutes)</label>
+            <input type="number" min="1" max="1440" value={config.autoban_window_minutes ?? 60} onChange={e => setConfig({ ...config, autoban_window_minutes: e.target.value })} style={{ width: 160 }} />
           </div>
           <div className="form-group">
             <label>Ban duration (minutes, 0 = permanent)</label>
