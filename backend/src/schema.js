@@ -343,6 +343,11 @@ async function initSchema() {
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_min_accounts INTEGER DEFAULT 3`);
   // Detection window (minutes): failures are counted over the last N minutes.
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_window_minutes INTEGER DEFAULT 60`);
+  // Usernames that are never legitimate (administrator/guest/...) — a hammer on
+  // one of these is an attack even from a single source against a single server.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_bad_accounts TEXT`);
+  // Real staff accounts whose broken clients must never trigger a ban.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS autoban_protected_accounts TEXT DEFAULT ''`);
 
   // Active/expired IP blocks (firewall rules pushed to agents). auto=1 means the
   // block was placed by the auto-ban engine; expires_at NULL = permanent.

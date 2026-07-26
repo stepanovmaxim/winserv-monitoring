@@ -81,9 +81,9 @@ async function detectBruteforce(serverId) {
       }
     }
 
-    // Auto-ban: independent, over its own configurable window. Runs even if the
-    // Telegram brute-force alert is disabled. queueBlock dedupes active blocks.
-    if (config.autoban_enabled) await runAutoban(server, config);
+    // Auto-ban runs fleet-wide on a scheduler (see index.js), not per-report —
+    // a spray spread thin across servers only shows up in the aggregate.
+    if (config.autoban_enabled) runAutoban().catch(() => {});
   } catch (err) {
     console.error('[Bruteforce]', err.message);
   }

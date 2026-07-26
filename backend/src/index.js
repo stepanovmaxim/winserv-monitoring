@@ -38,7 +38,7 @@ const { heartbeat } = require('./services/sseService');
 const { maybeSendDigest } = require('./services/digestService');
 const { runScheduledActions } = require('./services/scheduleService');
 const { runDueChecks } = require('./services/checkService');
-const { expireBans } = require('./services/banService');
+const { expireBans, runAutoban } = require('./services/banService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -183,6 +183,10 @@ async function start() {
 
   // Lift expired IP bans (queue unblock_ip when a ban's TTL passes).
   setInterval(expireBans, 60 * 1000);
+
+  // Fleet-wide auto-ban sweep: catches sprays spread thin across many servers,
+  // which per-server counting never sees.
+  setInterval(runAutoban, 60 * 1000);
 }
 
 // Last-resort guards. Only benign client disconnects are swallowed; any other

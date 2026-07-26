@@ -3,6 +3,7 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
 const { logAction } = require('../services/auditService');
 const { DEFAULT_IGNORE } = require('../services/serviceFilter');
+const { DEFAULT_BAD_ACCOUNTS } = require('../lib/banPolicy');
 
 const router = express.Router();
 const TOKEN_MASK = '********';
@@ -24,6 +25,8 @@ router.get('/config', requireAuth, requireAdmin, async (req, res) => {
     bot_token: config.bot_token ? TOKEN_MASK : '',
     // Show the effective list so the user can see and edit the built-in defaults.
     service_ignore: config.service_ignore != null ? config.service_ignore : DEFAULT_IGNORE.join('\n'),
+    // Same pattern: show the effective never-legit username list so it's editable.
+    autoban_bad_accounts: config.autoban_bad_accounts != null ? config.autoban_bad_accounts : DEFAULT_BAD_ACCOUNTS.join('\n'),
   };
   res.json(safe);
 });
@@ -82,11 +85,11 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
 
   // Auto-ban settings — separate targeted update (keeps the positional list above intact).
   const ab = req.body;
-  if (['autoban_enabled', 'autoban_threshold', 'autoban_minutes', 'autoban_allowlist', 'autoban_min_accounts', 'autoban_window_minutes'].some(k => ab[k] !== undefined)) {
+  if (['autoban_enabled', 'autoban_threshold', 'autoban_minutes', 'autoban_allowlist', 'autoban_min_accounts', 'autoban_window_minutes', 'autoban_bad_accounts', 'autoban_protected_accounts'].some(k => ab[k] !== undefined)) {
     const cur = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
     if (cur) {
       await db.query(
-        `UPDATE telegram_config SET autoban_enabled=$1, autoban_threshold=$2, autoban_minutes=$3, autoban_allowlist=$4, autoban_min_accounts=$5, autoban_window_minutes=$6 WHERE id=$7`,
+        `UPDATE telegram_config SET autoban_enabled=$1, autoban_threshold=$2, autoban_minutes=$3, autoban_allowlist=$4, autoban_min_accounts=$5, autoban_window_minutes=$6, autoban_bad_accounts=$8, autoban_protected_accounts=$9 WHERE id=$7`,
         [
           ab.autoban_enabled !== undefined ? (ab.autoban_enabled ? 1 : 0) : cur.autoban_enabled,
           ab.autoban_threshold !== undefined ? Math.max(5, parseInt(ab.autoban_threshold) || 30) : cur.autoban_threshold,
@@ -95,6 +98,8 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
           ab.autoban_min_accounts !== undefined ? Math.max(1, parseInt(ab.autoban_min_accounts) || 3) : cur.autoban_min_accounts,
           ab.autoban_window_minutes !== undefined ? Math.min(1440, Math.max(1, parseInt(ab.autoban_window_minutes) || 60)) : cur.autoban_window_minutes,
           cur.id,
+          ab.autoban_bad_accounts !== undefined ? String(ab.autoban_bad_accounts).slice(0, 4000) : cur.autoban_bad_accounts,
+          ab.autoban_protected_accounts !== undefined ? String(ab.autoban_protected_accounts).slice(0, 4000) : cur.autoban_protected_accounts,
         ]
       );
     }

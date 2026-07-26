@@ -238,10 +238,32 @@ export default function Settings() {
           </div>
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
-          <b>Account diversity guard:</b> failures against fewer than this many distinct accounts are treated as a
-          misconfigured client (e.g. an employee's stale Outlook password) and are <b>never</b> banned — only a
-          password-spray across many accounts is. This is what tells a broken client apart from a real attack.
+          <b>How a broken client is told apart from an attack.</b> Counting is fleet-wide (a spray spread thin across
+          servers is still caught). An IP is banned when any of these holds: failures span <b>{config.autoban_min_accounts ?? 3}+ distinct
+          accounts</b> (spray) · the target is a <b>never-legit username</b> below · the same account is hammered on
+          <b> 2+ servers</b> (scanning). A single unknown account on a single server is <b>alert-only</b>, and protected
+          accounts are never banned.
         </p>
+
+        <div className="form-group">
+          <label>Never-legit usernames — always an attack (one per line)</label>
+          <textarea value={config.autoban_bad_accounts || ''} onChange={e => setConfig({ ...config, autoban_bad_accounts: e.target.value })} rows={4}
+            placeholder={'administrator\nguest\nroot\nauditor'} style={{ fontFamily: 'monospace', fontSize: 13 }} />
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            No real employee is called these, so a hammer against one is banned immediately — even a single account on
+            a single server.
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Protected accounts — real staff, never trigger a ban (one per line)</label>
+          <textarea value={config.autoban_protected_accounts || ''} onChange={e => setConfig({ ...config, autoban_protected_accounts: e.target.value })} rows={3}
+            placeholder={'DmitrievAV\nNedlinVE'} style={{ fontFamily: 'monospace', fontSize: 13 }} />
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            Put real users here whose device has a stale password (they generate thousands of failures but are not an
+            attack). The exemption applies only while the source hits a single server, so the name can't shield a scanner.
+          </div>
+        </div>
         <div className="form-group">
           <label>Always protected (built-in — cannot be banned)</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>

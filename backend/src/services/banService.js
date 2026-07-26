@@ -3,7 +3,7 @@ const { sendTelegramMessage } = require('./telegram');
 const { sendWebhookAlert } = require('./webhookService');
 const { logAlert } = require('./alertLog');
 const { isBannable, parseAllowlist } = require('../lib/ipGuard');
-const { shouldAutoBan } = require('../lib/banPolicy');
+const { shouldAutoBan, DEFAULT_BAD_ACCOUNTS, parseList } = require('../lib/banPolicy');
 
 // Load the allowlist once per call — small table, keeps callers simple.
 async function allowlist() {
@@ -68,59 +68,90 @@ async function expireBans() {
 // Auto-ban decision from the brute-force detector. Extra anti-lockout guard:
 // never auto-ban an IP that also authenticated SUCCESSFULLY here recently — that
 // is far more likely a real user fat-fingering a password than an attacker.
-async function runAutoban(server, config) {
-  if (!config.autoban_enabled) return;
-  // Detection window (fail2ban "findtime"): count failures over the last N minutes.
-  const windowMin = Math.min(1440, Math.max(1, parseInt(config.autoban_window_minutes) || 60));
-  const threshold = parseInt(config.autoban_threshold) || 30;
-  const minAccounts = parseInt(config.autoban_min_accounts) || 3;
+// Fleet-wide auto-ban sweep. Counting per-server let a low-and-slow spray hide
+// (8 failures on each of 3 servers never reached a per-server threshold of 10),
+// so failures are aggregated per SOURCE IP across the whole fleet, and a ban is
+// pushed to every server that IP actually touched.
+async function runAutoban() {
+  try {
+    const config = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
+    if (!config || !config.autoban_enabled) return;
 
-  // Failures per source IP within the window, with account spread (one query).
-  const rows = await db.queryAll(
-    `SELECT ip, COUNT(*)::int AS fails, COUNT(DISTINCT account) FILTER (WHERE account <> '')::int AS accounts
-       FROM security_events
-       WHERE server_id = $1 AND event = 'fail' AND ip <> '' AND ip <> '-'
-         AND created_at > NOW() - ($2 || ' minutes')::interval
-       GROUP BY ip HAVING COUNT(*) >= $3`,
-    [server.id, String(windowMin), threshold]
-  );
-
-  for (const r of rows) {
-    if (!(await canBan(r.ip))) continue; // protected (local/allowlisted)
-
-    const decision = shouldAutoBan({ enabled: true, count: r.fails, threshold, distinctAccounts: r.accounts, minAccounts });
-    if (!decision.ban) {
-      if (decision.reason === 'single-account') {
-        console.log(`[Ban] Skipped ${r.ip} on ${server.hostname}: ${r.fails} fails / ${windowMin}min but only ${r.accounts} account(s) — likely a misconfigured client`);
-      }
-      continue;
-    }
-
-    // Never ban an IP that also authenticated successfully here recently.
-    const recentSuccess = await db.queryOne(
-      `SELECT 1 FROM security_events WHERE server_id = $1 AND ip = $2 AND event = 'success'
-         AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1`,
-      [server.id, r.ip]
-    );
-    if (recentSuccess) {
-      console.log(`[Ban] Skipped auto-ban of ${r.ip} on ${server.hostname}: recent successful logon`);
-      continue;
-    }
-
+    const windowMin = Math.min(1440, Math.max(1, parseInt(config.autoban_window_minutes) || 60));
+    const threshold = parseInt(config.autoban_threshold) || 30;
+    const minAccounts = parseInt(config.autoban_min_accounts) || 3;
+    const badAccounts = parseList(config.autoban_bad_accounts, DEFAULT_BAD_ACCOUNTS);
+    const protectedAccounts = parseList(config.autoban_protected_accounts, []);
     const mins = parseInt(config.autoban_minutes);
-    const res = await queueBlock(server, r.ip, {
-      reason: `auto: spray — ${r.fails} fails across ${r.accounts} accounts / ${windowMin}min`,
-      auto: true,
-      minutes: Number.isFinite(mins) ? mins : 1440,
-      requestedBy: 'auto-ban',
-    });
-    if (!res.ok) continue;
 
-    const dur = (Number.isFinite(mins) && mins > 0) ? `${mins} min` : 'until removed';
-    const msg = `<b>AUTO-BANNED</b> ${r.ip} on ${server.hostname}: ${r.fails} fails across ${r.accounts} accounts in ${windowMin} min — firewall block (${dur})`;
-    sendTelegramMessage(msg).catch(() => {});
-    sendWebhookAlert(msg);
-    logAlert({ severity: 'critical', kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
+    const rows = await db.queryAll(
+      `SELECT ip,
+              COUNT(*)::int AS fails,
+              COUNT(DISTINCT server_id)::int AS servers_hit,
+              array_agg(DISTINCT account) FILTER (WHERE account <> '') AS accounts,
+              array_agg(DISTINCT server_id) AS server_ids
+         FROM security_events
+        WHERE event = 'fail' AND ip <> '' AND ip <> '-'
+          AND created_at > NOW() - ($1 || ' minutes')::interval
+        GROUP BY ip HAVING COUNT(*) >= $2`,
+      [String(windowMin), threshold]
+    );
+
+    for (const r of rows) {
+      if (!(await canBan(r.ip))) continue; // local / reserved / allowlisted
+
+      const decision = shouldAutoBan({
+        enabled: true,
+        count: r.fails,
+        threshold,
+        accounts: r.accounts || [],
+        minAccounts,
+        serversHit: r.servers_hit,
+        badAccounts,
+        protectedAccounts,
+      });
+      if (!decision.ban) {
+        if (decision.reason === 'single-account' || decision.reason === 'protected-account') {
+          console.log(`[Ban] Skipped ${r.ip}: ${r.fails} fails/${windowMin}min, accounts=${(r.accounts || []).join(',')} — ${decision.reason}`);
+        }
+        continue;
+      }
+
+      // Never ban a source that also authenticated successfully somewhere recently.
+      const recentSuccess = await db.queryOne(
+        `SELECT 1 FROM security_events WHERE ip = $1 AND event = 'success'
+           AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1`,
+        [r.ip]
+      );
+      if (recentSuccess) {
+        console.log(`[Ban] Skipped auto-ban of ${r.ip}: recent successful logon`);
+        continue;
+      }
+
+      const acctList = (r.accounts || []).slice(0, 3).join(', ');
+      const reason = `auto/${decision.reason}: ${r.fails} fails, ${(r.accounts || []).length} acct(s), ${r.servers_hit} server(s) / ${windowMin}min`;
+
+      let placed = 0;
+      for (const sid of r.server_ids || []) {
+        const server = await db.queryOne('SELECT id, hostname, customer_id FROM servers WHERE id = $1', [sid]);
+        if (!server) continue;
+        const res = await queueBlock(server, r.ip, {
+          reason, auto: true,
+          minutes: Number.isFinite(mins) ? mins : 1440,
+          requestedBy: 'auto-ban',
+        });
+        if (res.ok) placed++;
+      }
+      if (!placed) continue; // already blocked everywhere
+
+      const dur = (Number.isFinite(mins) && mins > 0) ? `${mins} min` : 'until removed';
+      const msg = `<b>AUTO-BANNED</b> ${r.ip} — ${decision.reason}: ${r.fails} fails on ${r.servers_hit} server(s) in ${windowMin} min (${acctList}${(r.accounts || []).length > 3 ? '…' : ''}) — blocked on ${placed} server(s), ${dur}`;
+      sendTelegramMessage(msg).catch(() => {});
+      sendWebhookAlert(msg);
+      logAlert({ severity: 'critical', kind: 'security', message: msg });
+    }
+  } catch (err) {
+    console.error('[Autoban]', err.message);
   }
 }
 
