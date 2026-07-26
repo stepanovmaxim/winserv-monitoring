@@ -81,3 +81,25 @@ test('parseAllowlist splits on commas/whitespace/newlines', () => {
   assert.deepStrictEqual(parseAllowlist(''), []);
   assert.deepStrictEqual(parseAllowlist(null), []);
 });
+
+test('parseAllowlist supports # comments so ranges can be labelled', () => {
+  const raw = [
+    '# Microsoft 365 / Exchange Online',
+    '52.96.0.0/14   # covers 52.98.x seen on SMGEXCH01',
+    '40.96.0.0/13',
+    '   # a whole-line comment',
+    '203.0.113.7  # office',
+  ].join('\n');
+  assert.deepStrictEqual(parseAllowlist(raw), ['52.96.0.0/14', '40.96.0.0/13', '203.0.113.7']);
+});
+
+test('SAFETY: Microsoft 365 ranges make the observed Exchange sources unbannable', () => {
+  const allow = parseAllowlist('52.96.0.0/14 # Exchange Online\n40.96.0.0/13');
+  // The three real IPs that were failing auth against SMGEXCH01.
+  for (const ip of ['52.98.199.117', '52.98.44.21', '52.98.199.85']) {
+    assert.strictEqual(isBannable(ip, allow), false, `${ip} (Microsoft) must not be bannable`);
+  }
+  // ...while genuine attackers stay bannable.
+  assert.strictEqual(isBannable('85.30.235.176', allow), true);
+  assert.strictEqual(isBannable('93.152.205.162', allow), true);
+});

@@ -126,10 +126,14 @@ function isPrivateOrReserved(ip) {
   return NEVER_BAN.some(c => inCidr(ip, c));
 }
 
+// Entries are separated by newlines/commas/whitespace. Everything after a '#'
+// on a line is a comment, so an operator can label what each range is for.
 function parseAllowlist(raw) {
   if (!raw) return [];
   return String(raw)
-    .split(/[\n,\s]+/)
+    .split(/\r?\n/)
+    .map(line => line.split('#')[0])
+    .flatMap(line => line.split(/[,;\s]+/))
     .map(s => s.trim())
     .filter(Boolean);
 }
