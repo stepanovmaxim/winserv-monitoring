@@ -5,7 +5,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.16';
+const AGENT_VERSION = '2.17';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -16,7 +16,16 @@ function generateUniversalScript(serverUrl, regKey) {
     '#   schtasks /create /tn "WinServAgent" /ru SYSTEM /rl HIGHEST /sc minute /mo 1 /tr "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File C:\\winserv-agent\\agent.ps1" /f',
     '# ====================================================================',
     'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}',
-    '[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13',
+    '# TLS: enable the strongest protocols THIS .NET actually knows. Naming Tls13',
+    '# directly throws on .NET < 4.8, which aborted the whole assignment and left',
+    '# the default (TLS 1.0) — HTTPS then fails outright. Probe each value instead.',
+    'try {',
+    '  $sp = [System.Net.ServicePointManager]::SecurityProtocol',
+    '  foreach ($n in @(\'Tls12\', \'Tls13\')) {',
+    '    try { $sp = $sp -bor [Enum]::Parse([System.Net.SecurityProtocolType], $n) } catch {}',
+    '  }',
+    '  [System.Net.ServicePointManager]::SecurityProtocol = $sp',
+    '} catch {}',
     '',
     '$ErrorActionPreference = "Continue"',
     '$AgentVersion = "' + AGENT_VERSION + '"',
@@ -41,7 +50,14 @@ function generateUniversalScript(serverUrl, regKey) {
     '  "$ts $msg" | Out-File $LogFile -Append -Encoding UTF8',
     '}',
     '',
-    'Write-Log "Agent started"',
+    '$PSVer = try { $PSVersionTable.PSVersion } catch { $null }',
+    'Write-Log "Agent v$AgentVersion started (PowerShell $PSVer, TLS $([System.Net.ServicePointManager]::SecurityProtocol))"',
+    '# Fail loudly instead of dying silently: this agent needs PS 3.0+ for',
+    '# Get-CimInstance / ConvertTo-Json / Invoke-RestMethod.',
+    'if ($PSVer -and $PSVer.Major -lt 3) {',
+    '  Write-Log "FATAL: PowerShell $PSVer is too old. Install WMF 3.0+ (and .NET 4.5+ for TLS 1.2), then this agent will work. Nothing will be reported until then."',
+    '  exit 1',
+    '}',
     '',
     '$FullHostname = try { [System.Net.Dns]::GetHostEntry(\'\').HostName } catch { "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
     'if (-not $FullHostname -or $FullHostname -notmatch \'\\.\') { $FullHostname = "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
