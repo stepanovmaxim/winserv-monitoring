@@ -127,7 +127,8 @@ export default function Deploy() {
           <li><b>Active Directory PowerShell module</b> — on DC it's available; on Win10/11 run: <code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>Install-WindowsFeature RSAT-AD-PowerShell</code></li>
           <li><b>Domain Admin rights</b> — local admin on each target (remote task creation)</li>
           <li><b>Admin share C$</b> reachable — <b>TCP 445 (SMB)</b>, used to copy the agent</li>
-          <li><b>WinRM enabled</b> — <b>TCP 5985</b>. Required: the deployer creates the scheduled task via <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>Invoke-Command</code>. Enable with <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>Enable-PSRemoting -Force</code></li>
+          <li><b>WinRM</b> — <b>TCP 5985</b>, preferred path for creating the task (<code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>Enable-PSRemoting -Force</code>). If it's unavailable the deployer falls back to <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>schtasks /s</code> over RPC (TCP 135 + 445), which is what makes legacy hosts work</li>
+          <li><b>PowerShell 3.0+ on the target</b> — the agent uses Get-CimInstance / ConvertTo-Json / Invoke-RestMethod. <b>Server 2008 SP2 ships with PS 2.0</b> and needs <b>WMF 3.0+</b> installed, otherwise the task runs but never reports. The deployer detects this and warns per host</li>
           <li><b>ICMP not required</b> — hardened hosts often block ping; the deployer no longer gates on it</li>
           <li>After install the agent needs <b>outbound HTTPS only</b> — no inbound ports</li>
         </ul>
