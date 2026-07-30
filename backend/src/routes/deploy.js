@@ -10,7 +10,7 @@ function generateDeployerScript(serverUrl, regKey) {
   const agentB64 = Buffer.from(agentPs, 'utf-8').toString('base64');
 
   return [
-    '# WinServ Monitoring — Mass Deployer v2.3',
+    '# WinServ Monitoring — Mass Deployer v2.5',
     '# ====================================================================',
     '# Run on a domain-joined machine with Domain Admin rights.',
     '# Discovers servers, select with checkboxes, remote installs agent.',
