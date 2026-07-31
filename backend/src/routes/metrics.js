@@ -147,12 +147,24 @@ router.post('/', async (req, res) => {
   );
 
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
-  const cfgIv = await db.queryOne('SELECT metric_interval FROM telegram_config LIMIT 1');
+  const cfgIv = await db.queryOne('SELECT metric_interval, agent_auto_update FROM telegram_config LIMIT 1');
   const metric_interval = (cfgIv && cfgIv.metric_interval) ? cfgIv.metric_interval : 1;
   // Watched Event IDs the agent should also collect (beyond critical/error).
   const event_triggers = await db.queryAll('SELECT event_id, log_name FROM event_triggers WHERE enabled = 1');
-  // agent_latest is the Windows agent; Linux agents compare against their own.
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: AGENT_VERSION, linux_agent_latest: LINUX_AGENT_VERSION, metric_interval, event_triggers });
+
+  // The agent downloads a new version inside its scheduled task, and the task
+  // will not start a second instance meanwhile. On a link that trickles, that
+  // download blocks the metrics cadence and the host is flagged OFFLINE while
+  // being perfectly healthy. With auto-update paused we echo the agent's own
+  // version back, so it has nothing to fetch and keeps reporting on time;
+  // upgrades are then pushed deliberately via the deployer (SMB copy).
+  const autoUpdate = !cfgIv || cfgIv.agent_auto_update !== 0;
+  const reported = String(req.body.agent_version || '').trim();
+  const isLinux = platform === 'linux' || server.platform === 'linux';
+  const winLatest = autoUpdate ? AGENT_VERSION : (!isLinux && reported ? reported : AGENT_VERSION);
+  const linuxLatest = autoUpdate ? LINUX_AGENT_VERSION : (isLinux && reported ? reported : LINUX_AGENT_VERSION);
+
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: winLatest, linux_agent_latest: linuxLatest, metric_interval, event_triggers });
 
   // Push the fresh reading to any live dashboards.
   const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);

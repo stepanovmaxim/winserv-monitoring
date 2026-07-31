@@ -193,6 +193,17 @@ export default function Settings() {
               How often agents report and reschedule their task. Applied to already-deployed servers on their next check-in (agent v2.10+).
             </div>
           </div>
+          <div className="toggle-wrapper" onClick={() => setConfig({ ...config, agent_auto_update: !config.agent_auto_update })} style={{ marginTop: 16 }}>
+            <div className={`toggle ${config.agent_auto_update ? 'on' : ''}`}><div className="toggle-knob" /></div>
+            <label>Agent auto-update</label>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 8px' }}>
+            Agents download a new version inside their scheduled task, and the task can't run twice at once — so on a
+            slow or inspected link that download stalls the metrics and the host is reported OFFLINE while healthy.
+            Turn this off to stop the download attempts immediately (each agent is told its own version is current) and
+            roll out new versions with the deployer instead.
+          </div>
+
           <div className="form-group" style={{ marginTop: 16 }}>
             <label>Ignored services (health monitoring)</label>
             <textarea value={config.service_ignore || ''} onChange={e => setConfig({ ...config, service_ignore: e.target.value })} rows={4} placeholder="sppsvc&#10;googleupdate&#10;remoteregistry" style={{ fontFamily: 'monospace', fontSize: 13 }} />

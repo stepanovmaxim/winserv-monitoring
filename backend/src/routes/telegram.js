@@ -84,6 +84,12 @@ router.put('/config', requireAuth, requireAdmin, async (req, res) => {
   }
 
   // Auto-ban settings — separate targeted update (keeps the positional list above intact).
+  // Agent auto-update switch (separate from the positional list above).
+  if (req.body.agent_auto_update !== undefined) {
+    const cur0 = await db.queryOne('SELECT id FROM telegram_config LIMIT 1');
+    if (cur0) await db.query('UPDATE telegram_config SET agent_auto_update = $1 WHERE id = $2', [req.body.agent_auto_update ? 1 : 0, cur0.id]);
+  }
+
   const ab = req.body;
   if (['autoban_enabled', 'autoban_threshold', 'autoban_minutes', 'autoban_allowlist', 'autoban_min_accounts', 'autoban_window_minutes', 'autoban_bad_accounts', 'autoban_protected_accounts'].some(k => ab[k] !== undefined)) {
     const cur = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');

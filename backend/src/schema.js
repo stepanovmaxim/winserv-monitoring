@@ -328,6 +328,12 @@ async function initSchema() {
   // Health: services to ignore (NULL = use built-in defaults; edited in Settings).
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS service_ignore TEXT`);
 
+  // Agent self-update switch. On a link that trickles, the update download runs
+  // inside the scheduled task and blocks the metrics cadence, so the host looks
+  // OFFLINE. Turning this off makes the backend report each agent's own version
+  // as the latest, which stops the download attempts immediately.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS agent_auto_update INTEGER DEFAULT 1`);
+
   // Metric scheduler interval (minutes) pushed to agents; they reschedule to it.
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS metric_interval INTEGER DEFAULT 1`);
 
