@@ -312,6 +312,9 @@ async function initSchema() {
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS agent_version TEXT DEFAULT ''`);
   // windows | linux — agents report it; drives the icon and the "outdated" check.
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS platform TEXT DEFAULT 'windows'`);
+  // Why a host is stuck on an old agent (download vs install, with the reason),
+  // reported by the agent itself so a failed self-update is visible in the panel.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS update_error TEXT DEFAULT ''`);
 
   // Deep-health fields reported by the agent.
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS pending_reboot INTEGER DEFAULT 0`);

@@ -64,6 +64,10 @@ router.post('/', async (req, res) => {
   if (platform) {
     await db.query('UPDATE servers SET platform = $1 WHERE id = $2', [platform, serverId]);
   }
+  // Agents report why their last self-update failed; empty string clears it.
+  if (req.body.update_error !== undefined) {
+    await db.query('UPDATE servers SET update_error = $1 WHERE id = $2', [String(req.body.update_error || '').slice(0, 500), serverId]);
+  }
 
   const currentHostname = h || server.hostname;
   if (currentHostname && currentHostname.includes('.') && !server.group_id) {

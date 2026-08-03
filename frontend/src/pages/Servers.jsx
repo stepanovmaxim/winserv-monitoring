@@ -215,6 +215,7 @@ export default function Servers() {
                     <Link to={`/servers/${s.id}`}>{s.hostname}</Link>
                     {s.health_issues > 0 && <span title="health issues" style={{ marginLeft: 6, color: 'var(--danger)', fontSize: 12 }}>⚠{s.health_issues}</span>}
                     {s.pending_reboot ? <span title="reboot pending" style={{ marginLeft: 4 }}>🔄</span> : null}
+                    {s.update_error ? <span title={'Agent update failed — ' + s.update_error} style={{ marginLeft: 4, color: 'var(--danger)', fontSize: 12 }}>⬆✕</span> : null}
                   </td>
                   <td>{s.customer_name || <span style={{ color: 'var(--warning)' }}>—</span>}</td>
                   <td>{s.group_name || '-'}</td>
