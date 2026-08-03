@@ -685,13 +685,22 @@ function generateUniversalScript(serverUrl, regKey) {
 // client advertises support. A client that does not ask still gets plain text,
 // and one that mishandles gzip fails the "WinServ Monitoring Agent" content
 // check on the other side, so it retries instead of installing garbage.
+// Compression is OFF on purpose. It was tried and reverted: Windows PowerShell
+// advertises gzip but does not reliably decompress when writing with -OutFile,
+// so agents received the full body (server logged 9878B sent, zero aborts) and
+// then failed their own content check — reported as "download failed". Only
+// agents that explicitly opt in (2.20+ sets AutomaticDecompression) may get it,
+// and the endpoint already answers in ~120ms uncompressed, so there is nothing
+// to gain by risking the fleet's ability to update itself.
 function sendScript(req, res, text) {
   res.type('text/plain; charset=utf-8');
-  res.set('Vary', 'Accept-Encoding');
-  if (!String(req.headers['accept-encoding'] || '').toLowerCase().includes('gzip')) {
+  const ua = String(req.headers['user-agent'] || '');
+  const optedIn = /^WinServ-Agent\//.test(ua);
+  if (!optedIn || !String(req.headers['accept-encoding'] || '').toLowerCase().includes('gzip')) {
     return res.send(text);
   }
   const buf = zlib.gzipSync(Buffer.from(text, 'utf8'), { level: 9 });
+  res.set('Vary', 'Accept-Encoding');
   res.set('Content-Encoding', 'gzip');
   res.set('Content-Length', String(buf.length));
   return res.end(buf);
