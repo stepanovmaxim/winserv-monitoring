@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { requireUnrestricted } = require('../services/scopeService');
 const { logAction } = require('../services/auditService');
 const { DEFAULT_IGNORE } = require('../services/serviceFilter');
 const { DEFAULT_BAD_ACCOUNTS } = require('../lib/banPolicy');
@@ -15,7 +16,7 @@ const defaults = {
   authorized_chats: '', viewer_chats: '', webhook_secret: '',
 };
 
-router.get('/config', requireAuth, requireAdmin, async (req, res) => {
+router.get('/config', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const config = await db.queryOne('SELECT * FROM telegram_config LIMIT 1');
   if (!config) return res.json({ ...defaults, service_ignore: DEFAULT_IGNORE.join('\n') });
   // Never send the real bot token to the browser; expose only whether one is set.
@@ -31,7 +32,7 @@ router.get('/config', requireAuth, requireAdmin, async (req, res) => {
   res.json(safe);
 });
 
-router.put('/config', requireAuth, requireAdmin, async (req, res) => {
+router.put('/config', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const { chat_id, enabled, notify_disk, notify_cpu, notify_errors, notify_offline, offline_minutes, cpu_threshold, memory_threshold, disk_threshold, authorized_chats, viewer_chats, webhook_secret, digest_enabled, digest_hour, flap_threshold, alert_webhook_url, alert_webhook_enabled, notify_bruteforce, bruteforce_threshold, service_ignore, metric_interval } = req.body;
   // A masked token means "unchanged" — treat it as absent so we keep the stored one.
   const bot_token = req.body.bot_token === TOKEN_MASK ? undefined : req.body.bot_token;

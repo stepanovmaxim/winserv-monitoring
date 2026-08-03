@@ -6,6 +6,7 @@ const { sendWebhookAlert } = require('../services/webhookService');
 const { logAlert } = require('../services/alertLog');
 const { runAutoban, queueBlock, queueUnblock, canBan } = require('../services/banService');
 const { PROTECTED } = require('../lib/ipGuard');
+const { customerFilter, canSeeServer, requireServerAccess } = require('../services/scopeService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -92,6 +93,7 @@ async function detectBruteforce(serverId) {
 // Fleet view: top offending source IPs by failed logons.
 router.get('/top', requireAuth, requireApproved, async (req, res) => {
   const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+  const scopedTop = await customerFilter(req.user, 's.customer_id', 2);
   const rows = await db.queryAll(
     `SELECT se.ip, COUNT(*)::int fails, COUNT(DISTINCT se.server_id)::int servers,
         MAX(se.created_at) AS last_seen,
@@ -99,9 +101,9 @@ router.get('/top', requireAuth, requireApproved, async (req, res) => {
         array_agg(DISTINCT se.server_id) AS server_ids
      FROM security_events se JOIN servers s ON s.id = se.server_id
      WHERE se.event = 'fail' AND se.ip <> '' AND se.ip <> '-'
-       AND se.created_at > NOW() - ($1 || ' hours')::INTERVAL
+       AND se.created_at > NOW() - ($1 || ' hours')::INTERVAL${scopedTop.sql}
      GROUP BY se.ip ORDER BY fails DESC LIMIT 50`,
-    [String(hours)]
+    [String(hours), ...scopedTop.params]
   );
   res.json(rows);
 });
@@ -113,9 +115,11 @@ router.get('/protected-ranges', requireAuth, requireApproved, (req, res) => {
 
 // Active IP blocks across the fleet.
 router.get('/blocks', requireAuth, requireApproved, async (req, res) => {
+  const scopedB = await customerFilter(req.user, 's.customer_id', 1);
   const rows = await db.queryAll(
     `SELECT b.*, s.hostname FROM ip_blocks b LEFT JOIN servers s ON s.id = b.server_id
-     WHERE b.unblocked_at IS NULL ORDER BY b.created_at DESC LIMIT 500`
+     WHERE b.unblocked_at IS NULL${scopedB.sql} ORDER BY b.created_at DESC LIMIT 500`,
+    scopedB.params
   );
   res.json(rows);
 });
@@ -130,6 +134,7 @@ router.post('/block', requireAuth, requireAdmin, async (req, res) => {
   for (const sid of ids) {
     const server = await db.queryOne('SELECT id, hostname, customer_id FROM servers WHERE id = $1', [sid]);
     if (!server) continue;
+    if (!(await canSeeServer(req.user, sid))) continue;
     const r = await queueBlock(server, ip, { reason: 'manual', minutes: minutes || 0, requestedBy: req.user.email });
     if (r.ok) queued++;
   }
@@ -137,13 +142,15 @@ router.post('/block', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.post('/unblock/:id', requireAuth, requireAdmin, async (req, res) => {
+  const b = await db.queryOne('SELECT server_id FROM ip_blocks WHERE id = $1', [req.params.id]);
+  if (b && !(await canSeeServer(req.user, b.server_id))) return res.status(403).json({ error: 'No access to this server' });
   const r = await queueUnblock(parseInt(req.params.id), req.user.email);
   if (!r.ok) return res.status(404).json({ error: r.why });
   res.json({ success: true });
 });
 
 // Per-server recent logons (success + fail).
-router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const rows = await db.queryAll(
     'SELECT * FROM security_events WHERE server_id = $1 ORDER BY created_at DESC LIMIT 200',
     [req.params.serverId]

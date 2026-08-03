@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { requireUnrestricted } = require('../services/scopeService');
 const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = require('../services/linuxAgentScript');
 
 const router = express.Router();
@@ -603,7 +604,7 @@ function generateUniversalScript(serverUrl, regKey) {
   ].join('\n');
 }
 
-router.get('/script', requireAuth, requireAdmin, async (req, res) => {
+router.get('/script', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
   res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
@@ -633,12 +634,12 @@ router.get('/linux-script', async (req, res) => {
 });
 
 // The one-liner shown on the Deploy page (admin only — it contains the key).
-router.get('/linux-oneliner', requireAuth, requireAdmin, (req, res) => {
+router.get('/linux-oneliner', requireAuth, requireAdmin, requireUnrestricted, (req, res) => {
   const url = `${publicUrl()}/api/agent/linux-install?key=${encodeURIComponent(REGISTRATION_KEY)}`;
   res.json({ command: `curl -fsSL "${url}" | sudo bash`, version: LINUX_AGENT_VERSION });
 });
 
-router.get('/script/:serverId', requireAuth, requireAdmin, async (req, res) => {
+router.get('/script/:serverId', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
   res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));

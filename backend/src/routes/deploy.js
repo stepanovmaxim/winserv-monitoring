@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const { generateUniversalScript } = require('./agent');
+const { requireUnrestricted } = require('../services/scopeService');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -286,13 +287,13 @@ function generateLauncherCmd() {
   ].join('\r\n');
 }
 
-router.get('/script', requireAuth, requireAdmin, (req, res) => {
+router.get('/script', requireAuth, requireAdmin, requireUnrestricted, (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
   res.send(generateDeployerScript(serverUrl, REGISTRATION_KEY));
 });
 
-router.get('/launcher', requireAuth, requireAdmin, (req, res) => {
+router.get('/launcher', requireAuth, requireAdmin, requireUnrestricted, (req, res) => {
   res.type('text/plain; charset=utf-8');
   res.send(generateLauncherCmd());
 });

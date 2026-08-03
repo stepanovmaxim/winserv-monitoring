@@ -35,6 +35,20 @@ async function canSeeServer(user, serverId) {
   return canAccessCustomer(scope, s.customer_id);
 }
 
+// Guard for instance-wide settings and anything that grants power beyond one
+// tenant: the notification/auto-ban config, event triggers, the deployer and
+// agent scripts (they embed the fleet-wide registration key), and user
+// management — a scoped admin who could hand out roles would otherwise be able
+// to create an unrestricted admin and escalate out of their own scope.
+function requireUnrestricted(req, res, next) {
+  getScope(req.user)
+    .then(scope => {
+      if (isUnrestricted(scope)) return next();
+      res.status(403).json({ error: 'Requires an administrator with access to all customers' });
+    })
+    .catch(() => res.status(403).json({ error: 'Requires an administrator with access to all customers' }));
+}
+
 // Express guard for routes shaped like /:serverId or /:id (server id).
 function requireServerAccess(param = 'serverId') {
   return async (req, res, next) => {
@@ -49,5 +63,5 @@ function requireServerAccess(param = 'serverId') {
 
 module.exports = {
   getScope, customerFilter, canSeeCustomer, canSeeServer, requireServerAccess,
-  isUnrestricted, effectiveCustomerIds,
+  requireUnrestricted, isUnrestricted, effectiveCustomerIds,
 };

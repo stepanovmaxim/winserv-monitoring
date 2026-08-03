@@ -1,11 +1,13 @@
 const express = require('express');
 const { requireAuth, requireAdmin, requireApproved } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { customerFilter } = require('../services/scopeService');
 
 const router = express.Router();
 
 // Active + upcoming + recently-ended windows, with a human-readable scope label.
 router.get('/', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 'x', 1);
   const rows = await db.queryAll(
     `SELECT mw.*,
        CASE mw.scope_type
@@ -16,8 +18,12 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
        END AS scope_name,
        (NOW() BETWEEN mw.starts_at AND mw.ends_at) AS active
      FROM maintenance_windows mw
-     WHERE mw.ends_at > NOW() - INTERVAL '1 day'
-     ORDER BY mw.starts_at DESC`
+     WHERE mw.ends_at > NOW() - INTERVAL '1 day'${scoped.sql ? `
+       AND (mw.scope_type = 'customer' AND mw.scope_id = ANY($1)
+            OR mw.scope_type = 'server' AND mw.scope_id IN (SELECT id FROM servers WHERE customer_id = ANY($1))
+            OR mw.scope_type = 'group'  AND mw.scope_id IN (SELECT DISTINCT group_id FROM servers WHERE customer_id = ANY($1)))` : ''}
+     ORDER BY mw.starts_at DESC`,
+    scoped.params
   );
   res.json(rows);
 });

@@ -1,16 +1,20 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { customerFilter } = require('../services/scopeService');
 const { logAction } = require('../services/auditService');
 
 const router = express.Router();
 
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
+  const scoped = await customerFilter(req.user, 's.customer_id', 1);
   const actions = await db.queryAll(
     `SELECT sa.*, s.hostname
      FROM server_actions sa
      JOIN servers s ON s.id = sa.server_id
-     ORDER BY s.hostname`
+     ${scoped.sql ? 'WHERE' + scoped.sql.replace(/^ AND/, '') : ''}
+     ORDER BY s.hostname`,
+    scoped.params
   );
   res.json(actions);
 });

@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { customerFilter } = require('../services/scopeService');
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ const router = express.Router();
 // reported as 0% — the number becomes a true N-day SLA as history accrues.
 router.get('/uptime', requireAuth, requireApproved, async (req, res) => {
   const days = Math.min(parseInt(req.query.days) || 30, 365);
+  const scoped = await customerFilter(req.user, 's.customer_id', 2);
   const rows = await db.queryAll(
     `SELECT s.id, s.hostname, c.name AS customer_name,
         COALESCE(SUM(mh.sample_count), 0)::int AS samples,
@@ -18,9 +20,10 @@ router.get('/uptime', requireAuth, requireApproved, async (req, res) => {
      FROM servers s
      LEFT JOIN customers c ON s.customer_id = c.id
      LEFT JOIN metrics_hourly mh ON mh.server_id = s.id AND mh.bucket >= NOW() - ($1 || ' days')::INTERVAL
+     ${scoped.sql ? 'WHERE' + scoped.sql.replace(/^ AND/, '') : ''}
      GROUP BY s.id, s.hostname, c.name
      ORDER BY s.hostname`,
-    [String(days)]
+    [String(days), ...scoped.params]
   );
 
   const now = Date.now();

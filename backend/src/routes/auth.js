@@ -2,7 +2,7 @@ const express = require('express');
 const { passport, generateToken, ADMIN_EMAIL } = require('../auth');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
-const { getScope } = require('../services/scopeService');
+const { getScope, requireUnrestricted } = require('../services/scopeService');
 
 const router = express.Router();
 
@@ -63,7 +63,7 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
 
 // Assign which customers a user may see. An empty list means "all customers"
 // (the historical behaviour), so existing admins are unaffected by this feature.
-router.put('/users/:id/customers', requireAuth, requireAdmin, async (req, res) => {
+router.put('/users/:id/customers', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const { id } = req.params;
   const ids = Array.isArray(req.body.customer_ids) ? req.body.customer_ids.map(Number).filter(Number.isFinite) : [];
 
@@ -88,7 +88,7 @@ router.put('/users/:id/customers', requireAuth, requireAdmin, async (req, res) =
   res.json({ success: true, count: ids.length });
 });
 
-router.put('/users/:id/role', requireAuth, requireAdmin, async (req, res) => {
+router.put('/users/:id/role', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const { id } = req.params;
   const { role } = req.body;
   if (!['admin', 'viewer', 'pending'].includes(role)) {
