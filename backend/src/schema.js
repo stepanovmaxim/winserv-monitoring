@@ -328,6 +328,48 @@ async function initSchema() {
   // Health: services to ignore (NULL = use built-in defaults; edited in Settings).
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS service_ignore TEXT`);
 
+  // Microsoft Defender posture, one row per server, replaced on each report.
+  // available=0 means the Defender cmdlets are absent (third-party AV or the
+  // feature is removed) — that is reported, not treated as "protection off".
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS defender_status (
+      server_id INTEGER PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+      available INTEGER DEFAULT 0,
+      av_enabled INTEGER DEFAULT 0,
+      realtime_enabled INTEGER DEFAULT 0,
+      behavior_monitor INTEGER DEFAULT 0,
+      tamper_protected INTEGER DEFAULT 0,
+      signature_age_days INTEGER,
+      signature_updated TIMESTAMPTZ,
+      quick_scan_age_days INTEGER,
+      full_scan_age_days INTEGER,
+      engine_version TEXT DEFAULT '',
+      product_version TEXT DEFAULT '',
+      third_party TEXT DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
+  // Malware detections reported by Defender (deduped on server+time+name).
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS threat_detections (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      name TEXT DEFAULT '',
+      severity TEXT DEFAULT '',
+      resource TEXT DEFAULT '',
+      action_success INTEGER DEFAULT 0,
+      detected_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_threat_dedup ON threat_detections(server_id, name, detected_at)`);
+
+  // Thresholds for the Defender posture alerts.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS notify_defender INTEGER DEFAULT 1`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS defender_signature_days INTEGER DEFAULT 3`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS defender_scan_days INTEGER DEFAULT 14`);
+
   // Per-user customer scoping. A user with NO rows here sees everything (that is
   // the historical behaviour, so existing admins are unaffected); a user WITH
   // rows is restricted to exactly those customers.

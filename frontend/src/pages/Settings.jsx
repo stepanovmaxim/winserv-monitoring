@@ -10,6 +10,7 @@ export default function Settings() {
   const [showAgent, setShowAgent] = useState(false);
   const [triggers, setTriggers] = useState([]);
   const [protectedRanges, setProtectedRanges] = useState([]);
+  const [presetBusy, setPresetBusy] = useState(false);
   const [trigForm, setTrigForm] = useState({ event_id: '', log_name: 'System', source_match: '', label: '', severity: 'warning' });
 
   useEffect(() => {
@@ -310,6 +311,29 @@ export default function Settings() {
           <b> 55</b> NTFS corruption, <b>7</b> disk bad block, <b>41</b> kernel power. The agent collects these from
           the chosen log regardless of level (agent v2.15+).
         </p>
+        <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 14 }}>🛡 Security preset</b>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Log wiping (1102 / 104), new accounts (4720), privilege grants (4732 / 4728), persistence via services (7045)
+              and scheduled tasks (4698), lockouts (4740).
+            </span>
+            <button type="button" style={{ marginLeft: 'auto' }} disabled={presetBusy} onClick={async () => {
+              setPresetBusy(true);
+              try {
+                const r = await api.applyEventPreset();
+                const t = await api.getEventTriggers(); setTriggers(t);
+                alert(r.added ? `Added ${r.added} of ${r.total} triggers (the rest were already configured).` : 'All preset triggers are already configured.');
+              } catch (e) { alert(e.message); }
+              setPresetBusy(false);
+            }}>Add security preset</button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 8 }}>
+            The 4xxx events come from the Security log and only appear if the matching audit policy is enabled on the
+            server (Account Management / Object Access). Without it those triggers stay silent.
+          </div>
+        </div>
+
         <form onSubmit={addTrigger} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
           <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Event ID *</label><input type="number" value={trigForm.event_id} onChange={e => setTrigForm({ ...trigForm, event_id: e.target.value })} required style={{ width: 100 }} placeholder="6008" /></div>
           <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Log</label><select value={trigForm.log_name} onChange={e => setTrigForm({ ...trigForm, log_name: e.target.value })} style={{ width: 130 }}><option>System</option><option>Application</option><option>Security</option><option>Setup</option></select></div>

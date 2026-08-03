@@ -175,6 +175,20 @@ export const api = {
   getProtectedRanges() {
     return request('/api/security/protected-ranges');
   },
+
+  // Antivirus posture (Microsoft Defender)
+  getDefenderFleet() {
+    return request('/api/health-report/defender/fleet');
+  },
+  getThreats() {
+    return request('/api/health-report/defender/threats');
+  },
+  getEventPreset() {
+    return request('/api/event-triggers/preset');
+  },
+  applyEventPreset() {
+    return request('/api/event-triggers/preset', { method: 'POST' });
+  },
   blockIp(ip, server_ids, minutes) {
     return request('/api/security/block', { method: 'POST', body: JSON.stringify({ ip, server_ids, minutes }) });
   },

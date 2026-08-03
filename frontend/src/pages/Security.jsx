@@ -8,6 +8,9 @@ export default function Security() {
   const [hours, setHours] = useState(24);
   const [rows, setRows] = useState([]);
   const [blocks, setBlocks] = useState([]);
+  const [av, setAv] = useState([]);
+  const [threats, setThreats] = useState([]);
+  const [showAllAv, setShowAllAv] = useState(false);
   const [loading, setLoading] = useState(true);
 
   function load(h) {
@@ -15,7 +18,25 @@ export default function Security() {
     Promise.all([
       api.getSecurityTop(h).then(setRows),
       api.getBlocks().then(setBlocks).catch(() => setBlocks([])),
+      api.getDefenderFleet().then(setAv).catch(() => setAv([])),
+      api.getThreats().then(setThreats).catch(() => setThreats([])),
     ]).finally(() => setLoading(false));
+  }
+
+  // What's wrong with this host's antivirus, worst first. Empty = healthy.
+  function avProblems(r) {
+    if (!r.server_id || r.available === null || r.available === undefined) return ['no data yet'];
+    if (r.third_party) return [];                       // another AV owns the box
+    if (!r.available) return ['Defender not available'];
+    const p = [];
+    if (!r.av_enabled) p.push('DISABLED');
+    else if (!r.realtime_enabled) p.push('real-time OFF');
+    if (r.signature_age_days != null && r.signature_age_days > 3) p.push(`signatures ${r.signature_age_days}d old`);
+    const scans = [r.quick_scan_age_days, r.full_scan_age_days].filter(v => v != null);
+    if (!scans.length) p.push('never scanned');
+    else if (Math.min(...scans) > 14) p.push(`last scan ${Math.min(...scans)}d ago`);
+    if (!r.tamper_protected) p.push('tamper protection off');
+    return p;
   }
 
   useEffect(() => { load(hours); }, [hours]);
@@ -56,6 +77,80 @@ export default function Security() {
           persistent attackers automatically — local, reserved, and allowlisted addresses are never blocked.
         </p>
       </div>
+
+      {threats.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--danger)' }}>
+          <h3 style={{ marginTop: 0, color: 'var(--danger)' }}>🦠 Malware detected ({threats.length} in 30 days)</h3>
+          <table>
+            <thead><tr><th>When</th><th>Server</th><th>Threat</th><th>Object</th><th>Result</th></tr></thead>
+            <tbody>
+              {threats.slice(0, 15).map(t => (
+                <tr key={t.id}>
+                  <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{new Date(t.detected_at).toLocaleString()}</td>
+                  <td>{t.hostname}</td>
+                  <td><strong>{t.name}</strong></td>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.resource}>{t.resource || '-'}</td>
+                  <td>{t.action_success
+                    ? <span className="badge badge-viewer">neutralised</span>
+                    : <span className="badge badge-error">NOT neutralised</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {av.length > 0 && (() => {
+        const withProblems = av.filter(r => avProblems(r).length);
+        const shown = showAllAv ? av : withProblems;
+        return (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>🛡 Antivirus posture</h3>
+              <span style={{ fontSize: 13, color: withProblems.length ? 'var(--danger)' : 'var(--success, #22c55e)' }}>
+                {withProblems.length ? `${withProblems.length} of ${av.length} need attention` : `all ${av.length} protected`}
+              </span>
+              <button className="secondary" style={{ marginLeft: 'auto', padding: '4px 10px', fontSize: 12 }}
+                onClick={() => setShowAllAv(s => !s)}>{showAllAv ? 'Only problems' : 'Show all'}</button>
+            </div>
+            {shown.length === 0 ? (
+              <div className="empty"><p>✓ Defender is enabled, current and scanning everywhere.</p></div>
+            ) : (
+              <table>
+                <thead><tr><th>Server</th><th>Customer</th><th>State</th><th>Signatures</th><th>Last scan</th><th>Version</th></tr></thead>
+                <tbody>
+                  {shown.map(r => {
+                    const probs = avProblems(r);
+                    const scans = [r.quick_scan_age_days, r.full_scan_age_days].filter(v => v != null);
+                    return (
+                      <tr key={r.server_id}>
+                        <td><strong>{r.hostname}</strong></td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.customer_name || '-'}</td>
+                        <td style={{ fontSize: 12 }}>
+                          {r.third_party
+                            ? <span className="badge badge-viewer" title={r.third_party}>3rd-party AV</span>
+                            : probs.length
+                              ? probs.map((p, i) => <span key={i} className="badge badge-error" style={{ marginRight: 4 }}>{p}</span>)
+                              : <span className="badge badge-viewer">protected</span>}
+                        </td>
+                        <td style={{ fontSize: 12, color: r.signature_age_days > 3 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          {r.signature_age_days != null ? `${r.signature_age_days}d` : '-'}
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{scans.length ? `${Math.min(...scans)}d ago` : 'never'}</td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.engine_version || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
+              Reported by the agent (v2.19+) every ~10 minutes. Hosts running a third-party antivirus are shown as such:
+              Defender goes passive there, which is expected and not flagged.
+            </p>
+          </div>
+        );
+      })()}
 
       {blocks.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>

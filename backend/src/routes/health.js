@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
-const { requireServerAccess } = require('../services/scopeService');
+const { requireServerAccess, customerFilter } = require('../services/scopeService');
 const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { isMuted } = require('../services/maintenanceService');
@@ -86,7 +86,121 @@ router.post('/', async (req, res) => {
     }
   }
 
+  // --- Microsoft Defender posture + detections ---
+  try { await ingestDefender(server, req.body.defender, config, muted); }
+  catch (e) { console.error('[Defender]', e.message); }
+
   res.json({ success: true });
+});
+
+// Remembers which posture warning we already sent, so a permanently-misconfigured
+// host reports once a day instead of every ten minutes.
+const defenderAlerted = new Map();
+function onceADay(key) {
+  const last = defenderAlerted.get(key) || 0;
+  if (Date.now() - last < 24 * 60 * 60 * 1000) return false;
+  defenderAlerted.set(key, Date.now());
+  return true;
+}
+
+async function ingestDefender(server, d, config, muted) {
+  if (!d || typeof d !== 'object') return;
+  const b = (v) => (v ? 1 : 0);
+  const age = (v) => (v === null || v === undefined || v === '' ? null : parseInt(v));
+
+  await db.query(
+    `INSERT INTO defender_status (server_id, available, av_enabled, realtime_enabled, behavior_monitor,
+       tamper_protected, signature_age_days, signature_updated, quick_scan_age_days, full_scan_age_days,
+       engine_version, product_version, third_party, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
+     ON CONFLICT (server_id) DO UPDATE SET available=$2, av_enabled=$3, realtime_enabled=$4,
+       behavior_monitor=$5, tamper_protected=$6, signature_age_days=$7, signature_updated=$8,
+       quick_scan_age_days=$9, full_scan_age_days=$10, engine_version=$11, product_version=$12,
+       third_party=$13, updated_at=NOW()`,
+    [server.id, b(d.available), b(d.av_enabled), b(d.realtime_enabled), b(d.behavior_monitor),
+     b(d.tamper_protected), age(d.signature_age_days), d.signature_updated || null,
+     age(d.quick_scan_age_days), age(d.full_scan_age_days),
+     String(d.engine_version || '').slice(0, 60), String(d.product_version || '').slice(0, 60),
+     String(d.third_party || '').slice(0, 200)]
+  );
+
+  // Malware detections: store new ones and alert on each.
+  const threats = Array.isArray(d.threats) ? d.threats.slice(0, 25) : [];
+  for (const t of threats) {
+    if (!t || !t.name || !t.detected_at) continue;
+    const r = await db.query(
+      `INSERT INTO threat_detections (server_id, name, resource, action_success, detected_at)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (server_id, name, detected_at) DO NOTHING`,
+      [server.id, String(t.name).slice(0, 200), String(t.resource || '').slice(0, 400), b(t.action_success), t.detected_at]
+    );
+    if (r.rowCount > 0 && config) {
+      const cleaned = t.action_success ? ' (neutralised)' : ' — <b>NOT neutralised</b>';
+      notify(`<b>MALWARE</b> on ${server.hostname}: ${t.name}${cleaned}${t.resource ? '\n' + String(t.resource).slice(0, 200) : ''}`,
+        muted, { severity: 'critical', kind: 'malware', server_id: server.id, customer_id: server.customer_id });
+    }
+  }
+
+  if (!config || !config.notify_defender) return;
+
+  // A third-party AV puts Defender into passive mode, so "off" is expected there
+  // and must not be reported as an unprotected host.
+  if (!d.available || d.third_party) return;
+
+  const sigMax = parseInt(config.defender_signature_days) || 3;
+  const scanMax = parseInt(config.defender_scan_days) || 14;
+  const k = (s) => `${server.id}:${s}`;
+  const meta = { kind: 'antivirus', server_id: server.id, customer_id: server.customer_id };
+
+  if (!d.av_enabled && onceADay(k('av')))
+    notify(`<b>ANTIVIRUS OFF</b> on ${server.hostname}: Microsoft Defender is disabled`, muted, { severity: 'critical', ...meta });
+  else if (!d.realtime_enabled && onceADay(k('rtp')))
+    notify(`<b>Real-time protection OFF</b> on ${server.hostname}`, muted, { severity: 'critical', ...meta });
+
+  const sigAge = age(d.signature_age_days);
+  if (sigAge !== null && sigAge > sigMax && onceADay(k('sig')))
+    notify(`<b>Antivirus signatures stale</b> on ${server.hostname}: ${sigAge} days old (>${sigMax})`, muted, { severity: 'warning', ...meta });
+
+  const quick = age(d.quick_scan_age_days), full = age(d.full_scan_age_days);
+  const scanned = [quick, full].filter(v => v !== null);
+  const bestScan = scanned.length ? Math.min(...scanned) : null;
+  if (bestScan === null && onceADay(k('noscan')))
+    notify(`<b>Antivirus never scanned</b> on ${server.hostname}: no quick or full scan on record`, muted, { severity: 'warning', ...meta });
+  else if (bestScan !== null && bestScan > scanMax && onceADay(k('scan')))
+    notify(`<b>Antivirus scan overdue</b> on ${server.hostname}: last scan ${bestScan} days ago (>${scanMax})`, muted, { severity: 'warning', ...meta });
+}
+
+// Fleet antivirus posture. Ordered worst-first so problems surface at the top.
+router.get('/defender/fleet', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 's.customer_id', 1);
+  const rows = await db.queryAll(
+    `SELECT s.id AS server_id, s.hostname, s.status, c.name AS customer_name, d.*,
+        (SELECT COUNT(*)::int FROM threat_detections t
+          WHERE t.server_id = s.id AND t.detected_at > NOW() - INTERVAL '7 days') AS threats_7d
+     FROM servers s
+     LEFT JOIN defender_status d ON d.server_id = s.id
+     LEFT JOIN customers c ON c.id = s.customer_id
+     WHERE s.platform <> 'linux'${scoped.sql}
+     ORDER BY
+       (d.server_id IS NULL) DESC,
+       (d.available = 1 AND d.av_enabled = 0) DESC,
+       (d.available = 1 AND d.realtime_enabled = 0) DESC,
+       COALESCE(d.signature_age_days, 999) DESC,
+       s.hostname`,
+    scoped.params
+  );
+  res.json(rows);
+});
+
+// Recent malware detections across the fleet.
+router.get('/defender/threats', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 's.customer_id', 1);
+  const rows = await db.queryAll(
+    `SELECT t.*, s.hostname FROM threat_detections t JOIN servers s ON s.id = t.server_id
+     WHERE t.detected_at > NOW() - INTERVAL '30 days'${scoped.sql}
+     ORDER BY t.detected_at DESC LIMIT 200`,
+    scoped.params
+  );
+  res.json(rows);
 });
 
 router.get('/:serverId', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
