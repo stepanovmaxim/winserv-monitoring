@@ -1,4 +1,5 @@
 const express = require('express');
+const zlib = require('zlib');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const db = require('../db');
 const { requireUnrestricted } = require('../services/scopeService');
@@ -659,6 +660,23 @@ function generateUniversalScript(serverUrl, regKey) {
   ].join('\n');
 }
 
+// The agent pulls this over links that are sometimes slow or traffic-inspected,
+// and the script has grown past 32KB. Gzip takes it to roughly 8KB whenever the
+// client advertises support. A client that does not ask still gets plain text,
+// and one that mishandles gzip fails the "WinServ Monitoring Agent" content
+// check on the other side, so it retries instead of installing garbage.
+function sendScript(req, res, text) {
+  res.type('text/plain; charset=utf-8');
+  res.set('Vary', 'Accept-Encoding');
+  if (!String(req.headers['accept-encoding'] || '').toLowerCase().includes('gzip')) {
+    return res.send(text);
+  }
+  const buf = zlib.gzipSync(Buffer.from(text, 'utf8'), { level: 9 });
+  res.set('Content-Encoding', 'gzip');
+  res.set('Content-Length', String(buf.length));
+  return res.end(buf);
+}
+
 router.get('/script', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
@@ -713,8 +731,7 @@ router.get('/self-update', async (req, res) => {
   if (!agent) return res.status(401).type('text/plain').send('# invalid token');
   console.log(`[Self-update] served to ${agent.hostname} (was v${agent.agent_version || '?'} -> v${AGENT_VERSION})`);
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
-  res.type('text/plain; charset=utf-8');
-  res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
+  sendScript(req, res, generateUniversalScript(serverUrl, REGISTRATION_KEY));
 });
 
 // Latest agent version, so the UI can flag outdated hosts.
