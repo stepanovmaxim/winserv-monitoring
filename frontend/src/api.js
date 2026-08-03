@@ -30,6 +30,9 @@ export const api = {
   setUserRole(id, role) {
     return request(`/api/auth/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
   },
+  setUserCustomers(id, customer_ids) {
+    return request(`/api/auth/users/${id}/customers`, { method: 'PUT', body: JSON.stringify({ customer_ids }) });
+  },
 
   // Groups
   getGroups() {

@@ -3,6 +3,7 @@ const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { checkAlerts, handleBackOnline } = require('../services/alertService');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { requireServerAccess } = require('../services/scopeService');
 const { broadcast } = require('../services/sseService');
 const { assignCustomerByDomain } = require('../services/tenantService');
 const { filterValidDisks, diskAggregate } = require('../lib/disk');
@@ -178,7 +179,7 @@ router.post('/', async (req, res) => {
   });
 });
 
-router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const { serverId } = req.params;
   const { hours } = req.query;
   const lookback = hours || 24;
@@ -199,7 +200,7 @@ router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
 
 // Single most-recent reading — used for the live "current" cards regardless of
 // the chart's selected range.
-router.get('/:serverId/latest', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId/latest', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const m = await db.queryOne(
     'SELECT * FROM metrics WHERE server_id = $1 ORDER BY collected_at DESC LIMIT 1',
     [req.params.serverId]
@@ -211,7 +212,7 @@ router.get('/:serverId/latest', requireAuth, requireApproved, async (req, res) =
 });
 
 // Hourly rollups for long-range charts (fields already percentaged).
-router.get('/:serverId/rollup', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId/rollup', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const hours = parseInt(req.query.hours) || 720;
   const rows = await db.queryAll(
     `SELECT bucket AS collected_at, cpu_avg, cpu_max, mem_pct_avg, disk_pct_avg

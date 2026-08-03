@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { requireServerAccess } = require('../services/scopeService');
 const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { isMuted } = require('../services/maintenanceService');
@@ -88,7 +89,7 @@ router.post('/', async (req, res) => {
   res.json({ success: true });
 });
 
-router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const items = await db.queryAll(
     'SELECT * FROM health_items WHERE server_id = $1 ORDER BY kind, name',
     [req.params.serverId]

@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireAdmin, requireApproved } = require('../middleware/authMiddleware');
+const { customerFilter } = require('../services/scopeService');
 const db = require('../db');
 
 const router = express.Router();
@@ -12,6 +13,8 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
   else if (req.query.ack === '1') where.push('a.acknowledged_at IS NOT NULL');
   if (req.query.severity) { params.push(req.query.severity); where.push(`a.severity = $${params.length}`); }
   if (req.query.kind) { params.push(req.query.kind); where.push(`a.kind = $${params.length}`); }
+  const scoped = await customerFilter(req.user, 'COALESCE(a.customer_id, s.customer_id)', params.length + 1);
+  if (scoped.sql) { where.push(scoped.sql.replace(/^ AND /, '')); params.push(...scoped.params); }
   const limit = Math.min(parseInt(req.query.limit) || 200, 500);
   const rows = await db.queryAll(
     `SELECT a.*, s.hostname, cu.name AS customer_name, ck.name AS check_name
@@ -28,7 +31,12 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
 
 // Unacknowledged count, for the nav badge.
 router.get('/unacked-count', requireAuth, requireApproved, async (req, res) => {
-  const r = await db.queryOne('SELECT COUNT(*)::int AS n FROM alerts WHERE acknowledged_at IS NULL');
+  const scoped = await customerFilter(req.user, 'COALESCE(a.customer_id, s.customer_id)', 1);
+  const r = await db.queryOne(
+    `SELECT COUNT(*)::int AS n FROM alerts a LEFT JOIN servers s ON s.id = a.server_id
+     WHERE a.acknowledged_at IS NULL${scoped.sql}`,
+    scoped.params
+  );
   res.json({ count: r ? r.n : 0 });
 });
 

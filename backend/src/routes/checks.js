@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireAdmin, requireApproved } = require('../middleware/authMiddleware');
+const { customerFilter, canSeeCustomer } = require('../services/scopeService');
 const db = require('../db');
 const { runCheck } = require('../services/checkService');
 
@@ -7,10 +8,13 @@ const router = express.Router();
 const KINDS = ['ping', 'tcp', 'http', 'tls'];
 
 router.get('/', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 'c.customer_id', 1);
   const rows = await db.queryAll(
     `SELECT c.*, cu.name AS customer_name
      FROM checks c LEFT JOIN customers cu ON cu.id = c.customer_id
-     ORDER BY (c.status = 'down') DESC, c.name`
+     ${scoped.sql ? 'WHERE ' + scoped.sql.replace(/^ AND /, '') : ''}
+     ORDER BY (c.status = 'down') DESC, c.name`,
+    scoped.params
   );
   res.json(rows);
 });

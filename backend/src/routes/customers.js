@@ -2,16 +2,20 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireAdmin, requireApproved } = require('../middleware/authMiddleware');
 const db = require('../db');
+const { customerFilter, canSeeCustomer } = require('../services/scopeService');
 
 const router = express.Router();
 
 // --- Customers (collection) ---
 router.get('/', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 'c.id', 1);
   const customers = await db.queryAll(
     `SELECT c.*,
        (SELECT COUNT(*)::int FROM servers s WHERE s.customer_id = c.id) AS server_count
      FROM customers c
-     ORDER BY c.name`
+     ${scoped.sql ? 'WHERE ' + scoped.sql.replace(/^ AND /, '') : ''}
+     ORDER BY c.name`,
+    scoped.params
   );
   res.json(customers);
 });

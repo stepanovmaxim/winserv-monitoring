@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { requireServerAccess } = require('../services/scopeService');
 const db = require('../db');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -37,7 +38,7 @@ router.post('/', async (req, res) => {
 });
 
 // Panel: current snapshot for one server, hottest first.
-router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const rows = await db.queryAll(
     'SELECT name, pid, cpu_pct, mem_mb FROM process_snapshot WHERE server_id = $1 ORDER BY cpu_pct DESC, mem_mb DESC',
     [req.params.serverId]

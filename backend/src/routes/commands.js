@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
+const { requireServerAccess, canSeeServer } = require('../services/scopeService');
 const db = require('../db');
 const { logAction } = require('../services/auditService');
 const { canBan } = require('../services/banService');
@@ -7,7 +8,7 @@ const { canBan } = require('../services/banService');
 const router = express.Router();
 
 // Recent commands for a server (admin view).
-router.get('/:serverId', requireAuth, requireAdmin, async (req, res) => {
+router.get('/:serverId', requireAuth, requireAdmin, requireServerAccess(), async (req, res) => {
   const rows = await db.queryAll(
     `SELECT * FROM server_commands WHERE server_id = $1 ORDER BY created_at DESC LIMIT 50`,
     [req.params.serverId]
@@ -27,6 +28,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
   const server = await db.queryOne('SELECT hostname FROM servers WHERE id = $1', [server_id]);
   if (!server) return res.status(404).json({ error: 'server not found' });
+  if (!(await canSeeServer(req.user, server_id))) return res.status(403).json({ error: 'No access to this server' });
 
   const r = await db.query(
     'INSERT INTO server_commands (server_id, ctype, param, requested_by) VALUES ($1, $2, $3, $4) RETURNING id',

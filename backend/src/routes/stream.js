@@ -1,11 +1,12 @@
 const express = require('express');
 const { verifyToken } = require('../auth');
 const { addClient } = require('../services/sseService');
+const { getScope } = require('../services/scopeService');
 
 const router = express.Router();
 
 // EventSource cannot set Authorization headers, so the JWT arrives as ?token=.
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   let user;
   try {
     user = verifyToken(req.query.token || '');
@@ -25,7 +26,9 @@ router.get('/', (req, res) => {
   res.flushHeaders();
   res.write('retry: 5000\n\n');
 
-  addClient(res);
+  // Live events are filtered to this user's customers for the life of the stream.
+  const scope = await getScope(user);
+  addClient(res, scope);
 });
 
 module.exports = router;

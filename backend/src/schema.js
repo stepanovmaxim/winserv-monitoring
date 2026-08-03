@@ -328,6 +328,18 @@ async function initSchema() {
   // Health: services to ignore (NULL = use built-in defaults; edited in Settings).
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS service_ignore TEXT`);
 
+  // Per-user customer scoping. A user with NO rows here sees everything (that is
+  // the historical behaviour, so existing admins are unaffected); a user WITH
+  // rows is restricted to exactly those customers.
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS user_customers (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      PRIMARY KEY (user_id, customer_id)
+    );
+  `);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_user_customers_user ON user_customers(user_id)`);
+
   // Agent self-update switch. On a link that trickles, the update download runs
   // inside the scheduled task and blocks the metrics cadence, so the host looks
   // OFFLINE. Turning this off makes the backend report each agent's own version

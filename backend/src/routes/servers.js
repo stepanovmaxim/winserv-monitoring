@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireAdmin, requireApproved } = require('../middleware/authMiddleware');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
+const { customerFilter, canSeeServer, requireServerAccess } = require('../services/scopeService');
 
 const router = express.Router();
 
@@ -27,6 +28,13 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
   if (customer_id === 'none') { where.push('s.customer_id IS NULL'); }
   else if (customer_id) { params.push(customer_id); where.push(`s.customer_id = $${params.length}`); }
 
+  // Restrict to the customers this user is assigned to (no assignment = all).
+  const scoped = await customerFilter(req.user, 's.customer_id', params.length + 1);
+  if (scoped.sql) {
+    where.push(scoped.sql.replace(/^ AND /, ''));
+    params.push(...scoped.params);
+  }
+
   if (where.length) q += ' WHERE ' + where.join(' AND ');
   q += ' ORDER BY s.hostname';
   const servers = await db.queryAll(q, params);
@@ -48,10 +56,19 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   res.json({ id: result.rows[0].id, token });
 });
 
-router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.put('/:id', requireAuth, requireAdmin, requireServerAccess('id'), async (req, res) => {
   const { hostname, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk, cpu_threshold, memory_threshold, disk_threshold } = req.body;
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [req.params.id]);
   if (!server) return res.status(404).json({ error: 'Server not found' });
+
+  // A scoped admin must not be able to move a server out of (or into) their
+  // scope — that would silently hand it to another tenant, or hide it entirely.
+  if (customer_id !== undefined && Number(customer_id || 0) !== Number(server.customer_id || 0)) {
+    const { canSeeCustomer } = require('../services/scopeService');
+    const okFrom = await canSeeCustomer(req.user, server.customer_id);
+    const okTo = await canSeeCustomer(req.user, customer_id || null);
+    if (!okFrom || !okTo) return res.status(403).json({ error: 'No access to reassign this server' });
+  }
 
   const toBool = (v, def) => v !== undefined ? (v ? 1 : 0) : def;
   // '' or null clears the override (inherit); undefined keeps the stored value.
@@ -81,12 +98,12 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireAdmin, requireServerAccess('id'), async (req, res) => {
   await db.query('DELETE FROM servers WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
-router.get('/:id', requireAuth, requireApproved, async (req, res) => {
+router.get('/:id', requireAuth, requireApproved, requireServerAccess('id'), async (req, res) => {
   const server = await db.queryOne(`
     SELECT s.*, g.name as group_name, c.name as customer_name
     FROM servers s
@@ -99,13 +116,13 @@ router.get('/:id', requireAuth, requireApproved, async (req, res) => {
   res.json(server);
 });
 
-router.get('/:id/token', requireAuth, requireAdmin, async (req, res) => {
+router.get('/:id/token', requireAuth, requireAdmin, requireServerAccess('id'), async (req, res) => {
   const token = await db.queryOne('SELECT * FROM agent_tokens WHERE server_id = $1', [req.params.id]);
   if (!token) return res.status(404).json({ error: 'No token found' });
   res.json({ token: token.token });
 });
 
-router.post('/:id/regenerate-token', requireAuth, requireAdmin, async (req, res) => {
+router.post('/:id/regenerate-token', requireAuth, requireAdmin, requireServerAccess('id'), async (req, res) => {
   await db.query('DELETE FROM agent_tokens WHERE server_id = $1', [req.params.id]);
   const token = uuidv4();
   await db.query('INSERT INTO agent_tokens (server_id, token) VALUES ($1, $2)', [req.params.id, token]);

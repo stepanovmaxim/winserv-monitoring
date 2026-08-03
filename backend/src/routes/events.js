@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { requireServerAccess } = require('../services/scopeService');
 const { assignCustomerByDomain } = require('../services/tenantService');
 const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
@@ -132,7 +133,7 @@ router.post('/', async (req, res) => {
   res.json({ success: true, count: inserted });
 });
 
-router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const { serverId } = req.params;
   const { level, limit } = req.query;
 

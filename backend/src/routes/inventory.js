@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
+const { requireServerAccess } = require('../services/scopeService');
 const db = require('../db');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -70,7 +71,7 @@ router.post('/', async (req, res) => {
 });
 
 // Panel: hardware + software for one server.
-router.get('/:serverId', requireAuth, requireApproved, async (req, res) => {
+router.get('/:serverId', requireAuth, requireApproved, requireServerAccess(), async (req, res) => {
   const hw = await db.queryOne('SELECT * FROM server_hardware WHERE server_id = $1', [req.params.serverId]);
   const software = await db.queryAll(
     'SELECT name, version, publisher, installed_on FROM inventory_software WHERE server_id = $1 ORDER BY lower(name)',

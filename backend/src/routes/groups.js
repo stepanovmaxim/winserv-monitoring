@@ -1,16 +1,20 @@
 const express = require('express');
 const { requireAuth, requireAdmin, requireApproved } = require('../middleware/authMiddleware');
+const { customerFilter } = require('../services/scopeService');
 const db = require('../db');
 
 const router = express.Router();
 
 router.get('/', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 's.customer_id', 1);
   const groups = await db.queryAll(
     `SELECT g.*, COUNT(s.id)::int as server_count
      FROM server_groups g
-     LEFT JOIN servers s ON s.group_id = g.id
+     LEFT JOIN servers s ON s.group_id = g.id ${scoped.sql ? 'AND' + scoped.sql.replace(/^ AND/, '') : ''}
      GROUP BY g.id
-     ORDER BY g.name`
+     ${scoped.sql ? 'HAVING COUNT(s.id) > 0' : ''}
+     ORDER BY g.name`,
+    scoped.params
   );
   res.json(groups);
 });
