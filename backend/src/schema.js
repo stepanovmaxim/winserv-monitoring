@@ -373,6 +373,26 @@ async function initSchema() {
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS defender_signature_days INTEGER DEFAULT 3`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS defender_scan_days INTEGER DEFAULT 14`);
 
+  // Ransomware early warning. Canary files are decoys the agent plants and then
+  // hashes every run: if they change or vanish, encryption is running right now.
+  // Shadow-copy count is tracked because wiping restore points is the standard
+  // step immediately before encryption starts.
+  // Canaries write files on monitored servers, so they are OPT-IN.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS ransomware_canary INTEGER DEFAULT 0`);
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS notify_ransomware INTEGER DEFAULT 1`);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS ransomware_status (
+      server_id INTEGER PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+      canary_enabled INTEGER DEFAULT 0,
+      canary_total INTEGER DEFAULT 0,
+      canary_tripped INTEGER DEFAULT 0,
+      tripped_detail TEXT DEFAULT '',
+      shadow_copies INTEGER,
+      prev_shadow_copies INTEGER,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
   // Per-user customer scoping. A user with NO rows here sees everything (that is
   // the historical behaviour, so existing admins are unaffected); a user WITH
   // rows is restricted to exactly those customers.

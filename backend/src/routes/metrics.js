@@ -152,7 +152,7 @@ router.post('/', async (req, res) => {
   );
 
   const agentToken = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
-  const cfgIv = await db.queryOne('SELECT metric_interval, agent_auto_update FROM telegram_config LIMIT 1');
+  const cfgIv = await db.queryOne('SELECT metric_interval, agent_auto_update, ransomware_canary FROM telegram_config LIMIT 1');
   const metric_interval = (cfgIv && cfgIv.metric_interval) ? cfgIv.metric_interval : 1;
   // Watched Event IDs the agent should also collect (beyond critical/error).
   const event_triggers = await db.queryAll('SELECT event_id, log_name FROM event_triggers WHERE enabled = 1');
@@ -169,7 +169,9 @@ router.post('/', async (req, res) => {
   const winLatest = autoUpdate ? AGENT_VERSION : (!isLinux && reported ? reported : AGENT_VERSION);
   const linuxLatest = autoUpdate ? LINUX_AGENT_VERSION : (isLinux && reported ? reported : LINUX_AGENT_VERSION);
 
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: winLatest, linux_agent_latest: linuxLatest, metric_interval, event_triggers });
+  // Canary files are only planted when the operator has switched them on.
+  const canary = !!(cfgIv && cfgIv.ransomware_canary);
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: winLatest, linux_agent_latest: linuxLatest, metric_interval, event_triggers, canary });
 
   // Push the fresh reading to any live dashboards.
   const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);

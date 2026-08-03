@@ -183,6 +183,9 @@ export const api = {
   getThreats() {
     return request('/api/health-report/defender/threats');
   },
+  getRansomwareFleet() {
+    return request('/api/health-report/ransomware/fleet');
+  },
   getEventPreset() {
     return request('/api/event-triggers/preset');
   },

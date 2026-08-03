@@ -10,6 +10,7 @@ export default function Security() {
   const [blocks, setBlocks] = useState([]);
   const [av, setAv] = useState([]);
   const [threats, setThreats] = useState([]);
+  const [ransom, setRansom] = useState([]);
   const [showAllAv, setShowAllAv] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -20,6 +21,7 @@ export default function Security() {
       api.getBlocks().then(setBlocks).catch(() => setBlocks([])),
       api.getDefenderFleet().then(setAv).catch(() => setAv([])),
       api.getThreats().then(setThreats).catch(() => setThreats([])),
+      api.getRansomwareFleet().then(setRansom).catch(() => setRansom([])),
     ]).finally(() => setLoading(false));
   }
 
@@ -77,6 +79,29 @@ export default function Security() {
           persistent attackers automatically — local, reserved, and allowlisted addresses are never blocked.
         </p>
       </div>
+
+      {ransom.some(r => r.canary_tripped > 0) && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--danger)' }}>
+          <h3 style={{ marginTop: 0, color: 'var(--danger)' }}>🧬 RANSOMWARE SUSPECTED</h3>
+          <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
+            Canary files were modified — something is rewriting files on these servers right now.
+          </p>
+          <table>
+            <thead><tr><th>Server</th><th>Customer</th><th>Canaries hit</th><th>Where</th><th>Seen</th></tr></thead>
+            <tbody>
+              {ransom.filter(r => r.canary_tripped > 0).map(r => (
+                <tr key={r.server_id}>
+                  <td><strong>{r.hostname}</strong></td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.customer_name || '-'}</td>
+                  <td><span className="badge badge-error">{r.canary_tripped} / {r.canary_total}</span></td>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 340 }}>{r.tripped_detail || '-'}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.updated_at ? new Date(r.updated_at).toLocaleString() : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {threats.length > 0 && (
         <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--danger)' }}>

@@ -85,6 +85,14 @@ router.put('/config', requireAuth, requireAdmin, requireUnrestricted, async (req
   }
 
   // Auto-ban settings — separate targeted update (keeps the positional list above intact).
+  // Ransomware canary + alert switches (separate from the positional list above).
+  for (const k of ['ransomware_canary', 'notify_ransomware']) {
+    if (req.body[k] !== undefined) {
+      const cur = await db.queryOne('SELECT id FROM telegram_config LIMIT 1');
+      if (cur) await db.query(`UPDATE telegram_config SET ${k} = $1 WHERE id = $2`, [req.body[k] ? 1 : 0, cur.id]);
+    }
+  }
+
   // Agent auto-update switch (separate from the positional list above).
   if (req.body.agent_auto_update !== undefined) {
     const cur0 = await db.queryOne('SELECT id FROM telegram_config LIMIT 1');

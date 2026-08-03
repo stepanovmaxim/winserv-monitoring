@@ -221,6 +221,31 @@ export default function Settings() {
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
+        <h3>🧬 Ransomware early warning</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '8px 0 12px' }}>
+          Two signals that fire while an attack is still running, not after it. <b>Canary files</b> are hidden decoys the
+          agent plants and re-hashes on every pass — ransomware encrypts every file it walks over, so a modified decoy
+          means files are being rewritten <b>right now</b>. <b>Shadow copies</b> are counted because wiping restore
+          points is the standard step taken immediately before encryption starts. Requires agent v2.22+.
+        </p>
+        <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_ransomware: !config.notify_ransomware })} style={{ marginBottom: 10 }}>
+          <div className={`toggle ${config.notify_ransomware ? 'on' : ''}`}><div className="toggle-knob" /></div>
+          <label>Alert on ransomware signals</label>
+        </div>
+        <div className="toggle-wrapper" onClick={() => setConfig({ ...config, ransomware_canary: !config.ransomware_canary })}>
+          <div className={`toggle ${config.ransomware_canary ? 'on' : ''}`}><div className="toggle-knob" /></div>
+          <label>Plant canary files on servers</label>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
+          Off by default because it <b>writes files</b> on every monitored server: one hidden
+          <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, margin: '0 4px' }}>_WinServ_CANARY_DO_NOT_DELETE.txt</code>
+          in Public\Documents and in the agent folder. The name is deliberately obvious so an admin who finds one knows
+          what it is. Shadow-copy counting needs nothing and works with this off.
+        </div>
+        <button type="button" onClick={handleSave} disabled={saving}>Save ransomware settings</button>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
         <h3>Automatic IP ban (brute-force / DoS)</h3>
         <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
           When a source IP exceeds the threshold of failed logons within the detection window, a firewall block is pushed to the

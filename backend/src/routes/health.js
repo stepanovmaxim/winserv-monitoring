@@ -90,6 +90,10 @@ router.post('/', async (req, res) => {
   try { await ingestDefender(server, req.body.defender, config, muted); }
   catch (e) { console.error('[Defender]', e.message); }
 
+  // --- Ransomware early warning ---
+  try { await ingestRansomware(server, req.body.ransomware, config, muted); }
+  catch (e) { console.error('[Ransomware]', e.message); }
+
   res.json({ success: true });
 });
 
@@ -168,6 +172,71 @@ async function ingestDefender(server, d, config, muted) {
   else if (bestScan !== null && bestScan > scanMax && onceADay(k('scan')))
     notify(`<b>Antivirus scan overdue</b> on ${server.hostname}: last scan ${bestScan} days ago (>${scanMax})`, muted, { severity: 'warning', ...meta });
 }
+
+// Ransomware signals. A tripped canary means files are being rewritten right
+// now; shadow copies going to zero is the step attackers take immediately before
+// encrypting. An UNKNOWN shadow count (WMI unavailable) is never treated as
+// "restore points deleted" — that would alarm on a permissions problem.
+const ransomAlerted = new Map();
+async function ingestRansomware(server, r, config, muted) {
+  if (!r || typeof r !== 'object') return;
+
+  const num = (v) => (v === null || v === undefined || v === '' ? null : parseInt(v));
+  const shadows = num(r.shadow_copies);
+  const tripped = num(r.canary_tripped) || 0;
+  const total = num(r.canary_total) || 0;
+  const detail = Array.isArray(r.tripped) ? r.tripped.slice(0, 5).join('; ').slice(0, 400) : '';
+
+  const prev = await db.queryOne('SELECT shadow_copies FROM ransomware_status WHERE server_id = $1', [server.id]);
+  const prevShadows = prev ? num(prev.shadow_copies) : null;
+
+  await db.query(
+    `INSERT INTO ransomware_status (server_id, canary_enabled, canary_total, canary_tripped, tripped_detail,
+        shadow_copies, prev_shadow_copies, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+     ON CONFLICT (server_id) DO UPDATE SET canary_enabled=$2, canary_total=$3, canary_tripped=$4,
+        tripped_detail=$5, shadow_copies=$6, prev_shadow_copies=$7, updated_at=NOW()`,
+    [server.id, r.canary_enabled ? 1 : 0, total, tripped, detail, shadows, prevShadows]
+  );
+
+  if (!config || !config.notify_ransomware) return;
+  const meta = { kind: 'ransomware', server_id: server.id, customer_id: server.customer_id };
+
+  // Canary tripped — loud, and repeated while it keeps happening (this is live).
+  if (tripped > 0) {
+    const k = server.id + ':canary';
+    if (Date.now() - (ransomAlerted.get(k) || 0) > 10 * 60 * 1000) {
+      ransomAlerted.set(k, Date.now());
+      notify(`<b>RANSOMWARE SUSPECTED</b> on ${server.hostname}: ${tripped} of ${total} canary file(s) were modified — files are being rewritten right now.\n${detail}`,
+        muted, { severity: 'critical', ...meta });
+    }
+  }
+
+  // Restore points wiped: only when both readings are known.
+  if (prevShadows !== null && shadows !== null && prevShadows > 0 && shadows === 0) {
+    const k = server.id + ':shadows';
+    if (Date.now() - (ransomAlerted.get(k) || 0) > 60 * 60 * 1000) {
+      ransomAlerted.set(k, Date.now());
+      notify(`<b>SHADOW COPIES DELETED</b> on ${server.hostname}: ${prevShadows} restore point(s) disappeared. This is the usual step right before encryption — verify immediately.`,
+        muted, { severity: 'critical', ...meta });
+    }
+  }
+}
+
+// Fleet ransomware view.
+router.get('/ransomware/fleet', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 's.customer_id', 1);
+  const rows = await db.queryAll(
+    `SELECT s.id AS server_id, s.hostname, c.name AS customer_name, r.*
+     FROM servers s
+     LEFT JOIN ransomware_status r ON r.server_id = s.id
+     LEFT JOIN customers c ON c.id = s.customer_id
+     WHERE s.platform <> 'linux'${scoped.sql}
+     ORDER BY COALESCE(r.canary_tripped,0) DESC, s.hostname`,
+    scoped.params
+  );
+  res.json(rows);
+});
 
 // Fleet antivirus posture. Ordered worst-first so problems surface at the top.
 router.get('/defender/fleet', requireAuth, requireApproved, async (req, res) => {
