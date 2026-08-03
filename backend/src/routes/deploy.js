@@ -11,7 +11,7 @@ function generateDeployerScript(serverUrl, regKey) {
   const agentB64 = Buffer.from(agentPs, 'utf-8').toString('base64');
 
   return [
-    '# WinServ Monitoring — Mass Deployer v2.6',
+    '# WinServ Monitoring — Mass Deployer v2.7',
     '# ====================================================================',
     '# Run on a domain-joined machine with Domain Admin rights.',
     '# Discovers servers, select with checkboxes, remote installs agent.',
@@ -148,7 +148,7 @@ function generateDeployerScript(serverUrl, regKey) {
     '',
     'Clear-Host',
     'Write-Host "========================================" -ForegroundColor Cyan',
-    'Write-Host " WinServ Mass Deployer v2.6" -ForegroundColor Cyan',
+    'Write-Host " WinServ Mass Deployer v2.7" -ForegroundColor Cyan',
     'Write-Host " Server: $ServerUrl" -ForegroundColor Cyan',
     'Write-Host "========================================" -ForegroundColor Cyan',
     'Write-Host ""',
@@ -227,7 +227,10 @@ function generateDeployerScript(serverUrl, regKey) {
     '  }',
     '} while ($key -ne "D")',
     '',
-    '$selected = $serverList | Where-Object { $checked["$($_.idx)"] }',
+    '# @() is required: with a single match the pipeline returns the hashtable',
+    '# itself, and .Count on a hashtable is its NUMBER OF KEYS - which is why one',
+    '# selected machine was announced as "Deploying to 4 servers".',
+    '$selected = @($serverList | Where-Object { $checked["$($_.idx)"] })',
     'if ($selected.Count -eq 0) { Write-Host "No servers selected."; exit 0 }',
     '',
     'Write-Host ""; Write-Host "Deploying to $($selected.Count) servers..." -ForegroundColor Yellow',
@@ -258,7 +261,7 @@ function generateDeployerScript(serverUrl, regKey) {
     '',
     'Write-Host ""',
     'Write-Host "================================ DEPLOYMENT COMPLETE ==============================="',
-    'Write-Host (" Installed: " + ($results|?{$_.result -eq "OK"}).Count + "  Offline: " + ($results|?{$_.result -match "OFFLINE"}).Count + "  Errors: " + ($results|?{$_.result -match "ERROR"}).Count + "  Needs WMF 3.0: " + ($results|?{$_.pswarn}).Count)',
+    'Write-Host (" Installed: " + @($results|?{$_.result -eq "OK"}).Count + "  Offline: " + @($results|?{$_.result -match "OFFLINE"}).Count + "  Errors: " + @($results|?{$_.result -match "ERROR"}).Count + "  Needs WMF 3.0: " + @($results|?{$_.pswarn}).Count)',
     'Write-Host "Servers appear in dashboard within 1-2 minutes."',
   ].join('\n');
 }
