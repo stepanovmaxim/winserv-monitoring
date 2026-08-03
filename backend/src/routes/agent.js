@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.19';
+const AGENT_VERSION = '2.20';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -30,6 +30,8 @@ function generateUniversalScript(serverUrl, regKey) {
     '} catch {}',
     '',
     '$ErrorActionPreference = "Continue"',
+    '# Rendering a progress bar makes web transfers ~5x slower and nothing shows it.',
+    '$ProgressPreference = "SilentlyContinue"',
     '$AgentVersion = "' + AGENT_VERSION + '"',
     '$ServerUrl = "' + serverUrl + '"',
     '$MetricsUrl = "$ServerUrl/api/metrics"',
@@ -213,20 +215,38 @@ function generateUniversalScript(serverUrl, regKey) {
     '  # inspection / MTU) can stall a ~25KB GET while small POSTs pass, so we',
     '  # retry with a fresh connection each time, stream to disk, and allow a',
     '  # generous per-attempt timeout.',
-    '  # Bounded on purpose: this runs inside the scheduled task, and the task will',
-    '  # not start a second instance while it is busy. Long retries on a stalling',
-    '  # corporate link therefore stop metrics and fake an OFFLINE alert, so the',
-    '  # whole download is capped at ~2 min and retried on a later pass instead.',
-    '  $tmpDl = "$env:TEMP\\winserv-update.ps1"',
-    '  for ($try = 1; $try -le 2; $try++) {',
+    '  # HttpWebRequest, not Invoke-WebRequest: the latter renders a progress bar',
+    '  # (measured 5x slower on the same file), performs WPAD proxy discovery that',
+    '  # can stall for SYSTEM, and gives no control over the read timeout - only',
+    '  # over connection setup, so a trickling transfer ran far past -TimeoutSec.',
+    '  # Attempt 2 goes through the system proxy in case direct egress is blocked.',
+    '  # The reason for a failure is kept so force_update can report it verbatim',
+    '  # instead of a guess.',
+    '  $script:UpdateError = "no attempt made"',
+    '  for ($try = 1; $try -le 3; $try++) {',
+    '    $sw = [System.Diagnostics.Stopwatch]::StartNew()',
     '    try {',
-    '      if (Test-Path $tmpDl) { Remove-Item $tmpDl -Force -ErrorAction SilentlyContinue }',
-    '      Invoke-WebRequest -Uri "$ServerUrl/api/agent/self-update?token=$Token" -UseBasicParsing -TimeoutSec 60 -OutFile $tmpDl',
-    '      $content = [System.IO.File]::ReadAllText($tmpDl)',
-    '      Remove-Item $tmpDl -Force -ErrorAction SilentlyContinue',
-    '      if ($content -and $content.Length -gt 1000 -and $content -match "WinServ Monitoring Agent") { return $content }',
-    '      Write-Log "Update download attempt $($try) bad payload len=$($content.Length)"',
-    '    } catch { Write-Log "Update download attempt $try failed: $_"; Start-Sleep -Seconds 4 }',
+    '      $req = [System.Net.HttpWebRequest]::Create("$ServerUrl/api/agent/self-update?token=$Token")',
+    '      $req.Method = "GET"',
+    '      $req.Timeout = 30000',
+    '      $req.ReadWriteTimeout = 30000',
+    '      $req.UserAgent = "WinServ-Agent/$AgentVersion"',
+    '      if ($try -eq 2) { $req.Proxy = [System.Net.WebRequest]::DefaultWebProxy } else { $req.Proxy = $null }',
+    '      try { $req.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate } catch {}',
+    '      $resp = $req.GetResponse()',
+    '      $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())',
+    '      $content = $sr.ReadToEnd()',
+    '      $sr.Close(); $resp.Close()',
+    '      if ($content -and $content.Length -gt 1000 -and $content -match "WinServ Monitoring Agent") {',
+    '        Write-Log "Update downloaded: $($content.Length) chars in $($sw.ElapsedMilliseconds)ms (attempt $($try))"',
+    '        return $content',
+    '      }',
+    '      $script:UpdateError = "bad payload, $($content.Length) chars in $($sw.ElapsedMilliseconds)ms"',
+    '    } catch {',
+    '      $script:UpdateError = "$($_.Exception.Message) after $($sw.ElapsedMilliseconds)ms"',
+    '    }',
+    '    Write-Log "Update attempt $($try) failed: $($script:UpdateError)"',
+    '    Start-Sleep -Seconds 3',
     '  }',
     '  return $null',
     '}',
@@ -612,7 +632,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '            [System.IO.File]::WriteAllText($tmp, $new, (New-Object System.Text.UTF8Encoding($false)))',
     '            try { Move-Item -Path $tmp -Destination $selfPath -Force } catch { Copy-Item -Path $tmp -Destination $selfPath -Force; Remove-Item $tmp -Force -ErrorAction SilentlyContinue }',
     '            $ok = $true; $msg = "updated"; Write-Log "Command: force-updated"',
-    '          } else { $ok = $false; $msg = "download failed (slow/blocked link)" }',
+    '          } else { $ok = $false; $msg = "update download failed: $($script:UpdateError)" }',
     '        } elseif ($cmd.ctype -eq "reboot") {',
     '          $ok = $true; $msg = "rebooting"',
     '          Write-Log "Command: reboot requested"',
@@ -654,7 +674,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '      [System.IO.File]::WriteAllText($tmp, $new, (New-Object System.Text.UTF8Encoding($false)))',
     '      try { Move-Item -Path $tmp -Destination $selfPath -Force } catch { Copy-Item -Path $tmp -Destination $selfPath -Force; Remove-Item $tmp -Force -ErrorAction SilentlyContinue }',
     '      Write-Log "Self-updated OK -> $($lastResponse.agent_latest)"',
-    '    } else { Write-Log "Self-update: all download attempts failed (slow/blocked link)" }',
+    '    } else { Write-Log "Self-update: all download attempts failed - $($script:UpdateError)" }',
     '  }',
     '}',
   ].join('\n');
@@ -729,9 +749,24 @@ router.get('/self-update', async (req, res) => {
     [token]
   );
   if (!agent) return res.status(401).type('text/plain').send('# invalid token');
-  console.log(`[Self-update] served to ${agent.hostname} (was v${agent.agent_version || '?'} -> v${AGENT_VERSION})`);
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
-  sendScript(req, res, generateUniversalScript(serverUrl, REGISTRATION_KEY));
+  const body = generateUniversalScript(serverUrl, REGISTRATION_KEY);
+
+  // Agents keep reporting "download failed" while this endpoint answers in
+  // milliseconds, so record how the transfer actually ended: 'finish' means the
+  // whole body was flushed, a 'close' without it means the client went away
+  // mid-transfer. That distinguishes a stalled link from a client-side reject.
+  const t0 = Date.now();
+  let finished = false;
+  res.on('finish', () => {
+    finished = true;
+    console.log(`[Self-update] ${agent.hostname} v${agent.agent_version || '?'} -> v${AGENT_VERSION}: sent ${res.get('Content-Length') || body.length}B in ${Date.now() - t0}ms, ua="${(req.headers['user-agent'] || '-').slice(0, 60)}"`);
+  });
+  res.on('close', () => {
+    if (!finished) console.warn(`[Self-update] ${agent.hostname}: client ABORTED after ${Date.now() - t0}ms — transfer did not complete`);
+  });
+
+  sendScript(req, res, body);
 });
 
 // Latest agent version, so the UI can flag outdated hosts.
