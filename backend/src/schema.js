@@ -380,6 +380,10 @@ async function initSchema() {
   // Canaries write files on monitored servers, so they are OPT-IN.
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS ransomware_canary INTEGER DEFAULT 0`);
   await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS notify_ransomware INTEGER DEFAULT 1`);
+  // Backups create and delete a VSS snapshot every night, so a drop of one or two
+  // is normal churn, not an attack. Only a mass wipe counts, and only once a
+  // later report confirms the copies did not come back.
+  await db.exec(`ALTER TABLE telegram_config ADD COLUMN IF NOT EXISTS shadow_min_drop INTEGER DEFAULT 3`);
   await db.exec(`
     CREATE TABLE IF NOT EXISTS ransomware_status (
       server_id INTEGER PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
@@ -389,9 +393,13 @@ async function initSchema() {
       tripped_detail TEXT DEFAULT '',
       shadow_copies INTEGER,
       prev_shadow_copies INTEGER,
+      shadow_high INTEGER,
+      zero_streak INTEGER DEFAULT 0,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  await db.exec(`ALTER TABLE ransomware_status ADD COLUMN IF NOT EXISTS shadow_high INTEGER`);
+  await db.exec(`ALTER TABLE ransomware_status ADD COLUMN IF NOT EXISTS zero_streak INTEGER DEFAULT 0`);
 
   // Per-user customer scoping. A user with NO rows here sees everything (that is
   // the historical behaviour, so existing admins are unaffected); a user WITH

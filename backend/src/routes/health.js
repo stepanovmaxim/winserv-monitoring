@@ -7,6 +7,7 @@ const { sendWebhookAlert } = require('../services/webhookService');
 const { isMuted } = require('../services/maintenanceService');
 const { parseIgnore, isIgnoredService } = require('../services/serviceFilter');
 const { logAlert } = require('../services/alertLog');
+const { shouldAlertShadowDrop } = require('../lib/ransomPolicy');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -187,16 +188,23 @@ async function ingestRansomware(server, r, config, muted) {
   const total = num(r.canary_total) || 0;
   const detail = Array.isArray(r.tripped) ? r.tripped.slice(0, 5).join('; ').slice(0, 400) : '';
 
-  const prev = await db.queryOne('SELECT shadow_copies FROM ransomware_status WHERE server_id = $1', [server.id]);
+  const prev = await db.queryOne('SELECT shadow_copies, shadow_high, zero_streak FROM ransomware_status WHERE server_id = $1', [server.id]);
   const prevShadows = prev ? num(prev.shadow_copies) : null;
+
+  // Highest count seen recently: a wipe is measured against the peak, not
+  // against whatever a backup happened to leave behind a minute ago.
+  const prevHigh = prev ? num(prev.shadow_high) : null;
+  const high = shadows === null ? prevHigh : Math.max(shadows, prevHigh === null ? shadows : prevHigh);
+  // Consecutive reports at zero — a backup's snapshot reappears, a wipe does not.
+  const zeroStreak = shadows === 0 ? ((prev ? num(prev.zero_streak) : 0) || 0) + 1 : 0;
 
   await db.query(
     `INSERT INTO ransomware_status (server_id, canary_enabled, canary_total, canary_tripped, tripped_detail,
-        shadow_copies, prev_shadow_copies, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+        shadow_copies, prev_shadow_copies, shadow_high, zero_streak, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
      ON CONFLICT (server_id) DO UPDATE SET canary_enabled=$2, canary_total=$3, canary_tripped=$4,
-        tripped_detail=$5, shadow_copies=$6, prev_shadow_copies=$7, updated_at=NOW()`,
-    [server.id, r.canary_enabled ? 1 : 0, total, tripped, detail, shadows, prevShadows]
+        tripped_detail=$5, shadow_copies=$6, prev_shadow_copies=$7, shadow_high=$8, zero_streak=$9, updated_at=NOW()`,
+    [server.id, r.canary_enabled ? 1 : 0, total, tripped, detail, shadows, prevShadows, high, zeroStreak]
   );
 
   if (!config || !config.notify_ransomware) return;
@@ -212,14 +220,26 @@ async function ingestRansomware(server, r, config, muted) {
     }
   }
 
-  // Restore points wiped: only when both readings are known.
-  if (prevShadows !== null && shadows !== null && prevShadows > 0 && shadows === 0) {
+  // Restore points wiped. Measured against the recent peak and confirmed across
+  // reports, because a nightly backup legitimately creates and removes a
+  // snapshot — that churn produced a false "SHADOW COPIES DELETED" alert.
+  const decision = shouldAlertShadowDrop({
+    prev: high,
+    now: shadows,
+    zeroStreak,
+    minDrop: parseInt(config.shadow_min_drop) || 3,
+  });
+  if (decision.alert) {
     const k = server.id + ':shadows';
     if (Date.now() - (ransomAlerted.get(k) || 0) > 60 * 60 * 1000) {
       ransomAlerted.set(k, Date.now());
-      notify(`<b>SHADOW COPIES DELETED</b> on ${server.hostname}: ${prevShadows} restore point(s) disappeared. This is the usual step right before encryption — verify immediately.`,
-        muted, { severity: 'critical', ...meta });
+      // On its own this is suspicious, not proof; a tripped canary makes it certain.
+      const severity = tripped > 0 ? 'critical' : 'warning';
+      notify(`<b>SHADOW COPIES WIPED</b> on ${server.hostname}: all ${decision.drop} restore point(s) are gone and have not returned. Wiping restore points is the usual step right before encryption — verify this was not the backup.`,
+        muted, { severity, ...meta });
     }
+    // A confirmed wipe should not re-arm on the next pass.
+    await db.query('UPDATE ransomware_status SET shadow_high = 0 WHERE server_id = $1', [server.id]);
   }
 }
 

@@ -92,6 +92,10 @@ router.put('/config', requireAuth, requireAdmin, requireUnrestricted, async (req
       if (cur) await db.query(`UPDATE telegram_config SET ${k} = $1 WHERE id = $2`, [req.body[k] ? 1 : 0, cur.id]);
     }
   }
+  if (req.body.shadow_min_drop !== undefined) {
+    const cur = await db.queryOne('SELECT id FROM telegram_config LIMIT 1');
+    if (cur) await db.query('UPDATE telegram_config SET shadow_min_drop = $1 WHERE id = $2', [Math.max(1, parseInt(req.body.shadow_min_drop) || 3), cur.id]);
+  }
 
   // Agent auto-update switch (separate from the positional list above).
   if (req.body.agent_auto_update !== undefined) {
