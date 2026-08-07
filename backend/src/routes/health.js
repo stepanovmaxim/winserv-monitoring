@@ -8,6 +8,7 @@ const { isMuted } = require('../services/maintenanceService');
 const { parseIgnore, isIgnoredService } = require('../services/serviceFilter');
 const { logAlert } = require('../services/alertLog');
 const { shouldAlertShadowDrop } = require('../lib/ransomPolicy');
+const { scoreServer } = require('../lib/securityScore');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -90,6 +91,14 @@ router.post('/', async (req, res) => {
   // --- Microsoft Defender posture + detections ---
   try { await ingestDefender(server, req.body.defender, config, muted); }
   catch (e) { console.error('[Defender]', e.message); }
+
+  // --- Hardening audit ---
+  try {
+    if (req.body.audit && typeof req.body.audit === 'object') {
+      await db.query('UPDATE servers SET audit_json = $1, audit_at = NOW() WHERE id = $2',
+        [JSON.stringify(req.body.audit).slice(0, 4000), server.id]);
+    }
+  } catch (e) { console.error('[Audit]', e.message); }
 
   // --- Ransomware early warning ---
   try { await ingestRansomware(server, req.body.ransomware, config, muted); }
@@ -242,6 +251,26 @@ async function ingestRansomware(server, r, config, muted) {
     await db.query('UPDATE ransomware_status SET shadow_high = 0 WHERE server_id = $1', [server.id]);
   }
 }
+
+// Security score across the fleet, worst first.
+router.get('/audit/fleet', requireAuth, requireApproved, async (req, res) => {
+  const scoped = await customerFilter(req.user, 's.customer_id', 1);
+  const rows = await db.queryAll(
+    `SELECT s.id AS server_id, s.hostname, s.audit_json, s.audit_at, c.name AS customer_name
+     FROM servers s LEFT JOIN customers c ON c.id = s.customer_id
+     WHERE s.platform <> 'linux'${scoped.sql} ORDER BY s.hostname`,
+    scoped.params
+  );
+  const out = rows.map(r => {
+    let audit = null;
+    try { audit = r.audit_json ? JSON.parse(r.audit_json) : null; } catch {}
+    const { score, findings } = scoreServer(audit);
+    return { server_id: r.server_id, hostname: r.hostname, customer_name: r.customer_name,
+             audit_at: r.audit_at, score, findings, audit };
+  });
+  out.sort((a, b) => (a.score === null) - (b.score === null) || (a.score ?? 0) - (b.score ?? 0));
+  res.json(out);
+});
 
 // Fleet ransomware view.
 router.get('/ransomware/fleet', requireAuth, requireApproved, async (req, res) => {

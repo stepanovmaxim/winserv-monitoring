@@ -401,6 +401,11 @@ async function initSchema() {
   await db.exec(`ALTER TABLE ransomware_status ADD COLUMN IF NOT EXISTS shadow_high INTEGER`);
   await db.exec(`ALTER TABLE ransomware_status ADD COLUMN IF NOT EXISTS zero_streak INTEGER DEFAULT 0`);
 
+  // Hardening audit reported by the agent; scored on read so the weighting can
+  // change without a re-collection.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS audit_json TEXT DEFAULT ''`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS audit_at TIMESTAMPTZ`);
+
   // Per-user customer scoping. A user with NO rows here sees everything (that is
   // the historical behaviour, so existing admins are unaffected); a user WITH
   // rows is restricted to exactly those customers.
@@ -530,7 +535,7 @@ async function initSchema() {
 
   // Allow the manual "block IP" command type.
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
-  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip'))`);
+  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan'))`);
 
   console.log('PostgreSQL schema initialized');
 }

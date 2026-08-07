@@ -186,6 +186,9 @@ export const api = {
   getRansomwareFleet() {
     return request('/api/health-report/ransomware/fleet');
   },
+  getSecurityScore() {
+    return request('/api/health-report/audit/fleet');
+  },
   getEventPreset() {
     return request('/api/event-triggers/preset');
   },

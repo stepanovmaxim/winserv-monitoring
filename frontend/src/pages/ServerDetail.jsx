@@ -94,6 +94,41 @@ export default function ServerDetail() {
     loadCommands();
   }
 
+  async function doKillProcess() {
+    const t = prompt('Process name or PID to terminate on ' + server.hostname + ':');
+    if (!t || !t.trim()) return;
+    await api.queueCommand(Number(id), 'kill_process', t.trim());
+    alert('Queued. The agent applies it within ~1 minute.');
+    loadCommands();
+  }
+
+  async function doIsolate() {
+    const raw = prompt(
+      `ISOLATE ${server.hostname}?\n\n` +
+      'All inbound and outbound traffic is blocked except this monitoring server. ' +
+      'Use when a host is compromised or encrypting files.\n\n' +
+      'Auto-release after how many minutes?', '60');
+    if (raw == null) return;
+    const mins = parseInt(raw);
+    if (!mins || mins < 1) return alert('Enter a number of minutes.');
+    if (!confirm('Confirm isolation of ' + server.hostname + ' for ' + mins + ' minutes. Services on it will stop being reachable.')) return;
+    await api.queueCommand(Number(id), 'isolate_host', String(mins));
+    alert('Isolation queued. It lifts itself after ' + mins + ' min even if the agent stops.');
+    loadCommands();
+  }
+
+  async function doUnisolate() {
+    await api.queueCommand(Number(id), 'unisolate_host', '');
+    alert('Queued: isolation will be lifted on the next check-in.');
+    loadCommands();
+  }
+
+  async function doScan(kind) {
+    await api.queueCommand(Number(id), 'defender_scan', kind);
+    alert('Queued a ' + kind + ' Defender scan (signatures are updated first).');
+    loadCommands();
+  }
+
   async function doUninstall() {
     if (!confirm(`Uninstall the agent from ${server.hostname}? It stops reporting and the scheduled task + files are removed. To re-add it, redeploy the agent.`)) return;
     await api.queueCommand(Number(id), 'uninstall_agent', '');
@@ -473,6 +508,22 @@ export default function ServerDetail() {
             <button onClick={doRestartService}>Restart service</button>
             <button className="secondary" onClick={doForceUpdate}>Force update</button>
             <button className="danger" onClick={doReboot}>Reboot server</button>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, marginBottom: 8 }}><b>Incident response</b> <span style={{ color: 'var(--text-muted)' }}>— agent v2.24+</span></div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="secondary" onClick={() => doScan('quick')}>Defender quick scan</button>
+              <button className="secondary" onClick={() => doScan('full')}>Full scan</button>
+              <button className="secondary" onClick={doKillProcess}>Kill process…</button>
+              <button className="danger" onClick={doIsolate}>Isolate host…</button>
+              <button className="secondary" onClick={doUnisolate}>Lift isolation</button>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+              Isolation blocks all traffic except this monitoring server and <b>releases itself automatically</b> after the
+              chosen time — a scheduled task on the host removes the rules even if the agent stops, so a host can never be
+              stranded.
+            </div>
           </div>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>Stop monitoring this server — removes the agent (scheduled task + files) from the host.</div>

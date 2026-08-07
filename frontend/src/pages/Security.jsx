@@ -11,6 +11,8 @@ export default function Security() {
   const [av, setAv] = useState([]);
   const [threats, setThreats] = useState([]);
   const [ransom, setRansom] = useState([]);
+  const [score, setScore] = useState([]);
+  const [openScore, setOpenScore] = useState(null);
   const [showAllAv, setShowAllAv] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -22,6 +24,7 @@ export default function Security() {
       api.getDefenderFleet().then(setAv).catch(() => setAv([])),
       api.getThreats().then(setThreats).catch(() => setThreats([])),
       api.getRansomwareFleet().then(setRansom).catch(() => setRansom([])),
+      api.getSecurityScore().then(setScore).catch(() => setScore([])),
     ]).finally(() => setLoading(false));
   }
 
@@ -197,6 +200,54 @@ export default function Security() {
           </table>
         </div>
       )}
+
+      {score.some(r => r.score !== null) && (() => {
+        const scored = score.filter(r => r.score !== null);
+        const avg = Math.round(scored.reduce((a, r) => a + r.score, 0) / scored.length);
+        const col = (v) => (v >= 90 ? 'var(--success, #22c55e)' : v >= 70 ? 'var(--warning)' : 'var(--danger)');
+        return (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>📋 Security score</h3>
+              <span style={{ fontSize: 22, fontWeight: 700, color: col(avg) }}>{avg}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>fleet average over {scored.length} host(s)</span>
+            </div>
+            <table>
+              <thead><tr><th>Server</th><th>Customer</th><th>Score</th><th>What to fix</th></tr></thead>
+              <tbody>
+                {scored.map(r => (
+                  <tr key={r.server_id} style={{ cursor: r.findings.length ? 'pointer' : 'default' }}
+                      onClick={() => r.findings.length && setOpenScore(openScore === r.server_id ? null : r.server_id)}>
+                    <td><strong>{r.hostname}</strong></td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.customer_name || '-'}</td>
+                    <td><span style={{ fontWeight: 700, color: col(r.score) }}>{r.score}</span></td>
+                    <td style={{ fontSize: 12 }}>
+                      {r.findings.length === 0 ? <span style={{ color: 'var(--success, #22c55e)' }}>nothing — hardened</span> : (
+                        openScore === r.server_id ? (
+                          <ul style={{ margin: 0, paddingLeft: 16 }}>
+                            {r.findings.map(f => (
+                              <li key={f.key} style={{ marginBottom: 4 }}>
+                                <b style={{ color: f.severity === 'critical' ? 'var(--danger)' : 'var(--warning)' }}>{f.title}</b>
+                                {f.detail ? ' (' + f.detail + ')' : ''} — <span style={{ color: 'var(--text-muted)' }}>{f.hint}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : r.findings.map(f => (
+                          <span key={f.key} className={f.severity === 'critical' ? 'badge badge-error' : 'badge badge-warning'} style={{ marginRight: 4 }}>{f.title}</span>
+                        ))
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
+              Click a row for the fix. Settings the agent could not read are left out of the score rather than counted
+              against the host. Requires agent v2.24+.
+            </p>
+          </div>
+        );
+      })()}
 
       <div className="card">
         {rows.length === 0 ? (
