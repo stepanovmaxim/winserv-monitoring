@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.29';
+const AGENT_VERSION = '2.30';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -798,7 +798,24 @@ function generateUniversalScript(serverUrl, regKey) {
     '        }',
     '      } catch { $ok = $false; $msg = "$_"; Write-Log "Command error: $_" }',
     '      $rep = @{token=$Token; success=$ok; result=$msg} | ConvertTo-Json -Compress',
-    '      try { Invoke-RestMethod -Uri "$ServerUrl/api/commands/$($cmd.id)/report" -Method POST -Body $rep -ContentType "application/json; charset=utf-8" -TimeoutSec 10 } catch {}',
+    '      # Reporting the outcome is not optional bookkeeping - it is what takes',
+    '      # the command out of the queue. A single attempt swallowed by catch {}',
+    '      # meant one dropped HTTP request left the command pending forever, so',
+    '      # the agent re-ran it every single minute while the operator saw a',
+    '      # command that "never executed". That is why the same hosts appear in',
+    '      # the server log downloading the same agent build over and over.',
+    '      $reported = $false',
+    '      foreach ($attempt in 1..3) {',
+    '        try {',
+    '          Invoke-RestMethod -Uri "$ServerUrl/api/commands/$($cmd.id)/report" -Method POST -Body $rep -ContentType "application/json; charset=utf-8" -TimeoutSec 10 | Out-Null',
+    '          $reported = $true',
+    '          break',
+    '        } catch {',
+    '          Write-Log "Command $($cmd.id) report attempt $attempt failed: $($_.Exception.Message)"',
+    '          Start-Sleep -Seconds 2',
+    '        }',
+    '      }',
+    '      if (-not $reported) { Write-Log "Command $($cmd.id) ($($cmd.ctype)) ran but could NOT be reported - it stays queued and will run again" }',
     '      if ($cmd.ctype -eq "reboot" -and $ok) { Start-Sleep -Seconds 2; Restart-Computer -Force }',
     '      # Remove the scheduled task and agent files after reporting success.',
     '      if ($cmd.ctype -eq "uninstall_agent" -and $ok) {',
