@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.27';
+const AGENT_VERSION = '2.28';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -70,7 +70,14 @@ function generateUniversalScript(serverUrl, regKey) {
     '# they simply run on a later pass, while the metrics cadence is never lost.',
     '$RunSw = [System.Diagnostics.Stopwatch]::StartNew()',
     'function Test-Budget($sec) { return ($RunSw.Elapsed.TotalSeconds -lt $sec) }',
-    'Set-TaskTimeLimit',
+    '# There is deliberately no code here that edits the agent scheduled task.',
+    '# An earlier build re-registered it on every run to impose a 5 minute',
+    '# execution limit. Rewriting the task is the only operation in this script',
+    '# that can stop the agent from ever starting again, and it removes the very',
+    '# channel a fix would arrive through: four Server 2012 R2 hosts fell silent',
+    '# the first time they executed it and had to be recovered by hand over SMB.',
+    '# Runaway calls are capped by Invoke-Bounded instead, which fails into a',
+    '# caught error path and leaves the scheduler untouched.',
     '',
     '$FullHostname = try { [System.Net.Dns]::GetHostEntry(\'\').HostName } catch { "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
     'if (-not $FullHostname -or $FullHostname -notmatch \'\\.\') { $FullHostname = "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
@@ -410,27 +417,6 @@ function generateUniversalScript(serverUrl, regKey) {
     '    }',
     '  } catch { Write-Log "Inventory patches error: $_" }',
     '  return $inv',
-    '}',
-    '',
-    'function Set-TaskTimeLimit {',
-    '  # Belt and braces: ask Task Scheduler itself to kill a run that overruns.',
-    '  # Every in-script timeout depends on our code getting control back, and a',
-    '  # wedged provider never returns control. Windows killing the process is the',
-    '  # only guarantee, and the next tick then starts a clean run. Done over COM',
-    '  # so it also works on Server 2008, which has no ScheduledTasks module.',
-    '  try {',
-    '    $svc = New-Object -ComObject Schedule.Service',
-    '    $svc.Connect()',
-    '    $folder = $svc.GetFolder("\\")',
-    '    $task = $folder.GetTask("WinServAgent")',
-    '    $def = $task.Definition',
-    '    if ($def.Settings.ExecutionTimeLimit -ne "PT5M") {',
-    '      $def.Settings.ExecutionTimeLimit = "PT5M"',
-    '      # 4 = TASK_UPDATE, 3 = TASK_LOGON_SERVICE_ACCOUNT',
-    '      [void]$folder.RegisterTaskDefinition("WinServAgent", $def, 4, $null, $null, 3)',
-    '      Write-Log "Scheduled task execution limit set to 5 minutes"',
-    '    }',
-    '  } catch {}',
     '}',
     '',
     'function Write-BoundedError($m) {',
