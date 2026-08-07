@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.22';
+const AGENT_VERSION = '2.23';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -402,6 +402,25 @@ function generateUniversalScript(serverUrl, regKey) {
     '  return $inv',
     '}',
     '',
+    'function Invoke-Bounded($sb, $seconds) {',
+    '  # Hard wall-clock cap for a single call. Needed because WMI and the',
+    '  # Defender cmdlets can hang past any -OperationTimeoutSec, and the',
+    '  # scheduled task will not start a second instance while one is stuck — so',
+    '  # one wedged query silently ends all monitoring for that host until it is',
+    '  # rebooted. A runspace can be abandoned; an inline call cannot.',
+    '  $ps = [PowerShell]::Create()',
+    '  [void]$ps.AddScript($sb)',
+    '  try {',
+    '    $h = $ps.BeginInvoke()',
+    '    if ($h.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds($seconds))) {',
+    '      try { return $ps.EndInvoke($h) } catch { return $null } finally { try { $ps.Dispose() } catch {} }',
+    '    }',
+    '    try { $ps.Stop() } catch {}',
+    '    try { $ps.Dispose() } catch {}',
+    '    return $null',
+    '  } catch { try { $ps.Dispose() } catch {}; return $null }',
+    '}',
+    '',
     'function ConvertTo-AgeDays($v) {',
     '  # Defender reports "never scanned" as UInt32 max, which overflows [int] and',
     '  # would abort the whole collector. Anything absurd becomes $null instead.',
@@ -417,7 +436,8 @@ function generateUniversalScript(serverUrl, regKey) {
     '  $d = @{ available = $false; threats = @() }',
     '  if (-not (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue)) { return $d }',
     '  try {',
-    '    $s = Get-MpComputerStatus -ErrorAction Stop',
+    '    $s = Invoke-Bounded { Get-MpComputerStatus -ErrorAction Stop } 25',
+    '    if (-not $s) { $d.stalled = $true; return $d }',
     '    $d.available = $true',
     '    $d.av_enabled = [bool]$s.AntivirusEnabled',
     '    $d.realtime_enabled = [bool]$s.RealTimeProtectionEnabled',
@@ -433,9 +453,9 @@ function generateUniversalScript(serverUrl, regKey) {
     '  try {',
     '    # Map ThreatID -> name, then report what was detected in the last week.',
     '    $names = @{}',
-    '    Get-MpThreat -ErrorAction SilentlyContinue | ForEach-Object { $names["$($_.ThreatID)"] = "$($_.ThreatName)" }',
+    '    Invoke-Bounded { Get-MpThreat -ErrorAction SilentlyContinue } 20 | ForEach-Object { if ($_) { $names["$($_.ThreatID)"] = "$($_.ThreatName)" } }',
     '    $since = (Get-Date).AddDays(-7)',
-    '    Get-MpThreatDetection -ErrorAction SilentlyContinue |',
+    '    Invoke-Bounded { Get-MpThreatDetection -ErrorAction SilentlyContinue } 25 |',
     '      Where-Object { $_.InitialDetectionTime -and $_.InitialDetectionTime -gt $since } |',
     '      Sort-Object InitialDetectionTime -Descending | Select-Object -First 25 | ForEach-Object {',
     '        $nm = "$($names["$($_.ThreatID)"])"; if (-not $nm) { $nm = "ThreatID $($_.ThreatID)" }',
@@ -449,7 +469,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '  } catch {}',
     '  # Server SKUs have no SecurityCenter2, so this is best-effort only.',
     '  try {',
-    '    $av = Get-CimInstance -Namespace root\\SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop |',
+    '    $av = Invoke-Bounded { Get-CimInstance -Namespace root\\SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop } 15 |',
     '          Where-Object { $_.displayName -and $_.displayName -notmatch \'Windows Defender\' }',
     '    if ($av) { $d.third_party = (($av | ForEach-Object { $_.displayName }) -join \', \') }',
     '  } catch {}',
@@ -466,8 +486,9 @@ function generateUniversalScript(serverUrl, regKey) {
     '  # Everything is best-effort: this must never be able to break a run.',
     '  $r = @{ canary_enabled = [bool]$canaryOn; canary_total = 0; canary_tripped = 0; tripped = @(); shadow_copies = $null }',
     '  try {',
-    '    $sc = @(Get-CimInstance Win32_ShadowCopy -OperationTimeoutSec 15 -ErrorAction Stop)',
-    '    $r.shadow_copies = $sc.Count',
+    '    $sc = Invoke-Bounded { @(Get-CimInstance Win32_ShadowCopy -OperationTimeoutSec 10 -ErrorAction Stop) } 15',
+    '    if ($null -ne $sc) { $r.shadow_copies = @($sc).Count }',
+
     '  } catch {}',
     '  if (-not $canaryOn) { return $r }',
     '  # Marker is deliberately loud so an admin who finds one knows what it is.',
