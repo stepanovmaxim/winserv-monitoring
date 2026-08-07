@@ -20,7 +20,7 @@ router.get('/:serverId', requireAuth, requireAdmin, requireServerAccess(), async
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { server_id, ctype, param } = req.body;
   if (!server_id) return res.status(400).json({ error: 'server_id required' });
-  if (!['reboot', 'restart_service', 'block_ip', 'unblock_ip', 'uninstall_agent', 'force_update', 'kill_process', 'isolate_host', 'unisolate_host', 'defender_scan'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
+  if (!['reboot', 'restart_service', 'block_ip', 'unblock_ip', 'uninstall_agent', 'force_update', 'kill_process', 'isolate_host', 'unisolate_host', 'defender_scan', 'send_diag'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
   if (ctype === 'restart_service' && !param) return res.status(400).json({ error: 'service name required' });
   if (ctype === 'kill_process' && !param) return res.status(400).json({ error: 'process name or pid required' });
   if ((ctype === 'block_ip' || ctype === 'unblock_ip') && !param) return res.status(400).json({ error: 'ip required' });
