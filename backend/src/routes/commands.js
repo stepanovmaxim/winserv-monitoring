@@ -52,7 +52,9 @@ router.post('/:id/report', async (req, res) => {
   await db.query(
     `UPDATE server_commands SET status = $1, result = $2, executed_at = NOW()
      WHERE id = $3 AND server_id = $4`,
-    [success ? 'done' : 'failed', String(result || '').slice(0, 500), req.params.id, agent.server_id]
+    // Generous: send_diag returns a log tail, which is worthless cut down to a
+    // status line. Every other command reports a short sentence anyway.
+    [success ? 'done' : 'failed', String(result || '').slice(0, 20000), req.params.id, agent.server_id]
   );
   res.json({ success: true });
 });
