@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.26';
+const AGENT_VERSION = '2.27';
 
 function generateUniversalScript(serverUrl, regKey) {
   return [
@@ -205,19 +205,19 @@ function generateUniversalScript(serverUrl, regKey) {
     '}',
     '',
     'function Send-Body($url, $body) {',
-    '  # -TimeoutSec bounds the HTTP exchange but NOT proxy auto-detection, DNS',
-    '  # or connection setup. That left the one call which runs every single',
-    '  # minute as the last place a run could block indefinitely, and a blocked',
-    '  # run means the task never ticks again and the host reads as OFFLINE',
-    '  # while it is perfectly healthy. The wall-clock cap is deliberately well',
-    '  # above -TimeoutSec so slow-but-working links still fail the normal way',
-    '  # and only a genuine hang is abandoned.',
-    '  $r = Invoke-Bounded {',
-    '    param($u, $b)',
-    '    Invoke-RestMethod -Uri $u -Method POST -Body $b -ContentType "application/json; charset=utf-8" -TimeoutSec 15',
-    '  } 45 @($url, $body)',
-    '  if ($null -eq $r) { Write-Log "Send-Body $url : no response" }',
-    '  return $r',
+    '  # Deliberately a DIRECT call, not wrapped in Invoke-Bounded. Routing this',
+    '  # through a runspace looked like sound hardening, but it is the one call',
+    '  # every host depends on, and older PowerShell did not survive it: four',
+    '  # Server 2012 R2 machines that had held 100% coverage for a week went',
+    '  # completely silent within minutes of receiving that build. Anything',
+    '  # changed here reaches the entire fleet at once and cannot be verified on',
+    '  # 2019 alone, so this stays as plain as possible.',
+    '  try {',
+    '    return Invoke-RestMethod -Uri $url -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15',
+    '  } catch {',
+    '    Write-Log "Send-Body $url : $_"',
+    '    return $null',
+    '  }',
     '}',
     '',
     'function Install-AgentScript($target, $content) {',

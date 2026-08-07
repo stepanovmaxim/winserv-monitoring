@@ -7,6 +7,7 @@ const { requireServerAccess } = require('../services/scopeService');
 const { broadcast } = require('../services/sseService');
 const { assignCustomerByDomain } = require('../services/tenantService');
 const { filterValidDisks, diskAggregate } = require('../lib/disk');
+const { resolveAgentLatest } = require('../lib/updatePolicy');
 const { AGENT_VERSION, LINUX_AGENT_VERSION } = require('./agent');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -163,11 +164,16 @@ router.post('/', async (req, res) => {
   // being perfectly healthy. With auto-update paused we echo the agent's own
   // version back, so it has nothing to fetch and keeps reporting on time;
   // upgrades are then pushed deliberately via the deployer (SMB copy).
+  // Beyond the global pause, a build only rolls out automatically to the
+  // Windows releases it can actually be exercised against. See lib/updatePolicy:
+  // a 2019-only build silenced every 2012 R2 host in the fleet, and a silent
+  // host stops polling, so no later fix can reach it over this channel.
   const autoUpdate = !cfgIv || cfgIv.agent_auto_update !== 0;
   const reported = String(req.body.agent_version || '').trim();
   const isLinux = platform === 'linux' || server.platform === 'linux';
-  const winLatest = autoUpdate ? AGENT_VERSION : (!isLinux && reported ? reported : AGENT_VERSION);
-  const linuxLatest = autoUpdate ? LINUX_AGENT_VERSION : (isLinux && reported ? reported : LINUX_AGENT_VERSION);
+  const osForGate = req.body.os_info || server.os_info;
+  const winLatest = resolveAgentLatest({ autoUpdate, osInfo: osForGate, reported: !isLinux ? reported : '', latest: AGENT_VERSION });
+  const linuxLatest = resolveAgentLatest({ autoUpdate, osInfo: osForGate, reported: isLinux ? reported : '', latest: LINUX_AGENT_VERSION, isLinux });
 
   // Canary files are only planted when the operator has switched them on.
   const canary = !!(cfgIv && cfgIv.ransomware_canary);
