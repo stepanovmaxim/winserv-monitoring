@@ -535,7 +535,7 @@ async function initSchema() {
 
   // Allow the manual "block IP" command type.
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
-  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan'))`);
+  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan','send_diag'))`);
 
   console.log('PostgreSQL schema initialized');
 }
