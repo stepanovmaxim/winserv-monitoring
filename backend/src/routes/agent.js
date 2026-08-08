@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.31';
+const AGENT_VERSION = '2.32';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
