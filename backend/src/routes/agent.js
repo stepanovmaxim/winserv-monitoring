@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.36';
+const AGENT_VERSION = '2.37';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -704,9 +704,25 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    }',
     '  } catch {}',
     '  try {',
-    '    # RID 501 is the guest account whatever it is called locally.',
-    '    $gu = Invoke-Bounded { Get-WmiObject Win32_UserAccount -Filter "LocalAccount=True AND SID LIKE \'%-501\'" -ErrorAction Stop } 20',
-    '    if ($gu) { $a.guest_enabled = -not [bool](@($gu)[0].Disabled) }',
+    '    # RID 501 is the guest account whatever it is called locally. Enumerated',
+    '    # over ADSI against the local machine only: Win32_UserAccount filters',
+    '    # AFTER enumerating, and on a domain member that walks the directory, so',
+    '    # three member servers ran past the time limit and reported nothing at',
+    '    # all. A domain controller has no local accounts and correctly reports',
+    '    # nothing here rather than a made-up answer.',
+    '    $gEnabled = Invoke-Bounded {',
+    '      $pc = [ADSI]"WinNT://."',
+    '      foreach ($ch in $pc.psbase.Children) {',
+    '        if ($ch.SchemaClassName -ne "User") { continue }',
+    '        try {',
+    '          $sid = (New-Object System.Security.Principal.SecurityIdentifier($ch.objectSid.Value, 0)).Value',
+    '          # UserFlags bit 0x0002 is ACCOUNTDISABLE.',
+    '          if ($sid -match "-501$") { return (-not [bool]([int]$ch.UserFlags.Value -band 2)) }',
+    '        } catch {}',
+    '      }',
+    '    } 20',
+    '    # An empty result means no such account, which is not the same as false.',
+    '    if (@($gEnabled).Count -gt 0 -and $null -ne @($gEnabled)[0]) { $a.guest_enabled = [bool]@($gEnabled)[0] }',
     '  } catch {}',
     '  try {',
     '    $lsa = Get-ItemProperty "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa" -Name RunAsPPL -ErrorAction SilentlyContinue',
