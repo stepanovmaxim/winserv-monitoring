@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.33';
+const AGENT_VERSION = '2.34';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -222,7 +222,17 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '# across runs: the filtering is intermittent, so this recovers by itself the',
     '# moment the edge is reachable again, at the cost of one timeout per run.',
     '$script:BaseOrder = @($ServerUrl)',
-    'if ($FallbackUrl -and $FallbackUrl -ne $ServerUrl) { $script:BaseOrder = @($ServerUrl, $FallbackUrl) }',
+    '# $FallbackUrl may list several, comma separated, tried in the order given.',
+    '# One route being open is not a safe assumption: at the affected site 443 is',
+    '# filtered but the CDN alternate port answers, and that could invert without',
+    '# notice. Listing both the alternate port and the origin directly means the',
+    '# agent has somewhere else to go without anyone editing a config.',
+    'if ($FallbackUrl) {',
+    '  foreach ($fb in ($FallbackUrl -split ",")) {',
+    '    $fb = "$fb".Trim()',
+    '    if ($fb -and $fb -ne $ServerUrl -and ($script:BaseOrder -notcontains $fb)) { $script:BaseOrder += $fb }',
+    '  }',
+    '}',
     '',
     'function Send-Once($u, $body) {',
     '  # HttpWebRequest rather than Invoke-RestMethod, because -TimeoutSec does',
