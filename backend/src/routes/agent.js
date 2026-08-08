@@ -7,9 +7,9 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.30';
+const AGENT_VERSION = '2.31';
 
-function generateUniversalScript(serverUrl, regKey) {
+function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
     '# WinServ Monitoring Agent v' + AGENT_VERSION,
     '# ====================================================================',
@@ -34,6 +34,7 @@ function generateUniversalScript(serverUrl, regKey) {
     '$ProgressPreference = "SilentlyContinue"',
     '$AgentVersion = "' + AGENT_VERSION + '"',
     '$ServerUrl = "' + serverUrl + '"',
+    '$FallbackUrl = "' + (fallbackUrl || '') + '"',
     '$MetricsUrl = "$ServerUrl/api/metrics"',
     '$EventsUrl = "$ServerUrl/api/events"',
     '$SecurityUrl = "$ServerUrl/api/security"',
@@ -211,6 +212,18 @@ function generateUniversalScript(serverUrl, regKey) {
     '  } catch { Write-Log "Save-Token error: $_" }',
     '}',
     '',
+    '# Endpoints to try, in order. A second one exists because reaching the',
+    '# primary is not guaranteed: at one site TLS to the CDN edge is filtered',
+    '# upstream per connection, so the agent got through only in bursts and the',
+    '# host read OFFLINE for hours while being completely healthy. The fallback',
+    '# points at the origin directly, so a blocked edge no longer blinds a host.',
+    '#',
+    '# The primary is retried first on every run rather than being remembered',
+    '# across runs: the filtering is intermittent, so this recovers by itself the',
+    '# moment the edge is reachable again, at the cost of one timeout per run.',
+    '$script:BaseOrder = @($ServerUrl)',
+    'if ($FallbackUrl -and $FallbackUrl -ne $ServerUrl) { $script:BaseOrder = @($ServerUrl, $FallbackUrl) }',
+    '',
     'function Send-Body($url, $body) {',
     '  # Deliberately a DIRECT call, not wrapped in Invoke-Bounded. Routing this',
     '  # through a runspace looked like sound hardening, but it is the one call',
@@ -219,12 +232,23 @@ function generateUniversalScript(serverUrl, regKey) {
     '  # completely silent within minutes of receiving that build. Anything',
     '  # changed here reaches the entire fleet at once and cannot be verified on',
     '  # 2019 alone, so this stays as plain as possible.',
-    '  try {',
-    '    return Invoke-RestMethod -Uri $url -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15',
-    '  } catch {',
-    '    Write-Log "Send-Body $url : $_"',
-    '    return $null',
+    '  foreach ($base in $script:BaseOrder) {',
+    '    $u = $url',
+    '    if ($base -ne $ServerUrl -and $url.StartsWith($ServerUrl)) { $u = $base + $url.Substring($ServerUrl.Length) }',
+    '    try {',
+    '      $r = Invoke-RestMethod -Uri $u -Method POST -Body $body -ContentType "application/json; charset=utf-8" -TimeoutSec 15',
+    '      if ($base -ne $script:BaseOrder[0]) {',
+    '        # Use the one that answered for the rest of this run, so a host on',
+    '        # the fallback does not pay the primary timeout on every single send.',
+    '        $script:BaseOrder = @($base) + @($script:BaseOrder | Where-Object { $_ -ne $base })',
+    '        Write-Log "Primary endpoint unreachable - continuing on $base"',
+    '      }',
+    '      return $r',
+    '    } catch {',
+    '      Write-Log "Send-Body $u : $_"',
+    '    }',
     '  }',
+    '  return $null',
     '}',
     '',
     'function Install-AgentScript($target, $content) {',
@@ -1005,10 +1029,13 @@ function sendScript(req, res, text) {
 router.get('/script', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
-  res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
+  res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY, fallbackUrl()));
 });
 
 // --- Linux agent (Ubuntu/Debian) ---
+// Optional second endpoint the agent may fall back to when the primary is
+// unreachable. Empty unless configured, so nothing changes until it is set.
+const fallbackUrl = () => (process.env.FALLBACK_URL || '').replace(/\/$/, '');
 const publicUrl = () => (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
 
 // Installer, fetched by the one-liner. Gated on the registration key so the key
@@ -1040,7 +1067,7 @@ router.get('/linux-oneliner', requireAuth, requireAdmin, requireUnrestricted, (r
 router.get('/script/:serverId', requireAuth, requireAdmin, requireUnrestricted, async (req, res) => {
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
   res.type('text/plain; charset=utf-8');
-  res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY));
+  res.send(generateUniversalScript(serverUrl, REGISTRATION_KEY, fallbackUrl()));
 });
 
 // Agent self-update: returns the latest script to an agent presenting a valid
@@ -1055,7 +1082,7 @@ router.get('/self-update', async (req, res) => {
   );
   if (!agent) return res.status(401).type('text/plain').send('# invalid token');
   const serverUrl = (process.env.PUBLIC_URL || 'http://localhost:' + (process.env.PORT || '3000')).replace(/\/$/, '');
-  const body = generateUniversalScript(serverUrl, REGISTRATION_KEY);
+  const body = generateUniversalScript(serverUrl, REGISTRATION_KEY, fallbackUrl());
 
   // Agents keep reporting "download failed" while this endpoint answers in
   // milliseconds, so record how the transfer actually ended: 'finish' means the

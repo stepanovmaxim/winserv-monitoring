@@ -7,7 +7,7 @@ const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 
 function generateDeployerScript(serverUrl, regKey) {
-  const agentPs = generateUniversalScript(serverUrl, regKey);
+  const agentPs = generateUniversalScript(serverUrl, regKey, process.env.FALLBACK_URL || '');
   const agentB64 = Buffer.from(agentPs, 'utf-8').toString('base64');
 
   return [
