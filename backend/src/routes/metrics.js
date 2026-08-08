@@ -172,8 +172,14 @@ router.post('/', async (req, res) => {
   const reported = String(req.body.agent_version || '').trim();
   const isLinux = platform === 'linux' || server.platform === 'linux';
   const osForGate = req.body.os_info || server.os_info;
-  const winLatest = resolveAgentLatest({ autoUpdate, osInfo: osForGate, reported: !isLinux ? reported : '', latest: AGENT_VERSION });
-  const linuxLatest = resolveAgentLatest({ autoUpdate, osInfo: osForGate, reported: isLinux ? reported : '', latest: LINUX_AGENT_VERSION, isLinux });
+  // The policy needs the fleet to decide whether this build has already proven
+  // itself on this OS family. Only read it while auto-update is actually on.
+  const fleet = autoUpdate
+    ? await db.queryAll('SELECT id, os_info, agent_version, last_seen FROM servers')
+    : [];
+  const gate = { autoUpdate, osInfo: osForGate, hosts: fleet, selfId: serverId };
+  const winLatest = resolveAgentLatest({ ...gate, reported: !isLinux ? reported : '', latest: AGENT_VERSION });
+  const linuxLatest = resolveAgentLatest({ ...gate, reported: isLinux ? reported : '', latest: LINUX_AGENT_VERSION, isLinux });
 
   // Canary files are only planted when the operator has switched them on.
   const canary = !!(cfgIv && cfgIv.ransomware_canary);
