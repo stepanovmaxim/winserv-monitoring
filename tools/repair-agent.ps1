@@ -11,7 +11,14 @@
 # Removing that code from the agent stopped new damage but cannot repair a task
 # that is already broken, because the agent no longer runs to repair it.
 
-$Server = 'https://winserv.projectsms.uk'
+# -Server lets you point at a reachable endpoint. On sites where the CDN edge is
+# filtered upstream the default URL does not resolve or connect at all, and then
+# even this script cannot fetch the agent - pass the direct origin instead, e.g.
+#   .\repair-agent.ps1 -Server https://winserv2.projectsms.uk
+param(
+  [string]$Server = 'https://winserv.projectsms.uk'
+)
+
 $Dir    = 'C:\winserv-agent'
 $Script = "$Dir\agent.ps1"
 $Cfg    = "$env:ProgramData\WinServAgent\config.json"
@@ -34,6 +41,26 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Securit
 }
 
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
+
+# --- 0. can this host even reach the server? --------------------------------
+# Worth knowing before anything else: if this fails, the task is not the problem
+# and no amount of reinstalling will make the host report.
+Say ""
+Say "--- reachability ---" 'Cyan'
+$reach = $false
+try {
+  $rq = [Net.HttpWebRequest]::Create("$Server/api/health")
+  $rq.Timeout = 15000; $rq.ReadWriteTimeout = 15000; $rq.Proxy = $null
+  $rs = $rq.GetResponse()
+  $rd = New-Object IO.StreamReader($rs.GetResponseStream())
+  $txt = $rd.ReadToEnd(); $rd.Close(); $rs.Close()
+  Say ("$Server -> OK  " + $txt) 'Green'
+  $reach = $true
+} catch {
+  Say ("$Server -> UNREACHABLE: " + $_.Exception.Message) 'Red'
+  Say "The agent cannot report from here no matter how the task is configured." 'Yellow'
+  Say "Re-run with a reachable endpoint, e.g.  -Server https://winserv2.projectsms.uk" 'Yellow'
+}
 
 # --- 1. what does the machine look like before we touch it -------------------
 Say ""
