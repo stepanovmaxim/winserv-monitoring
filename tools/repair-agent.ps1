@@ -42,6 +42,20 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Securit
 
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
 
+function Reclaim($path) {
+  # From v2.38 the agent locks its files to SYSTEM only, so even an elevated
+  # admin is denied until ownership is reclaimed. takeown /r /a walks the tree
+  # and assigns it to the administrators group; the agent re-locks on its next
+  # run. Admins by SID S-1-5-32-544 because the name is localised.
+  if (Test-Path $path) {
+    & takeown /f "$path" /r /d Y /a 2>&1 | Out-Null
+    & icacls "$path" /grant:r "*S-1-5-32-544:(F)" /t /c 2>&1 | Out-Null
+  }
+}
+# Make the agent's files readable/writable to this elevated session first.
+Reclaim $Dir
+Reclaim (Split-Path $Cfg -Parent)
+
 # --- 0. can this host even reach the server? --------------------------------
 # Worth knowing before anything else: if this fails, the task is not the problem
 # and no amount of reinstalling will make the host report.
