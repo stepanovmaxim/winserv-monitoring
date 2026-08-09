@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.40';
+const AGENT_VERSION = '2.41';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -240,10 +240,28 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    $applied = $true',
     '    foreach ($t in @($ad, $cd)) {',
     '      if (-not $t -or -not (Test-Path $t)) { continue }',
-    '      & icacls "$t" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)(F)" /setowner "*S-1-5-18" /t /c 2>&1 | Out-Null',
-    '      if ($LASTEXITCODE -eq 0) { Write-Log "Locked $t to SYSTEM-only" } else { $applied = $false }',
+    '      # Two separate calls. /setowner is NOT a valid token inside the grant',
+    '      # command - passing it there makes icacls reject the WHOLE line with',
+    '      # "Invalid parameter", so nothing was applied and inheritance stayed on',
+    '      # (users kept read access) while the run still logged success. The',
+    '      # principal needs the leading * to be read as a SID.',
+    '      & icacls "$t" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)(F)" /t /c 2>&1 | Out-Null',
+    '      & icacls "$t" /setowner "*S-1-5-18" /t /c 2>&1 | Out-Null',
+    '      # Trust the result, not the exit code (/c continues past locked files',
+    '      # and skews it). Confirm by reading the ACL back, by SID: inheritance',
+    '      # off and nothing but SYSTEM present.',
+    '      $ok = $false',
+    '      try {',
+    '        $a = Get-Acl $t -ErrorAction Stop',
+    '        $foreign = @($a.Access | Where-Object {',
+    '          $sid = try { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { "" }',
+    '          $sid -ne "S-1-5-18"',
+    '        }).Count',
+    '        $ok = ($a.AreAccessRulesProtected -and $foreign -eq 0)',
+    '      } catch {}',
+    '      if ($ok) { Write-Log "Locked $t to SYSTEM-only" } else { $applied = $false; Write-Log "Set-AgentAcl: $t not fully locked" }',
     '    }',
-    '    # Marker only once BOTH locked cleanly, so a partial failure retries next run.',
+    '    # Marker only once BOTH verified locked, so a partial failure retries next run.',
     '    if ($applied) { try { Set-Content -Path $marker -Value "1" -Force -ErrorAction Stop } catch {} }',
     '  } catch { Write-Log "Set-AgentAcl error: $_" }',
     '}',
