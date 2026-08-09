@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.43';
+const AGENT_VERSION = '2.44';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -52,6 +52,21 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '  $dir = Split-Path $LogFile -Parent',
     '  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }',
     '  $ts = Get-Date -Format \'yyyy-MM-dd HH:mm:ss\'',
+    '  # Roll at 8MB, keeping one previous file. This log had never been rotated:',
+    '  # a host that had been running a while was found at 1.4 million lines, well',
+    '  # over 100MB, on every machine in the fleet. Checked cheaply - a file length',
+    '  # lookup, not a read - and any failure here must never stop the agent, so',
+    '  # the whole thing is best-effort.',
+    '  try {',
+    '    if (Test-Path $LogFile) {',
+    '      $fi = Get-Item $LogFile -ErrorAction Stop',
+    '      if ($fi.Length -gt 8388608) {',
+    '        $old = "$LogFile.1"',
+    '        if (Test-Path $old) { Remove-Item $old -Force -ErrorAction SilentlyContinue }',
+    '        Move-Item $LogFile $old -Force -ErrorAction SilentlyContinue',
+    '      }',
+    '    }',
+    '  } catch {}',
     '  "$ts $msg" | Out-File $LogFile -Append -Encoding UTF8',
     '}',
     '',
