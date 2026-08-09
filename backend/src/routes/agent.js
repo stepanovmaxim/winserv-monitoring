@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.42';
+const AGENT_VERSION = '2.43';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -1001,8 +1001,22 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '          } catch { [void]$d.Add("task: unreadable - $($_.Exception.Message)") }',
     '          try {',
     '            if (Test-Path $LogFile) {',
-    '              [void]$d.Add("--- agent.log tail ---")',
-    '              foreach ($ln in (Get-Content $LogFile -Tail 150 -ErrorAction Stop)) { [void]$d.Add("$ln") }',
+    '              # With a param, search the whole log instead of returning the',
+    '              # tail. The tail is useless for anything that happened more',
+    '              # than a few minutes ago: the evidence for why an agent died',
+    '              # sat well outside the last 150 lines, and by the time the host',
+    '              # was healthy enough to answer, its own recovery had pushed the',
+    '              # interesting part out of the window.',
+    '              $q = "$($cmd.param)".Trim()',
+    '              if ($q) {',
+    '                [void]$d.Add("--- agent.log lines matching \'$q\' ---")',
+    '                $hits = @(Select-String -Path $LogFile -SimpleMatch $q -ErrorAction Stop | Select-Object -Last 120)',
+    '                if ($hits.Count -eq 0) { [void]$d.Add("(no matching lines)") }',
+    '                foreach ($m in $hits) { [void]$d.Add("$($m.LineNumber): $($m.Line)") }',
+    '              } else {',
+    '                [void]$d.Add("--- agent.log tail ---")',
+    '                foreach ($ln in (Get-Content $LogFile -Tail 150 -ErrorAction Stop)) { [void]$d.Add("$ln") }',
+    '              }',
     '            } else { [void]$d.Add("no log file at $LogFile") }',
     '          } catch { [void]$d.Add("log unreadable: $($_.Exception.Message)") }',
     '          # Actual ACL of the agent directory, to confirm the SYSTEM-only lock.',
