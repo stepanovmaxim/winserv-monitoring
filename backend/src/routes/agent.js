@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.38';
+const AGENT_VERSION = '2.39';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -238,13 +238,20 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    $cd = Split-Path $ConfigFile -Parent',
     '    foreach ($d in @($ad, $cd)) { if ($d -and (Test-Path $d)) { $targets += $d } }',
     '    foreach ($t in $targets) {',
-    '      $foreign = 1',
+    '      $locked = $false',
     '      try {',
     '        $acl = Get-Acl $t -ErrorAction Stop',
-    '        $foreign = @($acl.Access | Where-Object { $_.IdentityReference.Value -ne "NT AUTHORITY\\SYSTEM" }).Count',
+    '        # Compare by SID, not by name. "NT AUTHORITY\\SYSTEM" is localised',
+    '        # (e.g. "система" on a Russian host), so a name test never matched and',
+    '        # the ACL was re-stamped, and logged, every single minute on 26 hosts.',
+    '        $foreign = @($acl.Access | Where-Object {',
+    '          $sid = try { $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { "" }',
+    '          $sid -ne "S-1-5-18"',
+    '        }).Count',
+    '        # Locked = inheritance already off AND nothing but SYSTEM remains.',
+    '        if ($acl.AreAccessRulesProtected -and $foreign -eq 0) { $locked = $true }',
     '      } catch {}',
-    '      # Already SYSTEM-only - do not keep re-stamping it every minute.',
-    '      if ($foreign -eq 0) { continue }',
+    '      if ($locked) { continue }',
     '      & icacls "$t" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)(F)" /setowner "*S-1-5-18" /t /c 2>&1 | Out-Null',
     '      Write-Log "Locked $t to SYSTEM-only"',
     '    }',
