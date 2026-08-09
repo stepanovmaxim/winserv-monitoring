@@ -99,6 +99,22 @@ try {
 }
 Say ("agent file  : " + $(if (Test-Path $Script) { "present" } else { "MISSING" }))
 
+# Both directories the v2.41 lock touched. C:\winserv-agent is often recreated
+# by a redeploy, but %ProgramData%\WinServAgent usually is not - and that is
+# where the agent writes its log and token, so a bad ACL there stops it dead
+# even with a fresh script and a fresh task.
+foreach ($d in @($Dir, (Split-Path $Cfg -Parent))) {
+  Say ""
+  Say ("--- permissions on $d ---") 'Cyan'
+  if (Test-Path $d) {
+    $out = & icacls $d 2>&1
+    $out | Select-Object -First 8 | ForEach-Object { Say ("  " + $_) }
+    if (($out -join ' ') -notmatch 'S-1-5-18|SYSTEM') {
+      Say "  ^ SYSTEM has no entry here - the agent runs as SYSTEM and cannot use this path." 'Red'
+    }
+  } else { Say "  (missing)" 'Yellow' }
+}
+
 # --- 2. refresh the agent script --------------------------------------------
 Say ""
 Say "--- fetching current agent ---" 'Cyan'
