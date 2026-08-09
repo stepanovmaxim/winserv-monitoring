@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.41';
+const AGENT_VERSION = '2.42';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -829,7 +829,13 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '# --- Main execution ---',
     'try {',
     '  Write-Log "Starting collection"',
-    '  Set-AgentAcl',
+    '  # Set-AgentAcl is intentionally NOT called. Applying a real SYSTEM-only',
+    '  # ACL to the agent directory bricked three hosts - one per OS family, the',
+    '  # staged-rollout canaries - which went silent the moment the lock actually',
+    '  # took (2.38-2.40 only looked like they locked; the icacls line was',
+    '  # rejected and was a no-op, which is why they kept working). The cause on a',
+    '  # dead host cannot be diagnosed remotely, so the lock is withdrawn until it',
+    '  # can be proven safe on a single recoverable host. Token encryption stays.',
     '',
     '  try { $osInfo = (Get-CimInstance Win32_OperatingSystem).Caption } catch { $osInfo = "Windows" }',
     '  Write-Log "OS: $osInfo"',
