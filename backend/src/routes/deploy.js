@@ -11,7 +11,7 @@ function generateDeployerScript(serverUrl, regKey) {
   const agentB64 = Buffer.from(agentPs, 'utf-8').toString('base64');
 
   return [
-    '# WinServ Monitoring — Mass Deployer v2.12',
+    '# WinServ Monitoring — Mass Deployer v2.13',
     '# ====================================================================',
     '# Run on a domain-joined machine with Domain Admin rights.',
     '# Discovers servers, select with checkboxes, remote installs agent.',
@@ -77,7 +77,13 @@ function generateDeployerScript(serverUrl, regKey) {
     '  #',
     '  # Administrators by SID S-1-5-32-544: the group name is localised.',
     '  & takeown /f "$dir" /r /d Y /a 2>&1 | Out-Null',
-    '  & icacls "$dir" /grant:r "*S-1-5-32-544:(OI)(CI)(F)" /t /c 2>&1 | Out-Null',
+    '  # /reset restores the permissions inherited from the parent, which is what',
+    '  # puts SYSTEM back. Granting Administrators alone is not enough: the agent',
+    '  # runs as SYSTEM, so a repair that only lets the admin in leaves the host',
+    '  # exactly as dead as it was.',
+    '  & icacls "$dir" /reset /t /c 2>&1 | Out-Null',
+    '  & icacls "$dir" /grant "*S-1-5-18:(OI)(CI)(F)" /t /c 2>&1 | Out-Null',
+    '  & icacls "$dir" /grant "*S-1-5-32-544:(OI)(CI)(F)" /t /c 2>&1 | Out-Null',
     '}',
     '',
     'function Install-Agent {',
@@ -228,7 +234,7 @@ function generateDeployerScript(serverUrl, regKey) {
     '',
     'Clear-Host',
     'Write-Host "========================================" -ForegroundColor Cyan',
-    'Write-Host " WinServ Mass Deployer v2.12" -ForegroundColor Cyan',
+    'Write-Host " WinServ Mass Deployer v2.13" -ForegroundColor Cyan',
     'Write-Host " Server: $ServerUrl" -ForegroundColor Cyan',
     'Write-Host "========================================" -ForegroundColor Cyan',
     'Write-Host ""',

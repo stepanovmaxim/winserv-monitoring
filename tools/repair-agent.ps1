@@ -43,14 +43,19 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Securit
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
 
 function Reclaim($path) {
-  # From v2.38 the agent locks its files to SYSTEM only, so even an elevated
-  # admin is denied until ownership is reclaimed. takeown /r /a walks the tree
-  # and assigns it to the administrators group; the agent re-locks on its next
-  # run. Admins by SID S-1-5-32-544 because the name is localised.
-  if (Test-Path $path) {
-    & takeown /f "$path" /r /d Y /a 2>&1 | Out-Null
-    & icacls "$path" /grant:r "*S-1-5-32-544:(F)" /t /c 2>&1 | Out-Null
-  }
+  # v2.41 left these directories unreadable even to an elevated administrator,
+  # and - critically - the agent could no longer use them either, so it ran
+  # every minute as SYSTEM, exited 0 and did nothing at all.
+  #
+  # /reset is the important part: it drops the explicit deny-everyone state and
+  # restores the permissions inherited from the parent, which is what puts
+  # SYSTEM back. Granting Administrators alone is NOT enough - the agent runs as
+  # SYSTEM, so a repair that only lets the admin in leaves the host just as dead.
+  #
+  # Not gated on Test-Path: on a locked directory Test-Path answers false.
+  & takeown /f "$path" /r /d Y /a 2>&1 | Out-Null
+  & icacls "$path" /reset /t /c 2>&1 | Out-Null
+  & icacls "$path" /grant "*S-1-5-18:(OI)(CI)(F)" /t /c 2>&1 | Out-Null
 }
 # Make the agent's files readable/writable to this elevated session first.
 Reclaim $Dir
