@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.45';
+const AGENT_VERSION = '2.46';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   return [
@@ -844,7 +844,10 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '# --- Main execution ---',
     'try {',
     '  Write-Log "Starting collection"',
-    'Set-AgentAcl',
+    '  # Set-AgentAcl call withdrawn again: v2.45 took 25 of 26 hosts silent the',
+    '  # moment they ran it (nt52, freshly repaired, was the lone survivor). The',
+    '  # run never reached the metrics send. Withdrawn to recover the fleet; the',
+    '  # function is kept for diagnosis. Cause under investigation before re-enable.',
     '',
     '  try { $osInfo = (Get-CimInstance Win32_OperatingSystem).Caption } catch { $osInfo = "Windows" }',
     '  Write-Log "OS: $osInfo"',
