@@ -7,10 +7,10 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.46';
+const AGENT_VERSION = '2.47';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
-  return [
+  const __lines = [
     '# WinServ Monitoring Agent v' + AGENT_VERSION,
     '# ====================================================================',
     '# Auto-registers on first run. One script for all servers.',
@@ -231,54 +231,6 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    $d = [System.Security.Cryptography.ProtectedData]::Unprotect($e, $null, [System.Security.Cryptography.DataProtectionScope]::LocalMachine)',
     '    return [System.Text.Encoding]::UTF8.GetString($d)',
     '  } catch { return $null }',
-    '}',
-    '',
-    'function Set-AgentAcl {',
-    '  # Lock the CODE directory to SYSTEM so an ordinary user, or an admin who',
-    '  # just opens the file, is denied. Three rules, each the direct fix to a way',
-    '  # the previous attempt bricked hosts:',
-    '  #',
-    '  #  1. Only the code directory. NOT %ProgramData%\\WinServAgent - that holds',
-    '  #     the log, and locking it is what killed the agent in v2.41: it started,',
-    '  #     could no longer write its log, and went silent forever. The token in',
-    '  #     ProgramData is DPAPI-encrypted, so that folder does not need a lock.',
-    '  #',
-    '  #  2. Grant SYSTEM FIRST, then strip inheritance - never in one icacls call.',
-    '  #     "/inheritance:r /grant:r" together could drop the write-DAC right',
-    '  #     before the grant applied, leaving an EMPTY DACL that denies everyone,',
-    '  #     SYSTEM included. Granting first guarantees a surviving SYSTEM ACE.',
-    '  #',
-    '  #  3. After locking, PROVE SYSTEM can still write here, and /reset instantly',
-    '  #     if it cannot. This is the safeguard v2.41 lacked: a lock that would',
-    '  #     break the agent is undone in the same run, so the worst case is an',
-    '  #     unprotected directory and a log line - never a dead host.',
-    '  #',
-    '  # By SID S-1-5-18 (the name is localised). Guarded on the real ACL state,',
-    '  # so a deployer /reset (which turns inheritance back on) makes the agent',
-    '  # re-lock on its next run - they stay in sync with no marker file.',
-    '  try {',
-    '    $dir = Split-Path $PSCommandPath -Parent',
-    '    if (-not $dir) { $dir = "C:\\winserv-agent" }',
-    '    if (-not (Test-Path $dir)) { return }',
-    '    $a = $null; try { $a = Get-Acl $dir -ErrorAction Stop } catch { return }',
-    '    # AreAccessRulesProtected == inheritance already disabled == already locked.',
-    '    if ($a -and $a.AreAccessRulesProtected) { return }',
-    '    # (2) grant SYSTEM before touching inheritance',
-    '    & icacls "$dir" /grant "*S-1-5-18:(OI)(CI)(F)" /t /c 2>&1 | Out-Null',
-    '    & icacls "$dir" /inheritance:r /t /c 2>&1 | Out-Null',
-    '    & icacls "$dir" /grant "*S-1-5-18:(OI)(CI)(F)" /t /c 2>&1 | Out-Null',
-    '    & icacls "$dir" /setowner "*S-1-5-18" /t /c 2>&1 | Out-Null',
-    '    # (3) prove SYSTEM can still write, or undo',
-    '    $probe = Join-Path $dir ".wtest"',
-    '    $canWrite = $false',
-    '    try { [System.IO.File]::WriteAllText($probe, "x"); Remove-Item $probe -Force -ErrorAction SilentlyContinue; $canWrite = $true } catch {}',
-    '    if (-not $canWrite) {',
-    '      & icacls "$dir" /reset /t /c 2>&1 | Out-Null',
-    '      Write-Log "Set-AgentAcl: SYSTEM write test FAILED after lock - reverted, directory left open"',
-    '      return',
-    '    }',
-    '    Write-Log "Code directory locked to SYSTEM-only"',
-    '  } catch { Write-Log "Set-AgentAcl error: $_" }',
     '}',
     '',
     'function Save-Token {',
@@ -844,11 +796,6 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '# --- Main execution ---',
     'try {',
     '  Write-Log "Starting collection"',
-    '  # Set-AgentAcl call withdrawn again: v2.45 took 25 of 26 hosts silent the',
-    '  # moment they ran it (nt52, freshly repaired, was the lone survivor). The',
-    '  # run never reached the metrics send. Withdrawn to recover the fleet; the',
-    '  # function is kept for diagnosis. Cause under investigation before re-enable.',
-    '',
     '  try { $osInfo = (Get-CimInstance Win32_OperatingSystem).Caption } catch { $osInfo = "Windows" }',
     '  Write-Log "OS: $osInfo"',
     '',
@@ -1228,7 +1175,20 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    }',
     '  }',
     '}',
-  ].join('\n');
+  ];
+  // Ship a comment-free script. The source above keeps its documentation (hard-
+  // won this week), but the artifact that lands on customer machines has every
+  // whole-line comment and blank line removed - nothing here has inline comments
+  // or block/here-string comments, verified, so this is purely cosmetic to the
+  // parser and cannot change behaviour. One marker line is kept because deployed
+  // agents validate a downloaded payload by matching "WinServ Monitoring Agent";
+  // dropping it would stop every host from self-updating.
+  const __marker = '# WinServ Monitoring Agent v' + AGENT_VERSION;
+  const __body = __lines.filter(l => {
+    const t = String(l).trim();
+    return t !== '' && t.charAt(0) !== '#';
+  });
+  return __marker + '\n' + __body.join('\n');
 }
 
 // The agent pulls this over links that are sometimes slow or traffic-inspected,
