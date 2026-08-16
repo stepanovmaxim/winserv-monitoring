@@ -5,7 +5,8 @@ const { sendTelegramMessage } = require('../services/telegram');
 const { sendWebhookAlert } = require('../services/webhookService');
 const { logAlert } = require('../services/alertLog');
 const { runAutoban, queueBlock, queueUnblock, canBan } = require('../services/banService');
-const { PROTECTED } = require('../lib/ipGuard');
+const { PROTECTED, isPrivateOrReserved } = require('../lib/ipGuard');
+const { logonKind } = require('../lib/logonKind');
 const { customerFilter, canSeeServer, requireServerAccess } = require('../services/scopeService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -63,8 +64,17 @@ async function detectBruteforce(serverId) {
     // Alerts: fixed 1h window, once/hour per IP.
     if (config.notify_bruteforce) {
       const threshold = parseInt(config.bruteforce_threshold) || 10;
+      // Per source IP: how many fails, how many distinct accounts, and the
+      // dominant logon type + account. The logon type names the real vector
+      // (RDP is 10; Exchange OWA/basic-auth is 8; MAPI/EWS/SMB is 3), and the
+      // account count separates a genuine spray (many accounts) from a single
+      // account failing over and over - which, especially from an internal
+      // host, is almost always a stale saved password, not an attack.
       const rows = await db.queryAll(
-        `SELECT ip, COUNT(*)::int n FROM security_events
+        `SELECT ip, COUNT(*)::int n, COUNT(DISTINCT account)::int accounts,
+                MODE() WITHIN GROUP (ORDER BY logon_type) AS logon_type,
+                MODE() WITHIN GROUP (ORDER BY account) AS account
+         FROM security_events
          WHERE server_id = $1 AND event = 'fail' AND ip <> '' AND ip <> '-'
            AND created_at > NOW() - INTERVAL '1 hour'
          GROUP BY ip HAVING COUNT(*) >= $2`,
@@ -74,11 +84,25 @@ async function detectBruteforce(serverId) {
         const key = serverId + ':' + r.ip;
         if (Date.now() - (bruteAlerted.get(key) || 0) < 60 * 60 * 1000) continue;
         bruteAlerted.set(key, Date.now());
-        const kind = server.platform === 'linux' ? 'SSH' : 'RDP';
-        const msg = `<b>${kind} brute-force</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} in the last hour`;
+        const kind = logonKind(r.logon_type, server.platform);
+        const acct = r.account || '?';
+        let msg, severity;
+        if (r.accounts >= 2) {
+          // Many accounts from one IP: a password spray.
+          msg = `<b>${kind} password-spray</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} across ${r.accounts} accounts in the last hour`;
+          severity = 'critical';
+        } else if (isPrivateOrReserved(r.ip)) {
+          // One account from an internal host: a stale credential, not an attack.
+          msg = `<b>${kind} login failures</b> on ${server.hostname}: ${r.n} for ${acct} from ${r.ip} (internal) in the last hour — one account from an internal host, usually a stale saved password, not an attack`;
+          severity = 'warning';
+        } else {
+          // One account from an external IP: targeted brute-force.
+          msg = `<b>${kind} brute-force</b> on ${server.hostname}: ${r.n} failed logons for ${acct} from ${r.ip} in the last hour`;
+          severity = 'critical';
+        }
         sendTelegramMessage(msg).catch(() => {});
         sendWebhookAlert(msg);
-        logAlert({ severity: 'critical', kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
+        logAlert({ severity, kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
       }
     }
 
