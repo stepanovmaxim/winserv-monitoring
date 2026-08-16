@@ -7,6 +7,7 @@ const { logAlert } = require('../services/alertLog');
 const { runAutoban, queueBlock, queueUnblock, canBan } = require('../services/banService');
 const { PROTECTED, isPrivateOrReserved } = require('../lib/ipGuard');
 const { logonKind } = require('../lib/logonKind');
+const { serviceOwner } = require('../lib/serviceRanges');
 const { customerFilter, canSeeServer, requireServerAccess } = require('../services/scopeService');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
@@ -86,11 +87,20 @@ async function detectBruteforce(serverId) {
         bruteAlerted.set(key, Date.now());
         const kind = logonKind(r.logon_type, server.platform);
         const acct = r.account || '?';
+        const service = serviceOwner(r.ip);
         let msg, severity;
         if (r.accounts >= 2) {
-          // Many accounts from one IP: a password spray.
-          msg = `<b>${kind} password-spray</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip} across ${r.accounts} accounts in the last hour`;
+          // Many accounts from one IP: a password spray. Still critical even
+          // from a cloud service range - that would mean the service is
+          // relaying an actual spray at us, which is worth waking up for.
+          const via = service ? ` via ${service}` : '';
+          msg = `<b>${kind} password-spray</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip}${via} across ${r.accounts} accounts in the last hour`;
           severity = 'critical';
+        } else if (service) {
+          // One account from the mail cloud: a client with a stale saved
+          // password looping through Exchange Online, not an attack on us.
+          msg = `<b>${kind} login failures</b> on ${server.hostname}: ${r.n} for ${acct} from ${r.ip} (${service}) in the last hour — one account via a mail cloud, usually a device with a stale saved password, not an attack`;
+          severity = 'warning';
         } else if (isPrivateOrReserved(r.ip)) {
           // One account from an internal host: a stale credential, not an attack.
           msg = `<b>${kind} login failures</b> on ${server.hostname}: ${r.n} for ${acct} from ${r.ip} (internal) in the last hour — one account from an internal host, usually a stale saved password, not an attack`;

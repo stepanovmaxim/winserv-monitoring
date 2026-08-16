@@ -149,6 +149,14 @@ function inAllowlist(ip, allowlistCidrs) {
 function isBannable(ip, allowlistCidrs = []) {
   if (!ipToBig(ip)) return false;
   if (isPrivateOrReserved(ip)) return false;
+  // Never ban a cloud service our own servers depend on. Auto-ban is live, and
+  // a rule as ordinary as "this IP hit two or more servers" trips easily when a
+  // customer runs two Exchange boxes - banning Microsoft's ranges would cut
+  // mail flow. Required lazily: serviceRanges imports this module.
+  try {
+    const { serviceOwner } = require('./serviceRanges');
+    if (serviceOwner(ip)) return false;
+  } catch { /* if the list cannot load, fall back to the checks above */ }
   if (inAllowlist(ip, allowlistCidrs)) return false;
   return true;
 }
