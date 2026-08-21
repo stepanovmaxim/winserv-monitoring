@@ -1,4 +1,5 @@
 const express = require('express');
+const { normalizeHostname } = require('../lib/hostname');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { requireServerAccess } = require('../services/scopeService');
 const db = require('../db');
@@ -11,7 +12,8 @@ const int = (v) => { const n = parseInt(v); return Number.isFinite(n) ? n : 0; }
 
 // Agent top-processes report — replaces the stored snapshot for this server.
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname, processes } = req.body;
+  const { token, registration_key, hostname: rawHostname, processes } = req.body;
+  const hostname = normalizeHostname(rawHostname);
 
   let serverId = null;
   if (token) {

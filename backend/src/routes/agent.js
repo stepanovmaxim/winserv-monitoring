@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.48';
+const AGENT_VERSION = '2.49';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   const __lines = [
@@ -95,8 +95,15 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '# Runaway calls are capped by Invoke-Bounded instead, which fails into a',
     '# caught error path and leaves the scheduler untouched.',
     '',
-    '$FullHostname = try { [System.Net.Dns]::GetHostEntry(\'\').HostName } catch { "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
-    'if (-not $FullHostname -or $FullHostname -notmatch \'\\.\') { $FullHostname = "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
+    '# A workgroup machine has no DNS domain. The old fallback appended an empty',
+    '# $env:USERDNSDOMAIN and produced names like "HV2." - which is how a newly',
+    '# added Hyper-V host showed up in the panel. Hostname is the key registration',
+    '# matches on, so that stray dot would later register the same machine a second',
+    '# time and orphan its history. Append a domain only when there is one.',
+    '$FullHostname = try { [System.Net.Dns]::GetHostEntry("").HostName } catch { "" }',
+    'if (-not $FullHostname) { $FullHostname = "$env:COMPUTERNAME" }',
+    'if ($FullHostname -notmatch "\\." -and $env:USERDNSDOMAIN) { $FullHostname = "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
+    '$FullHostname = "$FullHostname".Trim().TrimEnd(".")',
     '',
     'function Get-SystemMetrics {',
     '  $cpu = (Get-CimInstance Win32_Processor -OperationTimeoutSec 10 | Measure-Object -Property LoadPercentage -Average).Average',

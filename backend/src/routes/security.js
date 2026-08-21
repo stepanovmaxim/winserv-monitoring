@@ -1,4 +1,5 @@
 const express = require('express');
+const { normalizeHostname } = require('../lib/hostname');
 const db = require('../db');
 const { requireAuth, requireApproved, requireAdmin } = require('../middleware/authMiddleware');
 const { sendTelegramMessage } = require('../services/telegram');
@@ -16,7 +17,8 @@ const bruteAlerted = new Map(); // `${serverId}:${ip}` -> last alert ms
 
 // Agent ingest of Security-log logons (4625 fails / 4624 RDP successes).
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname } = req.body;
+  const { token, registration_key, hostname: rawHostname } = req.body;
+  const hostname = normalizeHostname(rawHostname);
   let { events } = req.body;
   if (typeof events === 'string') { try { events = JSON.parse(events); } catch { events = []; } }
   if (!Array.isArray(events)) events = [];

@@ -1,4 +1,5 @@
 const express = require('express');
+const { normalizeHostname } = require('../lib/hostname');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { requireServerAccess } = require('../services/scopeService');
 const db = require('../db');
@@ -12,7 +13,8 @@ const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0;
 
 // Agent inventory report: hardware snapshot + installed-software list.
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname, hardware, software, patches } = req.body;
+  const { token, registration_key, hostname: rawHostname, hardware, software, patches } = req.body;
+  const hostname = normalizeHostname(rawHostname);
 
   let serverId = null;
   if (token) {

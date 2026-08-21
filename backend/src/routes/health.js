@@ -1,4 +1,5 @@
 const express = require('express');
+const { normalizeHostname } = require('../lib/hostname');
 const db = require('../db');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
 const { requireServerAccess, customerFilter } = require('../services/scopeService');
@@ -23,7 +24,8 @@ function notify(text, muted, meta = {}) {
 
 // Agent deep-health report (services, certs, failed tasks, pending reboot).
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname, pending_reboot } = req.body;
+  const { token, registration_key, hostname: rawHostname, pending_reboot } = req.body;
+  const hostname = normalizeHostname(rawHostname);
   let { services, certs, tasks } = req.body;
 
   let serverId = null;

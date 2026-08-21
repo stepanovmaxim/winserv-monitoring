@@ -1,4 +1,5 @@
 const express = require('express');
+const { normalizeHostname } = require('../lib/hostname');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { checkAlerts, handleBackOnline } = require('../services/alertService');
@@ -14,7 +15,8 @@ const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change
 const router = express.Router();
 
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname, ip_address, os_info, agent_version } = req.body;
+  const { token, registration_key, hostname: rawHostname, ip_address, os_info, agent_version } = req.body;
+  const hostname = normalizeHostname(rawHostname);
   const platform = req.body.platform === 'linux' ? 'linux' : null;
   let { metrics } = req.body;
   const h = hostname || req.body.host || '';

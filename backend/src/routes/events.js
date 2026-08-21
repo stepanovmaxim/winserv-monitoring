@@ -1,4 +1,5 @@
 const express = require('express');
+const { normalizeHostname } = require('../lib/hostname');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth, requireApproved } = require('../middleware/authMiddleware');
@@ -41,7 +42,8 @@ async function checkEventTriggers(serverId, newEvents) {
 }
 
 router.post('/', async (req, res) => {
-  const { token, registration_key, hostname } = req.body;
+  const { token, registration_key, hostname: rawHostname } = req.body;
+  const hostname = normalizeHostname(rawHostname);
   let { events } = req.body;
   const h = hostname || req.body.host || '';
 
