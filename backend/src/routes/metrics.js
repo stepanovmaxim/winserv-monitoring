@@ -35,12 +35,18 @@ router.post('/', async (req, res) => {
       const owner = await db.queryOne('SELECT hostname FROM servers WHERE id = $1', [agentRecord.server_id]);
       const sameHost = !h || !owner || !owner.hostname ||
         owner.hostname.toLowerCase() === h.toLowerCase();
-      if (sameHost) {
-        serverId = agentRecord.server_id;
-      } else {
-        console.warn('[Identity] token for "%s" presented by "%s" (ip %s) - rejected, it must register separately',
+      if (!sameHost) {
+        // Warn, do NOT reject. A mismatch is usually innocent: the panel lets an
+        // operator rename a server, and its agent still reports the machine's
+        // real name - rejecting that took a healthy host offline and spawned a
+        // duplicate row, losing its history. The credential is what identifies a
+        // machine. The hazard this was meant to catch (two machines sharing one
+        // token) can no longer arise, because the ip_address fallback that
+        // handed out somebody else's token is gone.
+        console.warn('[Identity] token belongs to "%s" but caller reports "%s" (ip %s) - accepted; expected after a rename, investigate if unexpected',
           owner.hostname, h, ip_address || '-');
       }
+      serverId = agentRecord.server_id;
     }
   }
 
