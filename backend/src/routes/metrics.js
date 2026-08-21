@@ -25,14 +25,34 @@ router.post('/', async (req, res) => {
 
   if (token) {
     const agentRecord = await db.queryOne('SELECT * FROM agent_tokens WHERE token = $1', [token]);
-    if (agentRecord) serverId = agentRecord.server_id;
+    if (agentRecord) {
+      // A token identifies one machine. If the caller reports a different
+      // hostname, two machines are sharing one credential - which is exactly
+      // what happened when HV1 was handed AVTOSTEK HOST's token: their metrics
+      // interleaved in one record, across two different customers. Refuse, and
+      // let the caller register under its own name instead of corrupting this
+      // one. Compared case-insensitively so casing alone never orphans a host.
+      const owner = await db.queryOne('SELECT hostname FROM servers WHERE id = $1', [agentRecord.server_id]);
+      const sameHost = !h || !owner || !owner.hostname ||
+        owner.hostname.toLowerCase() === h.toLowerCase();
+      if (sameHost) {
+        serverId = agentRecord.server_id;
+      } else {
+        console.warn('[Identity] token for "%s" presented by "%s" (ip %s) - rejected, it must register separately',
+          owner.hostname, h, ip_address || '-');
+      }
+    }
   }
 
   if (!serverId && registration_key === REGISTRATION_KEY && h) {
+    // By hostname ONLY. There used to be a fallback that matched any server
+    // with the same ip_address, fleet-wide - and private addresses are not
+    // unique between customers. A new Hyper-V host reporting 10.0.0.1 was bound
+    // to a completely different customer's server that happened to use the same
+    // address, inheriting its token and writing into its record every minute.
+    // An unknown hostname now simply becomes a new server, which is the honest
+    // outcome; a genuine rename is an operator action, not a silent merge.
     let server = await db.queryOne('SELECT * FROM servers WHERE hostname = $1', [h]);
-    if (!server && ip_address) {
-      server = await db.queryOne("SELECT * FROM servers WHERE ip_address = $1 AND ip_address != ''", [ip_address]);
-    }
     if (!server) {
       const result = await db.query(
         'INSERT INTO servers (hostname, ip_address, os_info, status) VALUES ($1, $2, $3, $4) RETURNING id',
