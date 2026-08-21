@@ -173,7 +173,7 @@ export default function ServerDetail() {
       <div className="page-header">
         <div>
           <Link to="/servers" style={{ fontSize: 13, color: 'var(--text-muted)' }}>← Servers</Link>
-          <h1>{server.hostname}</h1>
+          <h1>{server.display_name || server.hostname}</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={hours} onChange={e => setHours(Number(e.target.value))}>
@@ -300,7 +300,7 @@ export default function ServerDetail() {
       {tab === 'info' && (
         <div className="card">
           <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 24px' }}>
-            <dt style={{ color: 'var(--text-muted)' }}>Hostname:</dt><dd>{server.hostname}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>Reports as:</dt><dd title="The name the agent registers with — identity, not a label">{server.hostname}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>IP Address:</dt><dd>{server.ip_address || '-'}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>OS:</dt><dd>{server.os_info || '-'}</dd>
             <dt style={{ color: 'var(--text-muted)' }}>Customer:</dt><dd>{server.customer_name || '—'}</dd>

@@ -1,4 +1,5 @@
 const db = require('../db');
+const { serverLabel } = require('../lib/serverLabel');
 const { sendTelegramMessage } = require('./telegram');
 const { broadcast } = require('./sseService');
 const { isMuted } = require('./maintenanceService');
@@ -69,7 +70,7 @@ async function checkFlapping(server, config) {
   if (Date.now() - last < 60 * 60 * 1000) return;
   flapAlerted.set(server.id, Date.now());
   if (config?.notify_offline && !(await isMuted(server))) {
-    const msg = `<b>FLAPPING</b>: ${server.hostname} changed state ${row.n}× in the last hour`;
+    const msg = `<b>FLAPPING</b>: ${serverLabel(server)} changed state ${row.n}× in the last hour`;
     sendTelegramMessage(msg).catch(() => {});
     logAlert({ severity: 'warning', kind: 'flapping', message: msg, server_id: server.id, customer_id: server.customer_id });
   }
@@ -104,9 +105,9 @@ async function checkAlerts(serverId, metrics) {
     if (state === 'triggered') {
       // Name the culprit: append the hottest processes from the latest snapshot.
       const top = await topProcesses(serverId);
-      alerts.push(`<b>High CPU</b> on ${server.hostname}: ${val.toFixed(1)}% (>${cpuT}%)${top ? ' — top: ' + top : ''}`);
+      alerts.push(`<b>High CPU</b> on ${serverLabel(server)}: ${val.toFixed(1)}% (>${cpuT}%)${top ? ' — top: ' + top : ''}`);
     }
-    else if (state === 'recovered') alerts.push(`<b>CPU OK</b> on ${server.hostname}: ${val.toFixed(1)}%`);
+    else if (state === 'recovered') alerts.push(`<b>CPU OK</b> on ${serverLabel(server)}: ${val.toFixed(1)}%`);
   }
 
   if (config.notify_disk && server.notify_disk) {
@@ -121,8 +122,8 @@ async function checkAlerts(serverId, metrics) {
       const pct = (used / total) * 100;
       const label = d.drive ? ` (${d.drive})` : '';
       const state = checkThreshold(`${serverId}:disk:${d.drive || 'all'}`, pct, diskT, diskT - 20);
-      if (state === 'triggered') alerts.push(`<b>Low disk</b> on ${server.hostname}${label}: ${free.toFixed(1)} GB free (${pct.toFixed(1)}%)`);
-      else if (state === 'recovered') alerts.push(`<b>Disk OK</b> on ${server.hostname}${label}: ${free.toFixed(1)} GB free`);
+      if (state === 'triggered') alerts.push(`<b>Low disk</b> on ${serverLabel(server)}${label}: ${free.toFixed(1)} GB free (${pct.toFixed(1)}%)`);
+      else if (state === 'recovered') alerts.push(`<b>Disk OK</b> on ${serverLabel(server)}${label}: ${free.toFixed(1)} GB free`);
     }
   }
 
@@ -130,8 +131,8 @@ async function checkAlerts(serverId, metrics) {
     const memPct = Number(metrics.memory_total_mb) > 0
       ? (Number(metrics.memory_used_mb) / Number(metrics.memory_total_mb)) * 100 : 0;
     const state = checkThreshold(serverId + ':mem', memPct, memT, memT - 10);
-    if (state === 'triggered') alerts.push(`<b>High memory</b> on ${server.hostname}: ${memPct.toFixed(1)}% (>${memT}%)`);
-    else if (state === 'recovered') alerts.push(`<b>Memory OK</b> on ${server.hostname}: ${memPct.toFixed(1)}%`);
+    if (state === 'triggered') alerts.push(`<b>High memory</b> on ${serverLabel(server)}: ${memPct.toFixed(1)}% (>${memT}%)`);
+    else if (state === 'recovered') alerts.push(`<b>Memory OK</b> on ${serverLabel(server)}: ${memPct.toFixed(1)}%`);
   }
 
   if (alerts.length > 0 && Date.now() - serverStart > GRACE_MS) {
@@ -145,7 +146,7 @@ async function checkAlerts(serverId, metrics) {
 
 // Called from metrics ingest when a server transitions offline → online.
 async function handleBackOnline(serverId) {
-  const server = await db.queryOne('SELECT id, hostname, group_id, customer_id FROM servers WHERE id = $1', [serverId]);
+  const server = await db.queryOne('SELECT id, hostname, display_name, group_id, customer_id FROM servers WHERE id = $1', [serverId]);
   if (!server) return;
   await logStatus(serverId, 'online');
   const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
@@ -156,8 +157,8 @@ async function handleBackOnline(serverId) {
   const now = Date.now();
   if (now - (onlineCooldown.get(key) || 0) > 300000) {
     onlineCooldown.set(key, now);
-    sendTelegramMessage(`<b>ONLINE</b>: ${server.hostname} is back`).catch(() => {});
-    logAlert({ severity: 'info', kind: 'online', message: `ONLINE: ${server.hostname} is back`, server_id: server.id, customer_id: server.customer_id });
+    sendTelegramMessage(`<b>ONLINE</b>: ${serverLabel(server)} is back`).catch(() => {});
+    logAlert({ severity: 'info', kind: 'online', message: `ONLINE: ${serverLabel(server)} is back`, server_id: server.id, customer_id: server.customer_id });
   }
 }
 
@@ -169,7 +170,7 @@ async function checkOfflineServers() {
     const justOffline = await db.queryAll(
       `UPDATE servers SET status = 'offline'
        WHERE status = 'online' AND (last_seen IS NULL OR last_seen < NOW() - ($1 || ' minutes')::INTERVAL)
-       RETURNING id, hostname, group_id, customer_id`,
+       RETURNING id, hostname, display_name, group_id, customer_id`,
       [String(mins)]
     );
 
@@ -182,11 +183,11 @@ async function checkOfflineServers() {
     }
 
     if (config && config.notify_offline && toNotify.length > 0) {
-      const names = toNotify.map(s => s.hostname).join(', ');
+      const names = toNotify.map(s => serverLabel(s)).join(', ');
       const msg = `<b>OFFLINE (${toNotify.length})</b>: ${names}`;
       sendTelegramMessage(msg).catch(() => {});
       sendWebhookAlert(msg);
-      for (const s of toNotify) logAlert({ severity: 'critical', kind: 'offline', message: `OFFLINE: ${s.hostname}`, server_id: s.id, customer_id: s.customer_id });
+      for (const s of toNotify) logAlert({ severity: 'critical', kind: 'offline', message: `OFFLINE: ${serverLabel(s)}`, server_id: s.id, customer_id: s.customer_id });
     }
   } catch (err) {
     console.error('[Offline check]', err.message);

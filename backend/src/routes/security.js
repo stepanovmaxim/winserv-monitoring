@@ -8,6 +8,7 @@ const { logAlert } = require('../services/alertLog');
 const { runAutoban, queueBlock, queueUnblock, canBan } = require('../services/banService');
 const { PROTECTED, isPrivateOrReserved } = require('../lib/ipGuard');
 const { logonKind } = require('../lib/logonKind');
+const { serverLabel } = require('../lib/serverLabel');
 const { serviceOwner } = require('../lib/serviceRanges');
 const { customerFilter, canSeeServer, requireServerAccess } = require('../services/scopeService');
 
@@ -61,7 +62,7 @@ async function detectBruteforce(serverId) {
   try {
     const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
     if (!config) return;
-    const server = await db.queryOne('SELECT id, hostname, customer_id, platform FROM servers WHERE id = $1', [serverId]);
+    const server = await db.queryOne('SELECT id, hostname, display_name, customer_id, platform FROM servers WHERE id = $1', [serverId]);
     if (!server) return;
 
     // Alerts: fixed 1h window, once/hour per IP.
@@ -96,20 +97,20 @@ async function detectBruteforce(serverId) {
           // from a cloud service range - that would mean the service is
           // relaying an actual spray at us, which is worth waking up for.
           const via = service ? ` via ${service}` : '';
-          msg = `<b>${kind} password-spray</b> on ${server.hostname}: ${r.n} failed logons from ${r.ip}${via} across ${r.accounts} accounts in the last hour`;
+          msg = `<b>${kind} password-spray</b> on ${serverLabel(server)}: ${r.n} failed logons from ${r.ip}${via} across ${r.accounts} accounts in the last hour`;
           severity = 'critical';
         } else if (service) {
           // One account from the mail cloud: a client with a stale saved
           // password looping through Exchange Online, not an attack on us.
-          msg = `<b>${kind} login failures</b> on ${server.hostname}: ${r.n} for ${acct} from ${r.ip} (${service}) in the last hour — one account via a mail cloud, usually a device with a stale saved password, not an attack`;
+          msg = `<b>${kind} login failures</b> on ${serverLabel(server)}: ${r.n} for ${acct} from ${r.ip} (${service}) in the last hour — one account via a mail cloud, usually a device with a stale saved password, not an attack`;
           severity = 'warning';
         } else if (isPrivateOrReserved(r.ip)) {
           // One account from an internal host: a stale credential, not an attack.
-          msg = `<b>${kind} login failures</b> on ${server.hostname}: ${r.n} for ${acct} from ${r.ip} (internal) in the last hour — one account from an internal host, usually a stale saved password, not an attack`;
+          msg = `<b>${kind} login failures</b> on ${serverLabel(server)}: ${r.n} for ${acct} from ${r.ip} (internal) in the last hour — one account from an internal host, usually a stale saved password, not an attack`;
           severity = 'warning';
         } else {
           // One account from an external IP: targeted brute-force.
-          msg = `<b>${kind} brute-force</b> on ${server.hostname}: ${r.n} failed logons for ${acct} from ${r.ip} in the last hour`;
+          msg = `<b>${kind} brute-force</b> on ${serverLabel(server)}: ${r.n} failed logons for ${acct} from ${r.ip} in the last hour`;
           severity = 'critical';
         }
         sendTelegramMessage(msg).catch(() => {});

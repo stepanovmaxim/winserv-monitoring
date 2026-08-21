@@ -512,6 +512,9 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_proc_server ON process_snapshot(server_id);
   `);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS processes_at TIMESTAMPTZ`);
+  // Free-text name shown to humans. hostname stays the identity registration
+  // matches on; renaming used to overwrite it, which orphaned a record.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS display_name TEXT`);
 
   // User-defined Event Log triggers: alert when a specific Event ID appears
   // (e.g. 6008 unexpected shutdown, 55 NTFS corruption, 7 disk bad block).

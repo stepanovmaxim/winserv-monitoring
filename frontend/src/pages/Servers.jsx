@@ -31,7 +31,7 @@ export default function Servers() {
       case 'disk': { const w = worstDisk(s); return w ? w.pct : -1; }
       case 'agent': return s.agent_version || '';
       case 'last_seen': return s.last_seen || '';
-      default: return (s.hostname || '').toLowerCase();
+      default: return ((s.display_name || s.hostname) || '').toLowerCase();
     }
   }
   const sorted = useMemo(() => {
@@ -125,7 +125,7 @@ export default function Servers() {
   function openEdit(s) {
     setEditServer(s);
     setForm({
-      hostname: s.hostname, description: s.description || '', ip_address: s.ip_address || '',
+      hostname: s.display_name || s.hostname, description: s.description || '', ip_address: s.ip_address || '',
       group_id: s.group_id || '', customer_id: s.customer_id || '', os_info: s.os_info || '',
       notify_cpu: s.notify_cpu !== 0, notify_memory: s.notify_memory !== 0, notify_disk: s.notify_disk !== 0,
       cpu_threshold: s.cpu_threshold ?? '', memory_threshold: s.memory_threshold ?? '', disk_threshold: s.disk_threshold ?? '',
@@ -212,7 +212,7 @@ export default function Servers() {
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
                   <td>
                     <span title={s.platform === 'linux' ? 'Linux' : 'Windows'} style={{ marginRight: 5 }}>{s.platform === 'linux' ? '🐧' : '🪟'}</span>
-                    <Link to={`/servers/${s.id}`}>{s.hostname}</Link>
+                    <Link to={`/servers/${s.id}`} title={s.display_name ? `Reports as ${s.hostname}` : undefined}>{s.display_name || s.hostname}</Link>
                     {s.health_issues > 0 && <span title="health issues" style={{ marginLeft: 6, color: 'var(--danger)', fontSize: 12 }}>⚠{s.health_issues}</span>}
                     {s.pending_reboot ? <span title="reboot pending" style={{ marginLeft: 4 }}>🔄</span> : null}
                     {s.update_error ? <span title={'Agent update failed — ' + s.update_error} style={{ marginLeft: 4, color: 'var(--danger)', fontSize: 12 }}>⬆✕</span> : null}
@@ -248,7 +248,15 @@ export default function Servers() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>{editServer ? 'Edit Server' : 'Add Server'}</h2>
             <form onSubmit={handleSave}>
-              <div className="form-group"><label>Hostname *</label><input value={form.hostname} onChange={e => setForm({ ...form, hostname: e.target.value })} required /></div>
+              <div className="form-group">
+                <label>Display name *</label>
+                <input value={form.hostname} onChange={e => setForm({ ...form, hostname: e.target.value })} required />
+                {editServer && (
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                    Reports as <code>{editServer.hostname}</code> — this is how the agent identifies itself and is not changed here.
+                  </div>
+                )}
+              </div>
               <div className="form-group"><label>Description</label><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Primary domain controller" /></div>
               <div className="form-group"><label>IP Address</label><input value={form.ip_address} onChange={e => setForm({ ...form, ip_address: e.target.value })} /></div>
               <div className="form-group"><label>Customer</label><select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">Unassigned</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>

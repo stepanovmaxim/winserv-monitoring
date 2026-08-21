@@ -1,4 +1,5 @@
 const db = require('../db');
+const { serverLabel } = require('../lib/serverLabel');
 const { sendTelegramMessage } = require('./telegram');
 
 // Once a day, at the configured hour (server local time), send a fleet summary.
@@ -50,7 +51,7 @@ async function buildDigest() {
     lines.push('Top disk usage:');
     for (const d of topDisk) {
       const pct = ((Number(d.disk_used_gb) / Number(d.disk_total_gb)) * 100).toFixed(0);
-      lines.push(`• ${d.hostname}: ${pct}%`);
+      lines.push(`• ${serverLabel(d)}: ${pct}%`);
     }
   }
   if (maint.length) lines.push('⏸ Maintenance windows active');

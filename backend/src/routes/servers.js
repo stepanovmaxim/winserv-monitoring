@@ -42,7 +42,7 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
 });
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
-  const { hostname, ip_address, group_id, os_info } = req.body;
+  const { hostname, display_name, ip_address, group_id, os_info } = req.body;
   if (!hostname) return res.status(400).json({ error: 'hostname is required' });
 
   const result = await db.query(
@@ -75,12 +75,17 @@ router.put('/:id', requireAuth, requireAdmin, requireServerAccess('id'), async (
   const toThresh = (v, def) => v === undefined ? def : (v === '' || v === null ? null : (parseInt(v) || null));
 
   await db.query(
-    `UPDATE servers SET hostname = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5,
+    `UPDATE servers SET display_name = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5,
        notify_cpu = $6, notify_memory = $7, notify_disk = $8, customer_id = $9,
        cpu_threshold = $10, memory_threshold = $11, disk_threshold = $12
      WHERE id = $13`,
     [
-      hostname || server.hostname,
+      // The panel's name field now sets the DISPLAY name and never touches
+      // hostname. hostname is the identity the agent registers with: editing
+      // it re-points or duplicates the record, which is exactly what happened
+      // to AVTOSTEK HOST. Clearing the field falls back to showing hostname.
+      display_name !== undefined ? (display_name || null)
+        : (hostname !== undefined && hostname !== server.hostname ? (hostname || null) : (server.display_name || null)),
       ip_address !== undefined ? ip_address : server.ip_address,
       group_id !== undefined ? (group_id || null) : server.group_id,
       os_info !== undefined ? os_info : server.os_info,
