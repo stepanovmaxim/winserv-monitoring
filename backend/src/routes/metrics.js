@@ -50,6 +50,17 @@ router.post('/', async (req, res) => {
   }
 
   if (!serverId) {
+    // Say WHY, and name the host. A machine that cannot register is otherwise
+    // completely invisible: the agent runs, its task ticks, its log looks
+    // healthy, and nothing appears in the panel with nothing anywhere to
+    // explain it. This is the only place that knows the reason.
+    const why = !h
+      ? 'no hostname in request'
+      : (registration_key === undefined || registration_key === null || registration_key === '')
+        ? (token ? 'token not recognised and no registration key sent' : 'no token and no registration key')
+        : (registration_key === REGISTRATION_KEY ? 'key valid but no server matched' : 'registration key does NOT match this server');
+    console.warn('[Register] REFUSED host=%s ip=%s agent=%s reason=%s',
+      h || '(none)', ip_address || '-', agent_version || '?', why);
     return res.status(401).json({ error: 'Valid token or registration_key required' });
   }
 
