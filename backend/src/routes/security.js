@@ -32,7 +32,7 @@ router.post('/', async (req, res) => {
     if (a) serverId = a.server_id;
   }
   if (!serverId && registration_key === REGISTRATION_KEY && hostname) {
-    const s = await db.queryOne('SELECT id FROM servers WHERE hostname = $1', [hostname]);
+    const s = await db.queryOne('SELECT id FROM servers WHERE LOWER(hostname) = LOWER($1)', [hostname]);
     if (s) serverId = s.id;
   }
   if (!serverId) return res.status(401).json({ error: 'Valid token or registration_key required' });

@@ -68,7 +68,7 @@ router.post('/', async (req, res) => {
   }
 
   if (!serverId && registration_key === REGISTRATION_KEY && h) {
-    let server = await db.queryOne('SELECT * FROM servers WHERE hostname = $1', [h]);
+    let server = await db.queryOne('SELECT * FROM servers WHERE LOWER(hostname) = LOWER($1)', [h]);
     if (!server) {
       const result = await db.query(
         'INSERT INTO servers (hostname, status) VALUES ($1, $2) RETURNING id',

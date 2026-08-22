@@ -58,7 +58,12 @@ router.post('/', async (req, res) => {
     // address, inheriting its token and writing into its record every minute.
     // An unknown hostname now simply becomes a new server, which is the honest
     // outcome; a genuine rename is an operator action, not a silent merge.
-    let server = await db.queryOne('SELECT * FROM servers WHERE hostname = $1', [h]);
+    // Case-insensitive: Windows host names are. A workgroup machine that used
+    // to report HV2 (from COMPUTERNAME) began reporting hv2 (from DNS) after
+    // the hostname fix, did not match its own row, and registered a second
+    // time - the machine looked like it had gone silent for half a day while
+    // it was reporting happily into a duplicate.
+    let server = await db.queryOne('SELECT * FROM servers WHERE LOWER(hostname) = LOWER($1)', [h]);
     if (!server) {
       const result = await db.query(
         'INSERT INTO servers (hostname, ip_address, os_info, status) VALUES ($1, $2, $3, $4) RETURNING id',
