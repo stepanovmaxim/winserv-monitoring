@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.50';
+const AGENT_VERSION = '2.51';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   const __lines = [
@@ -367,16 +367,20 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '}',
     '',
     'function Update-OriginPin {',
-    '  # Learn the address while DNS still works, so there is something to pin',
-    '  # later. Stored in the agent config and refreshed whenever it changes, so a',
-    '  # move of the server propagates instead of leaving a stale pin behind.',
+    '  # Learn the direct-origin address while resolution still works, so there is',
+    '  # something to pin when it stops.',
+    '  #',
+    '  # Runs AFTER the metrics have been sent, and under a hard time cap. The',
+    '  # first version did this at the start of every run: a name lookup blocks',
+    '  # until the resolver gives up, so on a host with failing DNS it delayed or',
+    '  # wedged the run before anything was reported - putting a DNS call in front',
+    '  # of the one thing that must always happen. Learning the address is only',
+    '  # ever needed for a LATER run, so nothing is lost by doing it last.',
     '  try {',
     '    $name = Get-HostFromUrl $script:PinUrl',
     '    if (-not $name) { return }',
-    '    $ip = $null',
-    '    try {',
-    '      $ip = @([System.Net.Dns]::GetHostAddresses($name) | Where-Object { $_.AddressFamily -eq "InterNetwork" })[0].IPAddressToString',
-    '    } catch { return }',
+    '    $ip = Invoke-Bounded { param($n) @([System.Net.Dns]::GetHostAddresses($n) | Where-Object { $_.AddressFamily -eq "InterNetwork" })[0].IPAddressToString } 5 @($name)',
+    '    $ip = "$(@($ip)[0])"',
     '    if ($ip -and $ip -ne $script:OriginIp) { $script:OriginIp = $ip; Save-Token }',
     '  } catch {}',
     '}',
@@ -920,7 +924,6 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '# --- Main execution ---',
     'try {',
     '  Write-Log "Starting collection"',
-    '  Update-OriginPin',
     '  try { $osInfo = (Get-CimInstance Win32_OperatingSystem).Caption } catch { $osInfo = "Windows" }',
     '  Write-Log "OS: $osInfo"',
     '',
@@ -1271,6 +1274,7 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    }',
     '  }',
     '',
+    '  Update-OriginPin',
     '  Write-Log "Agent completed successfully in $([int]$RunSw.Elapsed.TotalSeconds)s"',
     '} catch {',
     '  Write-Log "FATAL: $_"',
