@@ -1,5 +1,6 @@
 const express = require('express');
 const { normalizeHostname } = require('../lib/hostname');
+const { chooseIdentity } = require('../lib/identity');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const { checkAlerts, handleBackOnline } = require('../services/alertService');
@@ -17,66 +18,62 @@ const router = express.Router();
 router.post('/', async (req, res) => {
   const { token, registration_key, hostname: rawHostname, ip_address, os_info, agent_version } = req.body;
   const hostname = normalizeHostname(rawHostname);
+  const agentUid = String(req.body.agent_uid || '').trim();
   const platform = req.body.platform === 'linux' ? 'linux' : null;
   let { metrics } = req.body;
   const h = hostname || req.body.host || '';
 
+  // Identity resolution lives in lib/identity: token, then the machine's uid,
+  // then the hostname. See that module for why the hostname stopped being the
+  // key. Additive - a report without a uid resolves exactly as it did before.
+  const tokenServer = token
+    ? await db.queryOne(
+        `SELECT s.id, s.hostname, s.agent_uid FROM agent_tokens t
+         JOIN servers s ON s.id = t.server_id WHERE t.token = $1`, [token])
+    : null;
+
+  const mayRegister = registration_key === REGISTRATION_KEY;
+  const uidServer = (!tokenServer && mayRegister && agentUid)
+    ? await db.queryOne('SELECT id, hostname, agent_uid FROM servers WHERE agent_uid = $1', [agentUid])
+    : null;
+  const hostServer = (!tokenServer && !uidServer && mayRegister && h)
+    ? await db.queryOne('SELECT id, hostname, agent_uid FROM servers WHERE LOWER(hostname) = LOWER($1)', [h])
+    : null;
+
   let serverId = null;
+  if (tokenServer || mayRegister) {
+    const pick = chooseIdentity({ tokenServer, uidServer, hostServer, hostname: h, uid: agentUid });
+    serverId = pick.serverId;
 
-  if (token) {
-    const agentRecord = await db.queryOne('SELECT * FROM agent_tokens WHERE token = $1', [token]);
-    if (agentRecord) {
-      // A token identifies one machine. If the caller reports a different
-      // hostname, two machines are sharing one credential - which is exactly
-      // what happened when HV1 was handed AVTOSTEK HOST's token: their metrics
-      // interleaved in one record, across two different customers. Refuse, and
-      // let the caller register under its own name instead of corrupting this
-      // one. Compared case-insensitively so casing alone never orphans a host.
-      const owner = await db.queryOne('SELECT hostname FROM servers WHERE id = $1', [agentRecord.server_id]);
-      const sameHost = !h || !owner || !owner.hostname ||
-        owner.hostname.toLowerCase() === h.toLowerCase();
-      if (!sameHost) {
-        // Warn, do NOT reject. A mismatch is usually innocent: the panel lets an
-        // operator rename a server, and its agent still reports the machine's
-        // real name - rejecting that took a healthy host offline and spawned a
-        // duplicate row, losing its history. The credential is what identifies a
-        // machine. The hazard this was meant to catch (two machines sharing one
-        // token) can no longer arise, because the ip_address fallback that
-        // handed out somebody else's token is gone.
-        console.warn('[Identity] token belongs to "%s" but caller reports "%s" (ip %s) - accepted; expected after a rename, investigate if unexpected',
-          owner.hostname, h, ip_address || '-');
-      }
-      serverId = agentRecord.server_id;
-    }
-  }
-
-  if (!serverId && registration_key === REGISTRATION_KEY && h) {
-    // By hostname ONLY. There used to be a fallback that matched any server
-    // with the same ip_address, fleet-wide - and private addresses are not
-    // unique between customers. A new Hyper-V host reporting 10.0.0.1 was bound
-    // to a completely different customer's server that happened to use the same
-    // address, inheriting its token and writing into its record every minute.
-    // An unknown hostname now simply becomes a new server, which is the honest
-    // outcome; a genuine rename is an operator action, not a silent merge.
-    // Case-insensitive: Windows host names are. A workgroup machine that used
-    // to report HV2 (from COMPUTERNAME) began reporting hv2 (from DNS) after
-    // the hostname fix, did not match its own row, and registered a second
-    // time - the machine looked like it had gone silent for half a day while
-    // it was reporting happily into a duplicate.
-    let server = await db.queryOne('SELECT * FROM servers WHERE LOWER(hostname) = LOWER($1)', [h]);
-    if (!server) {
+    if (!serverId && mayRegister && h) {
       const result = await db.query(
-        'INSERT INTO servers (hostname, ip_address, os_info, status) VALUES ($1, $2, $3, $4) RETURNING id',
-        [h, ip_address || '', os_info || '', 'online']
+        'INSERT INTO servers (hostname, ip_address, os_info, status, agent_uid) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [h, ip_address || '', os_info || '', 'online', agentUid || null]
       );
-      server = { id: result.rows[0].id };
+      serverId = result.rows[0].id;
     }
-    serverId = server.id;
 
-    let tok = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
-    if (!tok) {
-      const newToken = uuidv4();
-      await db.query('INSERT INTO agent_tokens (server_id, token) VALUES ($1, $2)', [serverId, newToken]);
+    if (serverId) {
+      if (pick.setUid) {
+        // Ignore a clash: two machines reporting one uid means a clone that was
+        // not sysprepped, and the first record to claim it keeps it rather than
+        // the two fighting over it.
+        try {
+          await db.query('UPDATE servers SET agent_uid = $1 WHERE id = $2 AND agent_uid IS NULL', [pick.setUid, serverId]);
+        } catch (e) { console.warn('[Identity] uid %s already claimed, leaving %s as it is', pick.setUid, serverId); }
+      }
+      if (pick.renamedFrom) {
+        // Matched by uid, so this is the same machine under a new name. Follow
+        // the rename instead of creating a second record for it.
+        await db.query('UPDATE servers SET hostname = $1 WHERE id = $2', [h, serverId]);
+        console.warn('[Identity] server %s renamed: "%s" -> "%s"', serverId, pick.renamedFrom, h);
+      }
+
+      let tok = await db.queryOne('SELECT token FROM agent_tokens WHERE server_id = $1', [serverId]);
+      if (!tok) {
+        const newToken = uuidv4();
+        await db.query('INSERT INTO agent_tokens (server_id, token) VALUES ($1, $2)', [serverId, newToken]);
+      }
     }
   }
 

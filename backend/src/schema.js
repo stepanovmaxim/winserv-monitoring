@@ -515,6 +515,10 @@ async function initSchema() {
   // Free-text name shown to humans. hostname stays the identity registration
   // matches on; renaming used to overwrite it, which orphaned a record.
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS display_name TEXT`);
+  // The machine's Windows MachineGuid. Identity that survives a rename, an
+  // agent reinstall and a lost config - hostname is only an attribute.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS agent_uid TEXT`);
+  await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_servers_agent_uid ON servers(agent_uid) WHERE agent_uid IS NOT NULL`);
 
   // User-defined Event Log triggers: alert when a specific Event ID appears
   // (e.g. 6008 unexpected shutdown, 55 NTFS corruption, 7 disk bad block).

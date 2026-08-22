@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.51';
+const AGENT_VERSION = '2.52';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   const __lines = [
@@ -104,6 +104,22 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     'if (-not $FullHostname) { $FullHostname = "$env:COMPUTERNAME" }',
     'if ($FullHostname -notmatch "\\." -and $env:USERDNSDOMAIN) { $FullHostname = "$env:COMPUTERNAME.$env:USERDNSDOMAIN" }',
     '$FullHostname = "$FullHostname".Trim().TrimEnd(".")',
+    '',
+    '# Windows MachineGuid: what actually identifies this machine to the server.',
+    '# The hostname is only an attribute - it can be renamed in the panel, and the',
+    '# agent itself has changed the case it reports, and each of those spawned a',
+    '# duplicate record or attached a host to the wrong one. The MachineGuid',
+    '# survives a rename, an agent reinstall and a deleted config. Read-only, and',
+    '# a failure just means the server falls back to matching on the name.',
+    '$AgentUid = ""',
+    'try {',
+    '  $AgentUid = "$((Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Cryptography" -Name MachineGuid -ErrorAction Stop).MachineGuid)".Trim()',
+    '} catch {',
+    '  try {',
+    '    $rk = [Microsoft.Win32.RegistryKey]::OpenBaseKey("LocalMachine", "Registry64").OpenSubKey("SOFTWARE\\Microsoft\\Cryptography")',
+    '    if ($rk) { $AgentUid = "$($rk.GetValue("MachineGuid"))".Trim() }',
+    '  } catch {}',
+    '}',
     '',
     'function Get-SystemMetrics {',
     '  $cpu = (Get-CimInstance Win32_Processor -OperationTimeoutSec 10 | Measure-Object -Property LoadPercentage -Average).Average',
@@ -958,7 +974,7 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '',
     '  if ($metricsObj) {',
     '    if ($Token) {',
-    '      $body = @{token=$Token;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;agent_version=$AgentVersion;update_error=$LastUpdErr;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
+    '      $body = @{token=$Token;hostname=$FullHostname;agent_uid=$AgentUid;ip_address=$ip;os_info=$osInfo;agent_version=$AgentVersion;update_error=$LastUpdErr;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
     '      $response = Send-Body $MetricsUrl $body',
     '      if ($response) {',
     '        if ($response.token) { $Token = $response.token; Save-Token }',
@@ -971,7 +987,7 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    }',
     '',
     '    if (-not $Token) {',
-    '      $body = @{registration_key=$RegKey;hostname=$FullHostname;ip_address=$ip;os_info=$osInfo;agent_version=$AgentVersion;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
+    '      $body = @{registration_key=$RegKey;hostname=$FullHostname;agent_uid=$AgentUid;ip_address=$ip;os_info=$osInfo;agent_version=$AgentVersion;metrics=$metricsObj} | ConvertTo-Json -Depth 6',
     '      $response = Send-Body $MetricsUrl $body',
     '      if ($response -and $response.token) {',
     '        $Token = $response.token; Save-Token',
