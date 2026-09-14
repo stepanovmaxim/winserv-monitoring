@@ -609,6 +609,11 @@ async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_ws_soft ON workstation_software(workstation_id, name);
   `);
+  // A server can be marked as the inventory relay: the agent on it reads the
+  // GPO drop folder (relay_drop, a local path shared as the SMB drop) and
+  // forwards the PC configs it finds. One outward connection for the whole site.
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS is_relay INTEGER DEFAULT 0`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS relay_drop TEXT DEFAULT ''`);
 
   console.log('PostgreSQL schema initialized');
 }

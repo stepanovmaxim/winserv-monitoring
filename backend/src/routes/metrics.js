@@ -224,7 +224,10 @@ router.post('/', async (req, res) => {
 
   // Canary files are only planted when the operator has switched them on.
   const canary = !!(cfgIv && cfgIv.ransomware_canary);
-  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: winLatest, linux_agent_latest: linuxLatest, metric_interval, event_triggers, canary });
+  // If this host is the inventory relay, tell its agent where the GPO drop folder
+  // is so it forwards the PC configs it finds there.
+  const inventory_relay = server.is_relay ? { drop: server.relay_drop || '' } : null;
+  res.json({ success: true, server_id: serverId, token: agentToken?.token || null, actions, commands, agent_latest: winLatest, linux_agent_latest: linuxLatest, metric_interval, event_triggers, canary, inventory_relay });
 
   // Push the fresh reading to any live dashboards.
   const cust = await db.queryOne('SELECT customer_id FROM servers WHERE id = $1', [serverId]);
