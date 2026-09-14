@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import { api } from '../api';
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { lang, setLang, t } = useLang();
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -73,30 +75,39 @@ export default function Layout() {
       >
         <div className="sidebar-logo">WinServ Monitor</div>
         <nav className="sidebar-nav">
-          {link('/servers', '🖥', 'Servers')}
+          {link('/servers', '🖥', t('nav.servers'))}
           <Link to="/alerts" className={`sidebar-link ${location.pathname === '/alerts' ? 'active' : ''}`} onClick={closeMenu}>
             <span className="icon">🔔</span>
-            Alerts
+            {t('nav.alerts')}
             {unacked > 0 && (
               <span style={{ marginLeft: 'auto', background: 'var(--danger)', color: '#fff', borderRadius: 10, fontSize: 11, fontWeight: 700, padding: '1px 7px', minWidth: 18, textAlign: 'center' }}>
                 {unacked > 99 ? '99+' : unacked}
               </span>
             )}
           </Link>
-          {link('/checks', '📡', 'Checks')}
-          {link('/workstations', '💻', 'Рабочие станции')}
-          {link('/reports', '📈', 'Reports')}
-          {user?.role === 'admin' && link('/customers', '🏢', 'Customers')}
-          {user?.role === 'admin' && link('/groups', '📁', 'Groups')}
-          {user?.role === 'admin' && link('/deploy', '🚀', 'Deploy')}
-          {user?.role === 'admin' && link('/actions', '🔧', 'Actions')}
-          {user?.role === 'admin' && link('/maintenance', '⏸', 'Maintenance')}
-          {user?.role === 'admin' && link('/security', '🛡', 'Security')}
-          {user?.role === 'admin' && link('/audit', '📜', 'Audit')}
-          {user?.role === 'admin' && link('/settings', '⚙', 'Settings')}
-          {user?.role === 'admin' && link('/users', '👥', 'Users')}
+          {link('/checks', '📡', t('nav.checks'))}
+          {link('/workstations', '💻', t('nav.workstations'))}
+          {link('/reports', '📈', t('nav.reports'))}
+          {user?.role === 'admin' && link('/customers', '🏢', t('nav.customers'))}
+          {user?.role === 'admin' && link('/groups', '📁', t('nav.groups'))}
+          {user?.role === 'admin' && link('/deploy', '🚀', t('nav.deploy'))}
+          {user?.role === 'admin' && link('/actions', '🔧', t('nav.actions'))}
+          {user?.role === 'admin' && link('/maintenance', '⏸', t('nav.maintenance'))}
+          {user?.role === 'admin' && link('/security', '🛡', t('nav.security'))}
+          {user?.role === 'admin' && link('/audit', '📜', t('nav.audit'))}
+          {user?.role === 'admin' && link('/settings', '⚙', t('nav.settings'))}
+          {user?.role === 'admin' && link('/users', '👥', t('nav.users'))}
         </nav>
         <div className="sidebar-footer">
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            {['ru', 'en'].map(l => (
+              <button key={l} onClick={() => setLang(l)}
+                className={lang === l ? '' : 'secondary'}
+                style={{ flex: 1, padding: '5px 0', fontSize: 12, fontWeight: 600, textTransform: 'uppercase' }}>
+                {l}
+              </button>
+            ))}
+          </div>
           <div className="sidebar-user">
             {user?.avatar_url && <img src={user.avatar_url} alt="" />}
             <div className="sidebar-user-info">
@@ -104,7 +115,7 @@ export default function Layout() {
               <div className="sidebar-user-role">{user?.role}</div>
             </div>
           </div>
-          <button className="secondary" style={{ width: '100%' }} onClick={handleLogout}>Logout</button>
+          <button className="secondary" style={{ width: '100%' }} onClick={handleLogout}>{t('common.logout')}</button>
         </div>
       </aside>
       <main style={isMobile ? { padding: '56px 12px 12px', width: '100%', maxWidth: '100vw', overflowX: 'hidden' } : {}} className={!isMobile ? 'main' : ''}>
