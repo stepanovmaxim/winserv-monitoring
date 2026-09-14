@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Settings() {
+  const { t } = useLang();
   const [config, setConfig] = useState({ bot_token: '', chat_id: '', enabled: false, notify_disk: true, notify_cpu: true, notify_errors: true, notify_offline: true, offline_minutes: 3, cpu_threshold: 90, memory_threshold: 95, disk_threshold: 90, authorized_chats: '', viewer_chats: '', webhook_secret: '', digest_enabled: false, digest_hour: 9, flap_threshold: 6, alert_webhook_url: '', alert_webhook_enabled: false, notify_bruteforce: true, bruteforce_threshold: 10, service_ignore: '', metric_interval: 1 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,7 +33,7 @@ export default function Settings() {
     api.getEventTriggers().then(setTriggers);
   }
   async function removeTrigger(id) {
-    if (!confirm('Delete this trigger?')) return;
+    if (!confirm(t('st.trigDeleteConfirm'))) return;
     await api.deleteEventTrigger(id);
     api.getEventTriggers().then(setTriggers);
   }
@@ -42,9 +44,9 @@ export default function Settings() {
     setMessage('');
     try {
       await api.updateTelegramConfig(config);
-      setMessage('Saved');
+      setMessage(t('st.saved'));
     } catch (err) {
-      setMessage(`Error: ${err.message}`);
+      setMessage(t('st.errorPrefix') + err.message);
     }
     setSaving(false);
   }
@@ -52,7 +54,7 @@ export default function Settings() {
   async function handleTest() {
     try {
       await api.testTelegram();
-      setMessage('Test message sent!');
+      setMessage(t('st.testSent'));
     } catch (err) {
       setMessage(`Error: ${err.message}`);
     }
@@ -68,58 +70,58 @@ export default function Settings() {
     setShowAgent(!showAgent);
   }
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
 
   return (
     <div>
-      <div className="page-header"><h1>Settings</h1></div>
+      <div className="page-header"><h1>{t('st.title')}</h1></div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>Telegram Notifications</h3>
+        <h3>{t('st.tg')}</h3>
         <form onSubmit={handleSave}>
           <div className="form-group" style={{ marginTop: 16 }}>
-            <label>Bot Token</label>
+            <label>{t('st.botToken')}</label>
             <input type="password" value={config.bot_token} onChange={e => setConfig({ ...config, bot_token: e.target.value })} placeholder="123456:ABC-DEF..." />
           </div>
           <div className="form-group">
-            <label>Chat ID</label>
+            <label>{t('st.chatId')}</label>
             <input value={config.chat_id} onChange={e => setConfig({ ...config, chat_id: e.target.value })} placeholder="-100123456789 or @channel" />
           </div>
           <div className="form-group">
             <div className="toggle-wrapper" onClick={() => setConfig({ ...config, enabled: !config.enabled })}>
               <div className={`toggle ${config.enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
-              <label>Enabled</label>
+              <label>{t('st.enabled')}</label>
             </div>
           </div>
           {config.enabled && (
             <div className="grid grid-2" style={{ marginTop: 12 }}>
               <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_cpu: !config.notify_cpu })}>
                 <div className={`toggle ${config.notify_cpu ? 'on' : ''}`}><div className="toggle-knob" /></div>
-                <label>CPU alerts</label>
+                <label>{t('st.cpuAlerts')}</label>
               </div>
               <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_disk: !config.notify_disk })}>
                 <div className={`toggle ${config.notify_disk ? 'on' : ''}`}><div className="toggle-knob" /></div>
-                <label>Disk alerts</label>
+                <label>{t('st.diskAlerts')}</label>
               </div>
               <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_errors: !config.notify_errors })}>
                 <div className={`toggle ${config.notify_errors ? 'on' : ''}`}><div className="toggle-knob" /></div>
-                <label>Memory alerts</label>
+                <label>{t('st.memAlerts')}</label>
               </div>
               <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_offline: !config.notify_offline })}>
                 <div className={`toggle ${config.notify_offline ? 'on' : ''}`}><div className="toggle-knob" /></div>
-                <label>Offline alerts</label>
+                <label>{t('st.offlineAlerts')}</label>
               </div>
             </div>
           )}
           {config.enabled && (
             <div className="form-group" style={{ marginTop: 16 }}>
-              <label>Offline detection (minutes)</label>
+              <label>{t('st.offlineDetect')}</label>
               <input type="number" min="1" max="30" value={config.offline_minutes || 3} onChange={e => setConfig({ ...config, offline_minutes: e.target.value })} style={{ width: 100 }} />
             </div>
           )}
           {config.enabled && (
             <>
-              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>Alert Thresholds (%)</label>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>{t('st.thresholds')}</label>
               <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt; %</label>
@@ -138,171 +140,154 @@ export default function Settings() {
           )}
           {config.enabled && (
             <>
-              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>Daily digest & flapping</label>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>{t('st.digestFlap')}</label>
               <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div className="toggle-wrapper" onClick={() => setConfig({ ...config, digest_enabled: !config.digest_enabled })}>
                   <div className={`toggle ${config.digest_enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
-                  <label style={{ cursor: 'pointer' }}>Daily digest</label>
+                  <label style={{ cursor: 'pointer' }}>{t('st.dailyDigest')}</label>
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Digest hour (0–23)</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>{t('st.digestHour')}</label>
                   <input type="number" min="0" max="23" value={config.digest_hour ?? 9} onChange={e => setConfig({ ...config, digest_hour: e.target.value })} style={{ width: 100 }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Flap alert after N/hr</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>{t('st.flapAfter')}</label>
                   <input type="number" min="2" value={config.flap_threshold ?? 6} onChange={e => setConfig({ ...config, flap_threshold: e.target.value })} style={{ width: 120 }} />
                 </div>
               </div>
-              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>RDP brute-force detection</label>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>{t('st.bruteTitle')}</label>
               <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_bruteforce: !config.notify_bruteforce })}>
                   <div className={`toggle ${config.notify_bruteforce ? 'on' : ''}`}><div className="toggle-knob" /></div>
-                  <label style={{ cursor: 'pointer' }}>Alert on brute-force</label>
+                  <label style={{ cursor: 'pointer' }}>{t('st.bruteAlert')}</label>
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>Failed logons/hr from one IP</label>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 12, color: 'var(--text-muted)' }}>{t('st.bruteThresh')}</label>
                   <input type="number" min="3" value={config.bruteforce_threshold ?? 10} onChange={e => setConfig({ ...config, bruteforce_threshold: e.target.value })} style={{ width: 160 }} />
                 </div>
               </div>
               <div className="form-group">
-                <label>Admin Chat IDs (full access + alerts)</label>
+                <label>{t('st.adminChats')}</label>
                 <input value={config.authorized_chats || ''} onChange={e => setConfig({ ...config, authorized_chats: e.target.value })} placeholder="123456789" />
               </div>
               <div className="form-group">
-                <label>Viewer Chat IDs (hide/show commands)</label>
+                <label>{t('st.viewerChats')}</label>
                 <input value={config.viewer_chats || ''} onChange={e => setConfig({ ...config, viewer_chats: e.target.value })} placeholder="-10012345,987654321" />
               </div>
               <div className="form-group">
-                <label>Webhook Secret Token</label>
+                <label>{t('st.webhookSecret')}</label>
                 <input value={config.webhook_secret || ''} onChange={e => setConfig({ ...config, webhook_secret: e.target.value })} placeholder="random-secret-string" />
               </div>
-              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>Extra alert channel (Slack / Teams / custom webhook)</label>
+              <label style={{ display: 'block', margin: '16px 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>{t('st.extraChannel')}</label>
               <div className="toggle-wrapper" onClick={() => setConfig({ ...config, alert_webhook_enabled: !config.alert_webhook_enabled })} style={{ marginBottom: 8 }}>
                 <div className={`toggle ${config.alert_webhook_enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
-                <label>Send alerts to webhook</label>
+                <label>{t('st.sendWebhook')}</label>
               </div>
               <div className="form-group">
-                <label>Alert webhook URL</label>
+                <label>{t('st.webhookUrl')}</label>
                 <input value={config.alert_webhook_url || ''} onChange={e => setConfig({ ...config, alert_webhook_url: e.target.value })} placeholder="https://hooks.slack.com/services/..." />
               </div>
             </>
           )}
           <div className="form-group" style={{ marginTop: 16 }}>
-            <label>Metric interval (minutes)</label>
+            <label>{t('st.metricInterval')}</label>
             <input type="number" min="1" max="1439" value={config.metric_interval ?? 1} onChange={e => setConfig({ ...config, metric_interval: e.target.value })} style={{ width: 120 }} />
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              How often agents report and reschedule their task. Applied to already-deployed servers on their next check-in (agent v2.10+).
+              {t('st.metricNote')}
             </div>
           </div>
           <div className="toggle-wrapper" onClick={() => setConfig({ ...config, agent_auto_update: !config.agent_auto_update })} style={{ marginTop: 16 }}>
             <div className={`toggle ${config.agent_auto_update ? 'on' : ''}`}><div className="toggle-knob" /></div>
-            <label>Agent auto-update</label>
+            <label>{t('st.autoUpdate')}</label>
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 8px' }}>
-            Agents download a new version inside their scheduled task, and the task can't run twice at once — so on a
-            slow or inspected link that download stalls the metrics and the host is reported OFFLINE while healthy.
-            Turn this off to stop the download attempts immediately (each agent is told its own version is current) and
-            roll out new versions with the deployer instead.
+            {t('st.autoUpdateNote')}
           </div>
 
           <div className="form-group" style={{ marginTop: 16 }}>
-            <label>Ignored services (health monitoring)</label>
+            <label>{t('st.ignoredSvc')}</label>
             <textarea value={config.service_ignore || ''} onChange={e => setConfig({ ...config, service_ignore: e.target.value })} rows={4} placeholder="sppsvc&#10;googleupdate&#10;remoteregistry" style={{ fontFamily: 'monospace', fontSize: 13 }} />
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              One name prefix per line (or comma-separated), case-insensitive. Stopped auto-start services matching these are not alerted or shown in Health. Leave empty to monitor every service.
+              {t('st.ignoredNote')}
             </div>
           </div>
           <div className="form-actions">
-            <button type="submit" disabled={saving}>Save</button>
-            <button type="button" className="secondary" onClick={handleTest}>Test Message</button>
-            {message && <span style={{ fontSize: 13, color: message.startsWith('Error') ? 'var(--danger)' : 'var(--success)', alignSelf: 'center' }}>{message}</span>}
+            <button type="submit" disabled={saving}>{t('common.save')}</button>
+            <button type="button" className="secondary" onClick={handleTest}>{t('st.testMsg')}</button>
+            {message && <span style={{ fontSize: 13, color: message.startsWith(t('st.errorPrefix')) ? 'var(--danger)' : 'var(--success)', alignSelf: 'center' }}>{message}</span>}
           </div>
         </form>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>🧬 Ransomware early warning</h3>
+        <h3>{t('st.ransomTitle')}</h3>
         <p style={{ color: 'var(--text-muted)', margin: '8px 0 12px' }}>
-          Two signals that fire while an attack is still running, not after it. <b>Canary files</b> are hidden decoys the
-          agent plants and re-hashes on every pass — ransomware encrypts every file it walks over, so a modified decoy
-          means files are being rewritten <b>right now</b>. <b>Shadow copies</b> are counted because wiping restore
-          points is the standard step taken immediately before encryption starts. Requires agent v2.22+.
+          {t('st.ransomDesc')}
         </p>
         <div className="toggle-wrapper" onClick={() => setConfig({ ...config, notify_ransomware: !config.notify_ransomware })} style={{ marginBottom: 10 }}>
           <div className={`toggle ${config.notify_ransomware ? 'on' : ''}`}><div className="toggle-knob" /></div>
-          <label>Alert on ransomware signals</label>
+          <label>{t('st.ransomAlert')}</label>
         </div>
         <div className="toggle-wrapper" onClick={() => setConfig({ ...config, ransomware_canary: !config.ransomware_canary })}>
           <div className={`toggle ${config.ransomware_canary ? 'on' : ''}`}><div className="toggle-knob" /></div>
-          <label>Plant canary files on servers</label>
+          <label>{t('st.ransomCanary')}</label>
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
-          Off by default because it <b>writes files</b> on every monitored server: one hidden
-          <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, margin: '0 4px' }}>_WinServ_CANARY_DO_NOT_DELETE.txt</code>
-          in Public\Documents and in the agent folder. The name is deliberately obvious so an admin who finds one knows
-          what it is. Shadow-copy counting needs nothing and works with this off.
+          {t('st.ransomCanaryNote')}
         </div>
-        <button type="button" onClick={handleSave} disabled={saving}>Save ransomware settings</button>
+        <button type="button" onClick={handleSave} disabled={saving}>{t('st.ransomSave')}</button>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>Automatic IP ban (brute-force / DoS)</h3>
+        <h3>{t('st.abTitle')}</h3>
         <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
-          When a source IP exceeds the threshold of failed logons within the detection window, a firewall block is pushed to the
-          attacked server automatically. <b>Local, reserved, and allowlisted IPs are never banned</b>, and an IP that
-          also logged in successfully in the last 24h is skipped (likely a real user). Requires agent v2.16+ / Linux v1.1+.
+          {t('st.abDesc')}
         </p>
         <div className="toggle-wrapper" onClick={() => setConfig({ ...config, autoban_enabled: !config.autoban_enabled })} style={{ marginBottom: 12 }}>
           <div className={`toggle ${config.autoban_enabled ? 'on' : ''}`}><div className="toggle-knob" /></div>
-          <label>Enable auto-ban</label>
+          <label>{t('st.abEnable')}</label>
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <div className="form-group">
-            <label>Ban threshold (failed logons)</label>
+            <label>{t('st.abThresh')}</label>
             <input type="number" min="5" value={config.autoban_threshold ?? 30} onChange={e => setConfig({ ...config, autoban_threshold: e.target.value })} style={{ width: 140 }} />
           </div>
           <div className="form-group">
-            <label>...within this window (minutes)</label>
+            <label>{t('st.abWindow')}</label>
             <input type="number" min="1" max="1440" value={config.autoban_window_minutes ?? 60} onChange={e => setConfig({ ...config, autoban_window_minutes: e.target.value })} style={{ width: 160 }} />
           </div>
           <div className="form-group">
-            <label>Ban duration (minutes, 0 = permanent)</label>
+            <label>{t('st.abDuration')}</label>
             <input type="number" min="0" value={config.autoban_minutes ?? 1440} onChange={e => setConfig({ ...config, autoban_minutes: e.target.value })} style={{ width: 180 }} />
           </div>
           <div className="form-group">
-            <label>Min distinct accounts to ban</label>
+            <label>{t('st.abMinAcc')}</label>
             <input type="number" min="1" value={config.autoban_min_accounts ?? 3} onChange={e => setConfig({ ...config, autoban_min_accounts: e.target.value })} style={{ width: 160 }} />
           </div>
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
-          <b>How a broken client is told apart from an attack.</b> Counting is fleet-wide (a spray spread thin across
-          servers is still caught). An IP is banned when any of these holds: failures span <b>{config.autoban_min_accounts ?? 3}+ distinct
-          accounts</b> (spray) · the target is a <b>never-legit username</b> below · the same account is hammered on
-          <b> 2+ servers</b> (scanning). A single unknown account on a single server is <b>alert-only</b>, and protected
-          accounts are never banned.
+          {t('st.abHow', { n: config.autoban_min_accounts ?? 3 })}
         </p>
 
         <div className="form-group">
-          <label>Never-legit usernames — always an attack (one per line)</label>
+          <label>{t('st.abBadAcc')}</label>
           <textarea value={config.autoban_bad_accounts || ''} onChange={e => setConfig({ ...config, autoban_bad_accounts: e.target.value })} rows={4}
             placeholder={'administrator\nguest\nroot\nauditor'} style={{ fontFamily: 'monospace', fontSize: 13 }} />
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-            No real employee is called these, so a hammer against one is banned immediately — even a single account on
-            a single server.
+            {t('st.abBadNote')}
           </div>
         </div>
 
         <div className="form-group">
-          <label>Protected accounts — real staff, never trigger a ban (one per line)</label>
+          <label>{t('st.abProtAcc')}</label>
           <textarea value={config.autoban_protected_accounts || ''} onChange={e => setConfig({ ...config, autoban_protected_accounts: e.target.value })} rows={3}
             placeholder={'DmitrievAV\nNedlinVE'} style={{ fontFamily: 'monospace', fontSize: 13 }} />
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-            Put real users here whose device has a stale password (they generate thousands of failures but are not an
-            attack). The exemption applies only while the source hits a single server, so the name can't shield a scanner.
+            {t('st.abProtNote')}
           </div>
         </div>
         <div className="form-group">
-          <label>Always protected (built-in — cannot be banned)</label>
+          <label>{t('st.abBuiltin')}</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
             {protectedRanges.map(p => (
               <span key={p.cidr} title={p.label}
@@ -312,76 +297,70 @@ export default function Settings() {
             ))}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-            Private (10/8, 172.16/12, 192.168/16), loopback, link-local, CGNAT and IPv6-local ranges are enforced in
-            code — they are never banned even if the allowlist below is empty, and can't be removed.
+            {t('st.abBuiltinNote')}
           </div>
         </div>
 
         <div className="form-group">
-          <label>Additional allowlist — your public IPs (IP or CIDR, one per line)</label>
+          <label>{t('st.abAllowlist')}</label>
           <textarea value={config.autoban_allowlist || ''} onChange={e => setConfig({ ...config, autoban_allowlist: e.target.value })} rows={4}
             placeholder={'203.0.113.7\n45.10.20.0/24  (office egress)\n2a01:4f8::/29'} style={{ fontFamily: 'monospace', fontSize: 13 }} />
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-            Put your office public IPs, VPN, and admin ranges here so they can never be auto-banned. Private ranges
-            (10/8, 172.16/12, 192.168/16), loopback, and link-local are already protected automatically.
+            {t('st.abAllowNote')}
           </div>
         </div>
-        <button type="button" onClick={handleSave} disabled={saving}>Save auto-ban settings</button>
+        <button type="button" onClick={handleSave} disabled={saving}>{t('st.abSave')}</button>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>Event ID triggers</h3>
+        <h3>{t('st.etTitle')}</h3>
         <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
-          Alert when a specific Windows Event Log ID appears on any server — e.g. <b>6008</b> unexpected shutdown,
-          <b> 55</b> NTFS corruption, <b>7</b> disk bad block, <b>41</b> kernel power. The agent collects these from
-          the chosen log regardless of level (agent v2.15+).
+          {t('st.etDesc')}
         </p>
         <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 16 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <b style={{ fontSize: 14 }}>🛡 Security preset</b>
+            <b style={{ fontSize: 14 }}>{t('st.etPreset')}</b>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Log wiping (1102 / 104), new accounts (4720), privilege grants (4732 / 4728), persistence via services (7045)
-              and scheduled tasks (4698), lockouts (4740).
+              {t('st.etPresetDesc')}
             </span>
             <button type="button" style={{ marginLeft: 'auto' }} disabled={presetBusy} onClick={async () => {
               setPresetBusy(true);
               try {
                 const r = await api.applyEventPreset();
                 const t = await api.getEventTriggers(); setTriggers(t);
-                alert(r.added ? `Added ${r.added} of ${r.total} triggers (the rest were already configured).` : 'All preset triggers are already configured.');
+                alert(r.added ? t('st.etPresetAdded', { added: r.added, total: r.total }) : t('st.etPresetAll'));
               } catch (e) { alert(e.message); }
               setPresetBusy(false);
-            }}>Add security preset</button>
+            }}>{t('st.etAddPreset')}</button>
           </div>
           <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 8 }}>
-            The 4xxx events come from the Security log and only appear if the matching audit policy is enabled on the
-            server (Account Management / Object Access). Without it those triggers stay silent.
+            {t('st.etAuditNote')}
           </div>
         </div>
 
         <form onSubmit={addTrigger} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
-          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Event ID *</label><input type="number" value={trigForm.event_id} onChange={e => setTrigForm({ ...trigForm, event_id: e.target.value })} required style={{ width: 100 }} placeholder="6008" /></div>
-          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Log</label><select value={trigForm.log_name} onChange={e => setTrigForm({ ...trigForm, log_name: e.target.value })} style={{ width: 130 }}><option>System</option><option>Application</option><option>Security</option><option>Setup</option></select></div>
-          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Source contains</label><input value={trigForm.source_match} onChange={e => setTrigForm({ ...trigForm, source_match: e.target.value })} style={{ width: 130 }} placeholder="optional" /></div>
-          <div style={{ flex: '1 1 160px' }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Label</label><input value={trigForm.label} onChange={e => setTrigForm({ ...trigForm, label: e.target.value })} placeholder="Unexpected shutdown" /></div>
-          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Severity</label><select value={trigForm.severity} onChange={e => setTrigForm({ ...trigForm, severity: e.target.value })} style={{ width: 110 }}><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select></div>
-          <button type="submit">Add</button>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('st.etEventId')}</label><input type="number" value={trigForm.event_id} onChange={e => setTrigForm({ ...trigForm, event_id: e.target.value })} required style={{ width: 100 }} placeholder="6008" /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('st.etLog')}</label><select value={trigForm.log_name} onChange={e => setTrigForm({ ...trigForm, log_name: e.target.value })} style={{ width: 130 }}><option>System</option><option>Application</option><option>Security</option><option>Setup</option></select></div>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('st.etSource')}</label><input value={trigForm.source_match} onChange={e => setTrigForm({ ...trigForm, source_match: e.target.value })} style={{ width: 130 }} placeholder={t('st.etOptional')} /></div>
+          <div style={{ flex: '1 1 160px' }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('st.etLabel')}</label><input value={trigForm.label} onChange={e => setTrigForm({ ...trigForm, label: e.target.value })} placeholder={t('st.etLabelPh')} /></div>
+          <div><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('st.etSeverity')}</label><select value={trigForm.severity} onChange={e => setTrigForm({ ...trigForm, severity: e.target.value })} style={{ width: 110 }}><option value="info">{t('al.sev.info')}</option><option value="warning">{t('al.sev.warning')}</option><option value="critical">{t('al.sev.critical')}</option></select></div>
+          <button type="submit">{t('common.add')}</button>
         </form>
         {triggers.length === 0 ? (
-          <div className="empty"><p>No triggers yet.</p></div>
+          <div className="empty"><p>{t('st.etEmpty')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>Event ID</th><th>Log</th><th>Source</th><th>Label</th><th>Severity</th><th>State</th><th></th></tr></thead>
+            <thead><tr><th>{t('st.etEventId').replace(' *','')}</th><th>{t('st.etLog')}</th><th>{t('st.etColSource')}</th><th>{t('st.etLabel')}</th><th>{t('st.etSeverity')}</th><th>{t('mnt.state')}</th><th></th></tr></thead>
             <tbody>
-              {triggers.map(t => (
-                <tr key={t.id} style={t.enabled ? {} : { opacity: 0.5 }}>
-                  <td><strong>{t.event_id}</strong></td>
-                  <td style={{ fontSize: 13 }}>{t.log_name}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.source_match || '-'}</td>
-                  <td style={{ fontSize: 13 }}>{t.label || '-'}</td>
-                  <td style={{ fontSize: 12 }}>{t.severity}</td>
-                  <td><button className="secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => toggleTrigger(t)}>{t.enabled ? 'On' : 'Off'}</button></td>
-                  <td><button className="danger" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => removeTrigger(t.id)}>Del</button></td>
+              {triggers.map(trg => (
+                <tr key={trg.id} style={trg.enabled ? {} : { opacity: 0.5 }}>
+                  <td><strong>{trg.event_id}</strong></td>
+                  <td style={{ fontSize: 13 }}>{trg.log_name}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{trg.source_match || '-'}</td>
+                  <td style={{ fontSize: 13 }}>{trg.label || '-'}</td>
+                  <td style={{ fontSize: 12 }}>{trg.severity}</td>
+                  <td><button className="secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => toggleTrigger(trg)}>{trg.enabled ? t('st.on') : t('st.off')}</button></td>
+                  <td><button className="danger" style={{ padding: '3px 10px', fontSize: 12 }} onClick={() => removeTrigger(trg.id)}>{t('common.del')}</button></td>
                 </tr>
               ))}
             </tbody>
@@ -390,9 +369,9 @@ export default function Settings() {
       </div>
 
       <div className="card">
-        <h3>Agent Scripts</h3>
-        <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>Download the PowerShell agent script for all registered servers. Each includes a unique token.</p>
-        <button onClick={loadAgentScripts}>{showAgent ? 'Hide' : 'Show'} Agent Scripts</button>
+        <h3>{t('st.agentTitle')}</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>{t('st.agentDesc')}</p>
+        <button onClick={loadAgentScripts}>{showAgent ? t('st.agentHide') : t('st.agentShow')}</button>
         {showAgent && (
           <div className="script-container" style={{ maxHeight: 700, overflow: 'auto', marginTop: 16 }}>
             <pre>{agentScripts}</pre>
