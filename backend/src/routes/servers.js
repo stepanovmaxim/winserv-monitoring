@@ -57,7 +57,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireAdmin, requireServerAccess('id'), async (req, res) => {
-  const { hostname, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk, cpu_threshold, memory_threshold, disk_threshold, is_relay, relay_drop } = req.body;
+  const { hostname, display_name, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk, cpu_threshold, memory_threshold, disk_threshold, is_relay, relay_drop } = req.body;
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [req.params.id]);
   if (!server) return res.status(404).json({ error: 'Server not found' });
 
