@@ -15,6 +15,7 @@ import Maintenance from './pages/Maintenance';
 import Reports from './pages/Reports';
 import Security from './pages/Security';
 import Checks from './pages/Checks';
+import Workstations from './pages/Workstations';
 import Alerts from './pages/Alerts';
 import StatusPage from './pages/StatusPage';
 
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/security" element={<AdminRoute><Security /></AdminRoute>} />
         <Route path="/checks" element={<Checks />} />
+        <Route path="/workstations" element={<Workstations />} />
         <Route path="/alerts" element={<Alerts />} />
       </Route>
     </Routes>

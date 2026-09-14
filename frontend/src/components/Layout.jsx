@@ -84,6 +84,7 @@ export default function Layout() {
             )}
           </Link>
           {link('/checks', '📡', 'Checks')}
+          {link('/workstations', '💻', 'Рабочие станции')}
           {link('/reports', '📈', 'Reports')}
           {user?.role === 'admin' && link('/customers', '🏢', 'Customers')}
           {user?.role === 'admin' && link('/groups', '📁', 'Groups')}

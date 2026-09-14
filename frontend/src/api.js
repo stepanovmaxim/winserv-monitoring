@@ -241,6 +241,14 @@ export const api = {
   deleteServer(id) {
     return request(`/api/servers/${id}`, { method: 'DELETE' });
   },
+
+  // Workstations (domain PC inventory)
+  getWorkstations() {
+    return request('/api/workstations');
+  },
+  getWorkstation(id) {
+    return request(`/api/workstations/${id}`);
+  },
   getServerToken(id) {
     return request(`/api/servers/${id}/token`);
   },

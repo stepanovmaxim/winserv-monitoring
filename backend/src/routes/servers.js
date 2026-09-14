@@ -57,7 +57,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, requireAdmin, requireServerAccess('id'), async (req, res) => {
-  const { hostname, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk, cpu_threshold, memory_threshold, disk_threshold } = req.body;
+  const { hostname, description, ip_address, group_id, customer_id, os_info, notify_cpu, notify_memory, notify_disk, cpu_threshold, memory_threshold, disk_threshold, is_relay, relay_drop } = req.body;
   const server = await db.queryOne('SELECT * FROM servers WHERE id = $1', [req.params.id]);
   if (!server) return res.status(404).json({ error: 'Server not found' });
 
@@ -77,8 +77,9 @@ router.put('/:id', requireAuth, requireAdmin, requireServerAccess('id'), async (
   await db.query(
     `UPDATE servers SET display_name = $1, ip_address = $2, group_id = $3, os_info = $4, description = $5,
        notify_cpu = $6, notify_memory = $7, notify_disk = $8, customer_id = $9,
-       cpu_threshold = $10, memory_threshold = $11, disk_threshold = $12
-     WHERE id = $13`,
+       cpu_threshold = $10, memory_threshold = $11, disk_threshold = $12,
+       is_relay = $13, relay_drop = $14
+     WHERE id = $15`,
     [
       // The panel's name field now sets the DISPLAY name and never touches
       // hostname. hostname is the identity the agent registers with: editing
@@ -97,6 +98,8 @@ router.put('/:id', requireAuth, requireAdmin, requireServerAccess('id'), async (
       toThresh(cpu_threshold, server.cpu_threshold),
       toThresh(memory_threshold, server.memory_threshold),
       toThresh(disk_threshold, server.disk_threshold),
+      toBool(is_relay, server.is_relay),
+      relay_drop !== undefined ? String(relay_drop || '') : (server.relay_drop || ''),
       req.params.id
     ]
   );
