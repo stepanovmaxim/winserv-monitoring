@@ -53,9 +53,9 @@ export default function Servers() {
   const outdated = servers.filter(s => s.agent_version && latestFor(s) && s.agent_version !== latestFor(s));
   const outdatedCount = outdated.length;
   async function forceUpdateOutdated() {
-    if (!confirm(`Queue a forced update for ${outdatedCount} outdated agent(s)? Works on agent v2.11+; older ones must be redeployed.`)) return;
+    if (!confirm(t('srv.forceConfirm', { n: outdatedCount }))) return;
     await Promise.all(outdated.map(s => api.queueCommand(s.id, 'force_update', '')));
-    alert(`Queued force-update for ${outdatedCount} server(s). They apply on the next check-in.`);
+    alert(t('srv.forceQueued', { n: outdatedCount }));
   }
   function Th({ k, children }) {
     return <th onClick={() => toggleSort(k)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>{children}{sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}</th>;
@@ -141,7 +141,7 @@ export default function Servers() {
     // Validate in JS, not via HTML5 (the form is noValidate): a silently
     // blocked native validation used to look like a dead Save button.
     if (!form.hostname || !String(form.hostname).trim()) {
-      alert('Укажите имя (Display name)');
+      alert(t('srv.nameRequired'));
       return;
     }
     try {
@@ -156,40 +156,40 @@ export default function Servers() {
       api.getServers(selectedGroup || undefined, selectedCustomer || undefined).then(setServers).finally(() => setLoading(false));
     } catch (err) {
       // Surface the real reason instead of leaving the modal looking frozen.
-      alert('Не удалось сохранить: ' + (err?.message || err));
+      alert(t('srv.saveFailed') + (err?.message || err));
     }
   }
 
   async function handleDelete(id) {
-    if (!confirm('Delete this server?')) return;
+    if (!confirm(t('srv.deleteConfirm'))) return;
     await api.deleteServer(id);
     setServers(prev => prev.filter(s => s.id !== id));
   }
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
 
   return (
     <div>
       <div className="page-header">
-        <h1>Servers</h1>
+        <h1>{t('nav.servers')}</h1>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <select value={selectedCustomer} onChange={e => setSelectedCustomer(e.target.value)}>
-            <option value="">All Customers</option>
+            <option value="">{t('srv.allCustomers')}</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            <option value="none">— Unassigned —</option>
+            <option value="none">{t('srv.unassignedOpt')}</option>
           </select>
           <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
-            <option value="">All Groups</option>
+            <option value="">{t('srv.allGroups')}</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
-          {user?.role === 'admin' && outdatedCount > 0 && <button className="secondary" onClick={forceUpdateOutdated}>Update {outdatedCount} outdated</button>}
-          {user?.role === 'admin' && <button onClick={openCreate}>+ Add Server</button>}
+          {user?.role === 'admin' && outdatedCount > 0 && <button className="secondary" onClick={forceUpdateOutdated}>{t('srv.updateOutdated', { n: outdatedCount })}</button>}
+          {user?.role === 'admin' && <button onClick={openCreate}>{t('srv.add')}</button>}
         </div>
       </div>
 
       {showToken && (
         <div className="card" style={{ marginBottom: 16, border: '1px solid var(--primary)' }}>
-          <strong>Agent Token (save it!):</strong>
+          <strong>{t('srv.tokenSave')}</strong>
           <div className="script-container"><pre>{showToken}</pre></div>
           <button onClick={() => setShowToken(null)}>OK</button>
         </div>
@@ -198,27 +198,27 @@ export default function Servers() {
       <div className="grid grid-3" style={{ marginBottom: 24 }}>
         <div className="card">
           <div className="metric-value">{servers.length}</div>
-          <div className="metric-label">Total Servers</div>
+          <div className="metric-label">{t('srv.total')}</div>
         </div>
         <div className="card">
           <div className="metric-value" style={{ color: 'var(--success)' }}>{servers.filter(s => s.status === 'online').length}</div>
-          <div className="metric-label">Online</div>
+          <div className="metric-label">{t('srv.online')}</div>
         </div>
         <div className="card">
           <div className="metric-value" style={{ color: 'var(--danger)' }}>{servers.filter(s => s.status === 'offline').length}</div>
-          <div className="metric-label">Offline</div>
+          <div className="metric-label">{t('srv.offline')}</div>
         </div>
       </div>
 
       <div className="card">
         {servers.length === 0 ? (
-          <div className="empty"><div className="empty-icon">🖥</div><p>No servers yet. Add one to get started.</p></div>
+          <div className="empty"><div className="empty-icon">🖥</div><p>{t('srv.empty')}</p></div>
         ) : (
           <table>
             <thead><tr>
-              <Th k="status">Status</Th><Th k="hostname">Hostname</Th><Th k="customer">Customer</Th>
-              <Th k="group">Group</Th><Th k="cpu">CPU</Th><Th k="memory">Memory</Th><Th k="disk">Disk</Th>
-              <Th k="agent">Agent</Th><Th k="last_seen">Last Seen</Th><th></th>
+              <Th k="status">{t('common.status')}</Th><Th k="hostname">{t('srv.hostname')}</Th><Th k="customer">{t('common.customer')}</Th>
+              <Th k="group">{t('mnt.s.group')}</Th><Th k="cpu">CPU</Th><Th k="memory">{t('srv.memory')}</Th><Th k="disk">{t('srv.disk')}</Th>
+              <Th k="agent">{t('srv.agent')}</Th><Th k="last_seen">{t('srv.lastSeen')}</Th><th></th>
             </tr></thead>
             <tbody>
               {sorted.map(s => (
@@ -226,27 +226,27 @@ export default function Servers() {
                   <td><span className="status"><span className={`status-dot ${s.status}`} />{s.status}</span></td>
                   <td>
                     <span title={s.platform === 'linux' ? 'Linux' : 'Windows'} style={{ marginRight: 5 }}>{s.platform === 'linux' ? '🐧' : '🪟'}</span>
-                    <Link to={`/servers/${s.id}`} title={s.display_name ? `Reports as ${s.hostname}` : undefined}>{s.display_name || s.hostname}</Link>
-                    {s.health_issues > 0 && <span title="health issues" style={{ marginLeft: 6, color: 'var(--danger)', fontSize: 12 }}>⚠{s.health_issues}</span>}
-                    {s.pending_reboot ? <span title="reboot pending" style={{ marginLeft: 4 }}>🔄</span> : null}
-                    {s.update_error ? <span title={'Agent update failed — ' + s.update_error} style={{ marginLeft: 4, color: 'var(--danger)', fontSize: 12 }}>⬆✕</span> : null}
+                    <Link to={`/servers/${s.id}`} title={s.display_name ? t('srv.reportsAsTitle', { h: s.hostname }) : undefined}>{s.display_name || s.hostname}</Link>
+                    {s.health_issues > 0 && <span title={t('srv.healthIssues')} style={{ marginLeft: 6, color: 'var(--danger)', fontSize: 12 }}>⚠{s.health_issues}</span>}
+                    {s.pending_reboot ? <span title={t('srv.rebootPending')} style={{ marginLeft: 4 }}>🔄</span> : null}
+                    {s.update_error ? <span title={t('srv.updateFailedTitle', { e: s.update_error })} style={{ marginLeft: 4, color: 'var(--danger)', fontSize: 12 }}>⬆✕</span> : null}
                   </td>
                   <td>{s.customer_name || <span style={{ color: 'var(--warning)' }}>—</span>}</td>
                   <td>{s.group_name || '-'}</td>
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
                   <td>{s.last_mem_used != null && s.last_mem_total > 0 ? `${Math.round(Number(s.last_mem_used) / Number(s.last_mem_total) * 100)}%` : '-'}</td>
-                  <td>{(() => { const w = worstDisk(s); if (!w) return '-'; return <span title={w.drive ? `fullest volume ${w.drive}` : ''} style={w.pct >= 90 ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{w.pct}%{w.drive ? ` ${w.drive}` : ''}</span>; })()}</td>
+                  <td>{(() => { const w = worstDisk(s); if (!w) return '-'; return <span title={w.drive ? t('srv.fullest', { d: w.drive }) : ''} style={w.pct >= 90 ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{w.pct}%{w.drive ? ` ${w.drive}` : ''}</span>; })()}</td>
                   <td>
                     {s.agent_version
                       ? <span className={`badge ${latestAgent && s.agent_version !== latestAgent ? 'badge-warning' : 'badge-viewer'}`}>v{s.agent_version}{latestAgent && s.agent_version !== latestAgent ? ' ⤴' : ''}</span>
                       : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
-                  <td>{s.last_seen || 'Never'}</td>
+                  <td>{s.last_seen || t('common.never')}</td>
                   <td>
                     {user?.role === 'admin' && (
                       <>
-                        <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(s)}>Edit</button>
-                        <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => handleDelete(s.id)}>Del</button>
+                        <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(s)}>{t('common.edit')}</button>
+                        <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => handleDelete(s.id)}>{t('common.del')}</button>
                       </>
                     )}
                   </td>
@@ -260,25 +260,25 @@ export default function Servers() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{editServer ? 'Edit Server' : 'Add Server'}</h2>
+            <h2>{editServer ? t('srv.editTitle') : t('srv.addTitle')}</h2>
             <form onSubmit={handleSave} noValidate>
               <div className="form-group">
-                <label>Display name *</label>
+                <label>{t('srv.displayName')} *</label>
                 <input value={form.hostname} onChange={e => setForm({ ...form, hostname: e.target.value })} required />
                 {editServer && (
                   <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                    Reports as <code>{editServer.hostname}</code> — this is how the agent identifies itself and is not changed here.
+                    {t('srv.reportsAsA')} <code>{editServer.hostname}</code> {t('srv.reportsAsB')}
                   </div>
                 )}
               </div>
-              <div className="form-group"><label>Description</label><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Primary domain controller" /></div>
-              <div className="form-group"><label>IP Address</label><input value={form.ip_address} onChange={e => setForm({ ...form, ip_address: e.target.value })} /></div>
-              <div className="form-group"><label>Customer</label><select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">Unassigned</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-              <div className="form-group"><label>Group</label><select value={form.group_id} onChange={e => setForm({ ...form, group_id: e.target.value })}><option value="">None</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-              <div className="form-group"><label>OS Info</label><input value={form.os_info} onChange={e => setForm({ ...form, os_info: e.target.value })} /></div>
+              <div className="form-group"><label>{t('common.description')}</label><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder={t('srv.descPh')} /></div>
+              <div className="form-group"><label>{t('srv.ip')}</label><input value={form.ip_address} onChange={e => setForm({ ...form, ip_address: e.target.value })} /></div>
+              <div className="form-group"><label>{t('common.customer')}</label><select value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">{t('srv.unassigned')}</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div className="form-group"><label>{t('mnt.s.group')}</label><select value={form.group_id} onChange={e => setForm({ ...form, group_id: e.target.value })}><option value="">{t('srv.groupNone')}</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+              <div className="form-group"><label>{t('srv.osInfo')}</label><input value={form.os_info} onChange={e => setForm({ ...form, os_info: e.target.value })} /></div>
               {editServer && (
                 <>
-                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Alert Notifications</label>
+                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>{t('srv.alerts')}</label>
                   <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
                     <div className="toggle-wrapper" onClick={() => setForm({ ...form, notify_cpu: !form.notify_cpu })}>
                       <div className={`toggle ${form.notify_cpu ? 'on' : ''}`}><div className="toggle-knob" /></div>
@@ -293,11 +293,11 @@ export default function Servers() {
                       <label style={{ cursor: 'pointer' }}>Disk</label>
                     </div>
                   </div>
-                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Threshold overrides (%) — empty inherits group / customer / global</label>
+                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>{t('srv.thresholds')}</label>
                   <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
-                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Memory &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
-                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Memory &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
+                    <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
                   </div>
                   <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>{t('srv.inv')}</label>
                   <div className="toggle-wrapper" onClick={() => setForm({ ...form, is_relay: !form.is_relay })} style={{ marginBottom: 8 }}>
