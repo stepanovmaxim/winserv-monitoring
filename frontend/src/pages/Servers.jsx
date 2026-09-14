@@ -136,15 +136,26 @@ export default function Servers() {
 
   async function handleSave(e) {
     e.preventDefault();
-    if (editServer) {
-      await api.updateServer(editServer.id, form);
-    } else {
-      const data = await api.createServer(form);
-      setShowToken(data.token);
+    // Validate in JS, not via HTML5 (the form is noValidate): a silently
+    // blocked native validation used to look like a dead Save button.
+    if (!form.hostname || !String(form.hostname).trim()) {
+      alert('Укажите имя (Display name)');
+      return;
     }
-    setShowModal(false);
-    setLoading(true);
-    api.getServers(selectedGroup || undefined, selectedCustomer || undefined).then(setServers).finally(() => setLoading(false));
+    try {
+      if (editServer) {
+        await api.updateServer(editServer.id, form);
+      } else {
+        const data = await api.createServer(form);
+        setShowToken(data.token);
+      }
+      setShowModal(false);
+      setLoading(true);
+      api.getServers(selectedGroup || undefined, selectedCustomer || undefined).then(setServers).finally(() => setLoading(false));
+    } catch (err) {
+      // Surface the real reason instead of leaving the modal looking frozen.
+      alert('Не удалось сохранить: ' + (err?.message || err));
+    }
   }
 
   async function handleDelete(id) {
@@ -248,7 +259,7 @@ export default function Servers() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>{editServer ? 'Edit Server' : 'Add Server'}</h2>
-            <form onSubmit={handleSave}>
+            <form onSubmit={handleSave} noValidate>
               <div className="form-group">
                 <label>Display name *</label>
                 <input value={form.hostname} onChange={e => setForm({ ...form, hostname: e.target.value })} required />
