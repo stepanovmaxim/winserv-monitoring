@@ -225,13 +225,20 @@ if ($interactive) {
 $fileBase = if ($uid) { $uid } else { $env:COMPUTERNAME }
 $fileBase = ($fileBase -replace '[^A-Za-z0-9._-]', '_')
 
-# Fail loudly (when interactive) if the share is not even reachable - by far the
-# most common cause of "nothing appears": wrong path, or the run account (SYSTEM
-# = the machine account for a startup script, the user for a logon script) has
-# no write permission on the share.
-if (-not (Test-Path $DropShare)) {
-  Say "getcfg: drop share not reachable: $DropShare - check the path and that the run account has Change rights" $true
-  if ($interactive) { Write-Host "HINT: startup script runs as SYSTEM (grant 'Domain Computers'); logon script runs as the user (grant 'Domain Users')." -ForegroundColor Yellow }
+# Fail loudly (when interactive) if the share is not reachable/writable - by far
+# the most common cause of "nothing appears": wrong path, or the run account
+# (SYSTEM = the machine account for a startup script, the user for a logon
+# script) has no rights on the share. Test-Path THROWS on access-denied under
+# ErrorActionPreference=Stop instead of returning false, so guard it.
+$reachable = $false
+try { $reachable = Test-Path -LiteralPath $DropShare -ErrorAction Stop } catch { $reachable = $false }
+if (-not $reachable) {
+  Say "getcfg: drop share not reachable/denied: $DropShare - check the path and that the run account has Change rights" $true
+  if ($interactive) {
+    Write-Host "HINT: a STARTUP script runs as SYSTEM = the computer account (grant 'Domain Computers')." -ForegroundColor Yellow
+    Write-Host "      Running this by hand uses YOUR user, which the drop share may not permit - that is expected." -ForegroundColor Yellow
+    Write-Host "      To test the real context, run it as SYSTEM (schtasks /ru SYSTEM), not as yourself." -ForegroundColor Yellow
+  }
   exit 0
 }
 
