@@ -39,14 +39,21 @@ getcfg.ps1          (локальная папка на           /api/workstati
 1. Скопируйте `tools/getcfg.ps1` в `\\<домен>\NETLOGON\getcfg.ps1`.
 2. Откройте его и задайте `$DropShare` = ваша шара (`\\DC01\winserv-inv$`),
    либо передавайте параметром в GPO.
-3. Создайте GPO на нужный OU:
-   - **Рекомендуется:** Computer Configuration → Policies → Windows Settings →
-     Scripts → **Startup** → вкладка **PowerShell Scripts** → Add:
-     - Script Name: `\\<домен>\NETLOGON\getcfg.ps1`
-     - Parameters: `-DropShare \\DC01\winserv-inv$`
-   - Либо Logon-скрипт (User Configuration) — тогда пишется реальный пользователь.
-4. Убедитесь, что политика PowerShell позволяет запуск (GPO-скрипты Startup
-   выполняются в обход ExecutionPolicy; при необходимости — RemoteSigned).
+3. Создайте GPO на нужный OU. **Запускайте через .cmd-обёртку, а не .ps1 напрямую:**
+   - Скопируйте и `getcfg-startup.cmd` в NETLOGON, поправив в нём домен и путь шары.
+   - Computer Configuration → Policies → Windows Settings → Scripts →
+     **Startup** → вкладка **Scripts** (именно Scripts, НЕ «PowerShell Scripts») → Add:
+     - Script Name: `\\<домен>\NETLOGON\getcfg-startup.cmd`
+
+   **Почему обёртка, а не .ps1 напрямую:** запись «PowerShell Scripts» в GPO
+   запускает `powershell.exe` БЕЗ `-ExecutionPolicy Bypass`. На клиенте с
+   политикой по умолчанию (`Restricted`) скрипт с UNC-пути тогда **не стартует
+   вообще** — ни ошибки, ни файла. Обёртка вызывает PowerShell с `-ExecutionPolicy
+   Bypass` и снимает эту проблему. (Альтернатива — политика «Turn On Script
+   Execution» = Allow all, но обёртка надёжнее и локальнее.)
+
+   Logon-вариант (User Configuration → Scripts) — так же через `.cmd`; тогда
+   пишется реальный пользователь, а права на шаре нужны для `Domain Users`.
 
 Скрипт **только читает** систему, ничего не меняет. Данные обновляются при каждом
 запуске (загрузка/вход). Для регулярного обновления без перезагрузок можно
