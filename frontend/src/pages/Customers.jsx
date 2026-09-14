@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Customers() {
+  const { t } = useLang();
   const [customers, setCustomers] = useState([]);
   const [domainData, setDomainData] = useState({ mappings: [], domains: [] });
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,7 @@ export default function Customers() {
   }
 
   async function removeCustomer(id) {
-    if (!confirm('Delete this customer? Its servers will become unassigned.')) return;
+    if (!confirm(t('cst.deleteConfirm'))) return;
     await api.deleteCustomer(id);
     loadAll();
   }
@@ -52,7 +54,7 @@ export default function Customers() {
     const r = await api.setDomainMapping(mapForm.domain, Number(mapForm.customer_id));
     setMapForm({ domain: '', customer_id: '' });
     await loadAll();
-    if (r.applied) alert(`Mapped. ${r.applied} existing server(s) assigned to this customer.`);
+    if (r.applied) alert(t('cst.mapApplied', { n: r.applied }));
   }
 
   async function removeMapping(domain) {
@@ -71,36 +73,36 @@ export default function Customers() {
   const mappedDomains = new Set(domainData.mappings.map(m => m.domain));
   const unmapped = domainData.domains.filter(d => !mappedDomains.has(d));
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
 
   return (
     <div>
       <div className="page-header">
-        <h1>Customers</h1>
-        <button onClick={openCreate}>+ Add Customer</button>
+        <h1>{t('cst.title')}</h1>
+        <button onClick={openCreate}>{t('cst.add')}</button>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
         {customers.length === 0 ? (
-          <div className="empty"><p>No customers yet. Add one, then map its AD domains below.</p></div>
+          <div className="empty"><p>{t('cst.empty')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>Name</th><th>Description</th><th>Servers</th><th>Status</th><th>Public page</th><th></th></tr></thead>
+            <thead><tr><th>{t('common.name')}</th><th>{t('common.description')}</th><th>{t('groups.servers')}</th><th>{t('common.status')}</th><th>{t('cst.publicPage')}</th><th></th></tr></thead>
             <tbody>
               {customers.map(c => (
                 <tr key={c.id}>
                   <td><strong>{c.name}</strong></td>
                   <td style={{ color: 'var(--text-muted)' }}>{c.description || '-'}</td>
                   <td>{c.server_count}</td>
-                  <td><span className={`badge ${c.active ? 'badge-viewer' : 'badge-error'}`}>{c.active ? 'active' : 'inactive'}</span></td>
+                  <td><span className={`badge ${c.active ? 'badge-viewer' : 'badge-error'}`}>{c.active ? t('cst.active') : t('cst.inactive')}</span></td>
                   <td>
                     <button className="secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => { setStatusFor(c); setCopied(false); }}>
-                      {c.status_enabled ? '🌐 On' : 'Off'}
+                      {c.status_enabled ? t('cst.on') : t('cst.off')}
                     </button>
                   </td>
                   <td>
-                    <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(c)}>Edit</button>
-                    <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => removeCustomer(c.id)}>Del</button>
+                    <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(c)}>{t('common.edit')}</button>
+                    <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => removeCustomer(c.id)}>{t('common.del')}</button>
                   </td>
                 </tr>
               ))}
@@ -110,36 +112,33 @@ export default function Customers() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 8 }}>Domain → Customer mapping</h3>
-        <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
-          Domain-joined machines inherit their customer automatically from this map. Non-domain machines are
-          assigned per-server on the Servers page.
-        </p>
+        <h3 style={{ marginBottom: 8 }}>{t('cst.mapping')}</h3>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>{t('cst.mapDesc')}</p>
 
         <form onSubmit={saveMapping} style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           <select value={mapForm.domain} onChange={e => setMapForm({ ...mapForm, domain: e.target.value })} style={{ flex: '1 1 200px' }} required>
-            <option value="">Select domain...</option>
+            <option value="">{t('cst.selectDomain')}</option>
             {unmapped.map(d => <option key={d} value={d}>{d}</option>)}
             {mapForm.domain && mappedDomains.has(mapForm.domain) && <option value={mapForm.domain}>{mapForm.domain}</option>}
           </select>
           <select value={mapForm.customer_id} onChange={e => setMapForm({ ...mapForm, customer_id: e.target.value })} style={{ flex: '1 1 200px' }} required>
-            <option value="">Select customer...</option>
+            <option value="">{t('cst.selectCustomer')}</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <button type="submit">Map</button>
+          <button type="submit">{t('cst.map')}</button>
         </form>
 
         {domainData.mappings.length === 0 ? (
-          <div className="empty"><p>No domain mappings yet</p></div>
+          <div className="empty"><p>{t('cst.noMappings')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>Domain</th><th>Customer</th><th></th></tr></thead>
+            <thead><tr><th>{t('cst.domain')}</th><th>{t('common.customer')}</th><th></th></tr></thead>
             <tbody>
               {domainData.mappings.map(m => (
                 <tr key={m.domain}>
                   <td style={{ fontFamily: 'monospace' }}>{m.domain}</td>
-                  <td>{m.customer_name || <span style={{ color: 'var(--danger)' }}>(deleted)</span>}</td>
-                  <td><button className="danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => removeMapping(m.domain)}>Unmap</button></td>
+                  <td>{m.customer_name || <span style={{ color: 'var(--danger)' }}>{t('cst.deleted')}</span>}</td>
+                  <td><button className="danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => removeMapping(m.domain)}>{t('cst.unmap')}</button></td>
                 </tr>
               ))}
             </tbody>
@@ -147,47 +146,42 @@ export default function Customers() {
         )}
 
         {unmapped.length > 0 && (
-          <p style={{ color: 'var(--warning)', marginTop: 12, fontSize: 13 }}>
-            Unmapped domains in the fleet: {unmapped.join(', ')}
-          </p>
+          <p style={{ color: 'var(--warning)', marginTop: 12, fontSize: 13 }}>{t('cst.unmapped', { list: unmapped.join(', ') })}</p>
         )}
       </div>
 
       {statusFor && (
         <div className="modal-overlay" onClick={() => setStatusFor(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>Public status page — {statusFor.name}</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>
-              A shareable page showing this customer's servers and checks as operational / degraded / down.
-              No IPs or metrics are exposed. Anyone with the link can view it.
-            </p>
+            <h2>{t('cst.sp.title', { name: statusFor.name })}</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>{t('cst.sp.desc')}</p>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, cursor: 'pointer' }}>
               <input type="checkbox" checked={!!statusFor.status_enabled} onChange={e => updateStatusPage({ enabled: e.target.checked })} style={{ width: 16, height: 16, flex: '0 0 auto', margin: 0 }} />
-              Enable public status page
+              {t('cst.sp.enable')}
             </label>
 
             {statusFor.status_enabled && statusFor.status_token && (
               <>
                 <div className="form-group">
-                  <label>Public URL</label>
+                  <label>{t('cst.sp.url')}</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input readOnly value={statusUrl(statusFor)} onFocus={e => e.target.select()} style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }} />
                     <button type="button" className="secondary" onClick={() => { navigator.clipboard?.writeText(statusUrl(statusFor)); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
-                      {copied ? 'Copied!' : 'Copy'}
+                      {copied ? t('cst.sp.copied') : t('cst.sp.copy')}
                     </button>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <a href={statusUrl(statusFor)} target="_blank" rel="noreferrer"><button type="button" className="secondary">Open</button></a>
-                  <button type="button" className="secondary" onClick={() => { if (confirm('Generate a new link? The current link will stop working.')) updateStatusPage({ enabled: true, regenerate: true }); }}>
-                    Regenerate link
+                  <a href={statusUrl(statusFor)} target="_blank" rel="noreferrer"><button type="button" className="secondary">{t('cst.sp.open')}</button></a>
+                  <button type="button" className="secondary" onClick={() => { if (confirm(t('cst.sp.regenConfirm'))) updateStatusPage({ enabled: true, regenerate: true }); }}>
+                    {t('cst.sp.regen')}
                   </button>
                 </div>
               </>
             )}
 
             <div className="form-actions" style={{ marginTop: 20 }}>
-              <button type="button" onClick={() => setStatusFor(null)}>Done</button>
+              <button type="button" onClick={() => setStatusFor(null)}>{t('cst.sp.done')}</button>
             </div>
           </div>
         </div>
@@ -196,19 +190,19 @@ export default function Customers() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{editing ? 'Edit Customer' : 'Add Customer'}</h2>
+            <h2>{editing ? t('cst.editTitle') : t('cst.addTitle')}</h2>
             <form onSubmit={saveCustomer}>
-              <div className="form-group"><label>Name *</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
-              <div className="form-group"><label>Description</label><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. ООО Ромашка, договор 2026" /></div>
-              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Default thresholds (%) — empty inherits global</label>
+              <div className="form-group"><label>{t('common.name')} *</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
+              <div className="form-group"><label>{t('common.description')}</label><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder={t('cst.descPh')} /></div>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>{t('cst.thresholds')}</label>
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
-                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Mem &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
-                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Mem &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
               </div>
               <div className="form-actions">
-                <button type="submit">Save</button>
-                <button type="button" className="secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="submit">{t('common.save')}</button>
+                <button type="button" className="secondary" onClick={() => setShowModal(false)}>{t('common.cancel')}</button>
               </div>
             </form>
           </div>
