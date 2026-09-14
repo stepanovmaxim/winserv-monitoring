@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Deploy() {
+  const { t } = useLang();
   const [copied, setCopied] = useState(false);
   const [linuxCmd, setLinuxCmd] = useState('');
   const [linuxCopied, setLinuxCopied] = useState(false);
@@ -39,98 +41,79 @@ export default function Deploy() {
     download('/api/deploy/launcher', 'winserv-deployer.cmd');
   }
 
+  const codeStyle = { background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 };
+
   return (
     <div>
       <div className="page-header">
-        <h1>Mass Deployment</h1>
+        <h1>{t('dep.title')}</h1>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>Domain-wide Agent Deployment</h3>
-        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>
-          Download the deployer script and run it on a domain-joined machine with <b>Domain Admin</b> rights.
-          The script will:
-        </p>
+        <h3>{t('dep.h1')}</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>{t('dep.p1')}</p>
         <ol style={{ color: 'var(--text-muted)', paddingLeft: 20, lineHeight: 2 }}>
-          <li>Discover all Windows Servers in your domain via Active Directory</li>
-          <li>Show an interactive grid — select servers with checkboxes</li>
-          <li>Remotely install the agent via <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>C$</code> admin share</li>
-          <li>Create scheduled task to run every 1 minute</li>
-          <li>Servers auto-register and appear in dashboard within 2 minutes</li>
+          <li>{t('dep.li1')}</li>
+          <li>{t('dep.li2')}</li>
+          <li>{t('dep.li3')}</li>
+          <li>{t('dep.li4')}</li>
+          <li>{t('dep.li5')}</li>
         </ol>
 
         <div style={{ marginTop: 20, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={handleDownload} style={{ fontSize: 16, padding: '12px 32px' }}>
-            Download deployer (.ps1)
-          </button>
-          <button className="secondary" onClick={handleDownloadLauncher} style={{ fontSize: 16, padding: '12px 24px' }}>
-            Download launcher (.cmd)
-          </button>
-          {copied && <span style={{ color: 'var(--success)' }}>Downloaded</span>}
+          <button onClick={handleDownload} style={{ fontSize: 16, padding: '12px 32px' }}>{t('dep.dlPs1')}</button>
+          <button className="secondary" onClick={handleDownloadLauncher} style={{ fontSize: 16, padding: '12px 24px' }}>{t('dep.dlCmd')}</button>
+          {copied && <span style={{ color: 'var(--success)' }}>{t('dep.downloaded')}</span>}
         </div>
         <div style={{ marginTop: 16, background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 16px' }}>
-          <b style={{ fontSize: 14 }}>Easiest way to run — no unblock, no manual admin:</b>
+          <b style={{ fontSize: 14 }}>{t('dep.easiest')}</b>
           <ol style={{ color: 'var(--text-muted)', paddingLeft: 20, lineHeight: 1.9, marginTop: 8, marginBottom: 0 }}>
-            <li>Download <b>both</b> files above into the <b>same folder</b>.</li>
-            <li>Double-click <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>winserv-deployer.cmd</code> — it requests admin (UAC) and runs the deployer with the execution policy bypassed.</li>
+            <li>{t('dep.easy1')}</li>
+            <li>{t('dep.easy2a')} <code style={codeStyle}>winserv-deployer.cmd</code> {t('dep.easy2b')}</li>
           </ol>
           <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 0' }}>
-            The .ps1 also self-elevates and unblocks itself, so running it directly with
-            <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>powershell -ExecutionPolicy Bypass -File winserv-deployer.ps1</code> works too.
+            {t('dep.psNoteA')} <code style={codeStyle}>powershell -ExecutionPolicy Bypass -File winserv-deployer.ps1</code> {t('dep.psNoteB')}
           </p>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>Manual Installation (single server)</h3>
-        <p style={{ color: 'var(--text-muted)', margin: '12px 0 0' }}>
-          For individual servers, use the <b>Agent Script</b> from the Settings page.
-        </p>
+        <h3>{t('dep.manualH')}</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '12px 0 0' }}>{t('dep.manualP')}</p>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>🐧 Linux agent (Ubuntu / Debian)</h3>
-        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>
-          Run this one-liner on the Linux host as root. It installs the agent and a systemd timer;
-          the host registers itself and appears in the dashboard within 1–2 minutes. Same features as
-          the Windows agent: metrics, processes, failed services, SSH brute-force, inventory, self-update.
-        </p>
+        <h3>{t('dep.linuxH')}</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>{t('dep.linuxP')}</p>
         {linuxCmd ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input readOnly value={linuxCmd} onFocus={e => e.target.select()}
-              style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }} />
-            <button type="button" className="secondary" onClick={copyLinux}>{linuxCopied ? 'Copied!' : 'Copy'}</button>
+            <input readOnly value={linuxCmd} onFocus={e => e.target.select()} style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }} />
+            <button type="button" className="secondary" onClick={copyLinux}>{linuxCopied ? t('dep.copied') : t('dep.copy')}</button>
           </div>
         ) : (
-          <button onClick={loadLinuxCmd}>Show install command</button>
+          <button onClick={loadLinuxCmd}>{t('dep.showCmd')}</button>
         )}
-        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 10 }}>
-          Needs only outbound HTTPS from the host. The command contains the registration key — treat it as a secret.
-        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 10 }}>{t('dep.linuxNote')}</p>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3>Update Agents</h3>
-        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>
-          To update agents on all servers: download the deployer script and re-run it.
-          It detects existing installations (shows version) and overwrites the agent.ps1 file.
-          The scheduled task is re-created with updated settings.
-        </p>
+        <h3>{t('dep.updateH')}</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>{t('dep.updateP1')}</p>
         <p style={{ color: 'var(--text-muted)' }}>
-          Scheduled task command: <code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, fontSize: 12 }}>schtasks /create /tn "WinServAgent" /s SERVER /ru SYSTEM /sc minute /mo 1 /tr "powershell.exe -ExecutionPolicy Bypass -File C:\winserv-agent\agent.ps1" /f</code>
+          {t('dep.updateP2')} <code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, fontSize: 12 }}>schtasks /create /tn "WinServAgent" /s SERVER /ru SYSTEM /sc minute /mo 1 /tr "powershell.exe -ExecutionPolicy Bypass -File C:\winserv-agent\agent.ps1" /f</code>
         </p>
       </div>
 
       <div className="card">
-        <h3>Requirements</h3>
+        <h3>{t('dep.reqH')}</h3>
         <ul style={{ color: 'var(--text-muted)', paddingLeft: 20, lineHeight: 2 }}>
-          <li><b>Active Directory PowerShell module</b> — on DC it's available; on Win10/11 run: <code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>Install-WindowsFeature RSAT-AD-PowerShell</code></li>
-          <li><b>Domain Admin rights</b> — local admin on each target (remote task creation)</li>
-          <li><b>Admin share C$</b> reachable — <b>TCP 445 (SMB)</b>, used to copy the agent</li>
-          <li><b>WinRM</b> — <b>TCP 5985</b>, preferred path for creating the task (<code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>Enable-PSRemoting -Force</code>). If it's unavailable the deployer falls back to <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>schtasks /s</code> over RPC (TCP 135 + 445), which is what makes legacy hosts work</li>
-          <li><b>PowerShell 3.0+ on the target</b> — the agent uses Get-CimInstance / ConvertTo-Json / Invoke-RestMethod. <b>Server 2008 SP2 ships with PS 2.0</b> and needs <b>WMF 3.0+</b> installed, otherwise the task runs but never reports. The deployer detects this and warns per host</li>
-          <li><b>ICMP not required</b> — hardened hosts often block ping; the deployer no longer gates on it</li>
-          <li>After install the agent needs <b>outbound HTTPS only</b> — no inbound ports</li>
+          <li><b>{t('dep.req1a')}</b> {t('dep.req1b')} <code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>Install-WindowsFeature RSAT-AD-PowerShell</code></li>
+          <li><b>{t('dep.req2a')}</b> {t('dep.req2b')}</li>
+          <li><b>{t('dep.req3a')}</b> {t('dep.req3b')} <b>TCP 445 (SMB)</b>, {t('dep.req3c')}</li>
+          <li><b>WinRM</b> — <b>TCP 5985</b>{t('dep.req4a')} (<code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>Enable-PSRemoting -Force</code>){t('dep.req4b')} <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4 }}>schtasks /s</code> {t('dep.req4c')}</li>
+          <li><b>{t('dep.req5a')}</b> {t('dep.req5b')} <b>{t('dep.req5c')}</b> {t('dep.req5d')} <b>WMF 3.0+</b> {t('dep.req5e')}</li>
+          <li><b>{t('dep.req6a')}</b> {t('dep.req6b')}</li>
+          <li>{t('dep.req7a')} <b>{t('dep.req7b')}</b> {t('dep.req7c')}</li>
         </ul>
       </div>
     </div>
