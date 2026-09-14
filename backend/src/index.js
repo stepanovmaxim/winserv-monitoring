@@ -31,6 +31,7 @@ const inventoryRoutes = require('./routes/inventory');
 const processRoutes = require('./routes/processes');
 const eventTriggerRoutes = require('./routes/eventTriggers');
 const streamRoutes = require('./routes/stream');
+const workstationRoutes = require('./routes/workstations');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
 const { rollupMetrics } = require('./services/rollupService');
@@ -120,6 +121,7 @@ async function start() {
   app.use('/api/health-report', ingestLimiter, healthReportRoutes);
   app.use('/api/inventory-report', ingestLimiter, inventoryRoutes);
   app.use('/api/process-report', ingestLimiter, processRoutes);
+  app.use('/api/workstations', workstationRoutes);
   app.use('/api/event-triggers', eventTriggerRoutes);
   app.use('/api/checks', checkRoutes);
   app.use('/api/alerts', alertRoutes);

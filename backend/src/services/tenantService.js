@@ -11,6 +11,25 @@ async function assignCustomerByDomain(serverId, hostname) {
   if (!server || server.customer_id) return;
   const domain = hostname.substring(hostname.indexOf('.') + 1).toLowerCase();
 
+  const customerId = await customerForDomain(domain);
+  if (customerId) {
+    // Assign every still-unowned machine of this domain, not just the caller.
+    await db.query(
+      `UPDATE servers SET customer_id = $1
+       WHERE customer_id IS NULL AND lower(substring(hostname from position('.' in hostname) + 1)) = $2`,
+      [customerId, domain]
+    );
+  }
+}
+
+// The customer that owns an AD domain, auto-onboarding a new one the same way a
+// server's domain is. Shared so workstations land with the same client as the
+// servers of their domain, given only the domain name (they report it directly,
+// rather than it being buried in a FQDN hostname). Returns a customer id or null.
+async function customerForDomain(rawDomain) {
+  const domain = String(rawDomain || '').trim().toLowerCase();
+  if (!domain || !domain.includes('.')) return null;
+
   let map = await db.queryOne('SELECT customer_id FROM domain_customers WHERE domain = $1', [domain]);
 
   if (!map) {
@@ -35,18 +54,11 @@ async function assignCustomerByDomain(serverId, hostname) {
       map = await db.queryOne('SELECT customer_id FROM domain_customers WHERE domain = $1', [domain]);
     } catch (err) {
       console.error('[Tenant] auto-onboard', err.message);
-      return;
+      return null;
     }
   }
 
-  if (map && map.customer_id) {
-    // Assign every still-unowned machine of this domain, not just the caller.
-    await db.query(
-      `UPDATE servers SET customer_id = $1
-       WHERE customer_id IS NULL AND lower(substring(hostname from position('.' in hostname) + 1)) = $2`,
-      [map.customer_id, domain]
-    );
-  }
+  return map && map.customer_id ? map.customer_id : null;
 }
 
-module.exports = { assignCustomerByDomain };
+module.exports = { assignCustomerByDomain, customerForDomain };

@@ -544,6 +544,65 @@ async function initSchema() {
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
   await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan','send_diag'))`);
 
+  // Domain PC inventory ("getcfg"). Workstations are NOT servers: they are not
+  // monitored, alerted on, or given commands - this is a configuration snapshot
+  // of the desktop fleet, collected by a GPO logon/scheduled script and relayed
+  // in. Kept in its own table so hundreds of PCs never dilute the server views.
+  //
+  // Identity is agent_uid (Windows MachineGuid), the same lesson learned for
+  // servers: hostname is renamed and re-imaged far too freely to be a key. A
+  // desktop fleet is usually deployed from one image, so a clone that was not
+  // sysprepped shares its MachineGuid - clone_of records the collision instead
+  // of letting two machines quietly overwrite one row.
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS workstations (
+      id SERIAL PRIMARY KEY,
+      agent_uid TEXT,
+      hostname TEXT DEFAULT '',
+      customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+      ad_domain TEXT DEFAULT '',
+      ad_ou TEXT DEFAULT '',
+      ad_site TEXT DEFAULT '',
+      manufacturer TEXT DEFAULT '',
+      model TEXT DEFAULT '',
+      serial TEXT DEFAULT '',
+      chassis TEXT DEFAULT '',
+      os_caption TEXT DEFAULT '',
+      os_version TEXT DEFAULT '',
+      os_build TEXT DEFAULT '',
+      cpu TEXT DEFAULT '',
+      cpu_cores INTEGER DEFAULT 0,
+      cpu_logical INTEGER DEFAULT 0,
+      ram_gb DOUBLE PRECISION DEFAULT 0,
+      disks_json TEXT DEFAULT '[]',
+      monitors_json TEXT DEFAULT '[]',
+      ip TEXT DEFAULT '',
+      mac TEXT DEFAULT '',
+      last_user TEXT DEFAULT '',
+      last_boot TIMESTAMPTZ,
+      last_patch_date DATE,
+      hotfixes_json TEXT DEFAULT '[]',
+      clone_of INTEGER,
+      relay_host TEXT DEFAULT '',
+      collected_at TIMESTAMPTZ,
+      first_seen TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ws_uid ON workstations(agent_uid) WHERE agent_uid IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_ws_customer ON workstations(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_ws_hostname ON workstations(LOWER(hostname));
+
+    CREATE TABLE IF NOT EXISTS workstation_software (
+      id SERIAL PRIMARY KEY,
+      workstation_id INTEGER REFERENCES workstations(id) ON DELETE CASCADE,
+      name TEXT DEFAULT '',
+      version TEXT DEFAULT '',
+      publisher TEXT DEFAULT '',
+      installed_on TEXT DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_ws_soft ON workstation_software(workstation_id, name);
+  `);
+
   console.log('PostgreSQL schema initialized');
 }
 
