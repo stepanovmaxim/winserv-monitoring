@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.53';
+const AGENT_VERSION = '2.54';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   const __lines = [
@@ -416,7 +416,7 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '  foreach ($f in $files) {',
     '    if (-not (Test-Budget 45)) { break }',
     '    try {',
-    '      $raw = Get-Content -LiteralPath $f.FullName -Raw -ErrorAction Stop',
+    '      $raw = Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8 -ErrorAction Stop',
     '      $obj = $raw | ConvertFrom-Json',
     '      [void]$batch.Add($obj); [void]$paths.Add($f.FullName)',
     '    } catch {',
