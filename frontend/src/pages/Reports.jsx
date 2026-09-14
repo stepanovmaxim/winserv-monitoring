@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Reports() {
+  const { t } = useLang();
   const [days, setDays] = useState(30);
   const [data, setData] = useState({ servers: [] });
   const [loading, setLoading] = useState(true);
@@ -33,35 +35,32 @@ export default function Reports() {
     return 'var(--danger)';
   }
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
 
   return (
     <div>
       <div className="page-header">
-        <h1>Uptime Report</h1>
+        <h1>{t('reports.title')}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={days} onChange={e => setDays(Number(e.target.value))}>
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
+            <option value={7}>{t('reports.last7')}</option>
+            <option value={30}>{t('reports.last30')}</option>
+            <option value={90}>{t('reports.last90')}</option>
           </select>
-          <button className="secondary" onClick={exportCsv}>Export CSV</button>
+          <button className="secondary" onClick={exportCsv}>{t('common.export')}</button>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <p style={{ color: 'var(--text-muted)' }}>
-          Uptime is derived from the hourly metric rollups. It measures availability since data collection
-          began, and becomes a true {days}-day figure as history accumulates.
-        </p>
+        <p style={{ color: 'var(--text-muted)' }}>{t('reports.desc', { d: days })}</p>
       </div>
 
       <div className="card">
         {data.servers.length === 0 ? (
-          <div className="empty"><p>No data yet</p></div>
+          <div className="empty"><p>{t('reports.empty')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>Server</th><th>Customer</th><th>Uptime</th><th>Samples</th></tr></thead>
+            <thead><tr><th>{t('common.server')}</th><th>{t('common.customer')}</th><th>{t('reports.uptime')}</th><th>{t('reports.samples')}</th></tr></thead>
             <tbody>
               {data.servers.map(s => (
                 <tr key={s.id}>

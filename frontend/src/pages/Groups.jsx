@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Groups() {
+  const { t } = useLang();
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -40,26 +42,26 @@ export default function Groups() {
   }
 
   async function handleDelete(id) {
-    if (!confirm('Delete this group? Servers in it will be ungrouped.')) return;
+    if (!confirm(t('groups.deleteConfirm'))) return;
     await api.deleteGroup(id);
     loadGroups();
   }
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
 
   return (
     <div>
       <div className="page-header">
-        <h1>Server Groups</h1>
-        <button onClick={openCreate}>+ New Group</button>
+        <h1>{t('groups.title')}</h1>
+        <button onClick={openCreate}>{t('groups.new')}</button>
       </div>
 
       <div className="card">
         {groups.length === 0 ? (
-          <div className="empty"><div className="empty-icon">📁</div><p>No groups yet</p></div>
+          <div className="empty"><div className="empty-icon">📁</div><p>{t('groups.empty')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>Name</th><th>Description</th><th>Servers</th><th></th></tr></thead>
+            <thead><tr><th>{t('common.name')}</th><th>{t('common.description')}</th><th>{t('groups.servers')}</th><th></th></tr></thead>
             <tbody>
               {groups.map(g => (
                 <tr key={g.id}>
@@ -67,8 +69,8 @@ export default function Groups() {
                   <td style={{ color: 'var(--text-muted)' }}>{g.description || '-'}</td>
                   <td>{g.server_count}</td>
                   <td>
-                    <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(g)}>Edit</button>
-                    <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => handleDelete(g.id)}>Del</button>
+                    <button style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(g)}>{t('common.edit')}</button>
+                    <button className="danger" style={{ padding: '4px 10px', fontSize: 12, marginLeft: 4 }} onClick={() => handleDelete(g.id)}>{t('common.del')}</button>
                   </td>
                 </tr>
               ))}
@@ -80,19 +82,19 @@ export default function Groups() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{editGroup ? 'Edit Group' : 'New Group'}</h2>
+            <h2>{editGroup ? t('groups.editTitle') : t('groups.newTitle')}</h2>
             <form onSubmit={handleSave}>
-              <div className="form-group"><label>Name *</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
-              <div className="form-group"><label>Description</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} /></div>
-              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Default thresholds (%) — empty inherits customer / global</label>
+              <div className="form-group"><label>{t('common.name')} *</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
+              <div className="form-group"><label>{t('common.description')}</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} /></div>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>{t('groups.thresholds')}</label>
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
-                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Mem &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
-                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>CPU &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.cpu_threshold} onChange={e => setForm({ ...form, cpu_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Mem &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder={t('common.inherit')} value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
               </div>
               <div className="form-actions">
-                <button type="submit">Save</button>
-                <button type="button" className="secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="submit">{t('common.save')}</button>
+                <button type="button" className="secondary" onClick={() => setShowModal(false)}>{t('common.cancel')}</button>
               </div>
             </form>
           </div>

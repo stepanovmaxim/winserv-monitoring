@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Audit() {
+  const { t } = useLang();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -12,28 +14,25 @@ export default function Audit() {
 
   useEffect(() => { load(); }, []);
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
 
   return (
     <div>
       <div className="page-header">
-        <h1>Action Audit</h1>
-        <button className="secondary" onClick={load}>Refresh</button>
+        <h1>{t('audit.title')}</h1>
+        <button className="secondary" onClick={load}>{t('common.refresh')}</button>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <p style={{ color: 'var(--text-muted)' }}>
-          Every hide/show toggle of a server action — from the web panel or the Telegram bot — is recorded here,
-          including who triggered it and when.
-        </p>
+        <p style={{ color: 'var(--text-muted)' }}>{t('audit.desc')}</p>
       </div>
 
       <div className="card">
         {rows.length === 0 ? (
-          <div className="empty"><p>No actions recorded yet</p></div>
+          <div className="empty"><p>{t('audit.empty')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>Time</th><th>Server</th><th>Action</th><th>New state</th><th>Source</th><th>By</th></tr></thead>
+            <thead><tr><th>{t('common.time')}</th><th>{t('common.server')}</th><th>{t('audit.action')}</th><th>{t('audit.state')}</th><th>{t('audit.source')}</th><th>{t('audit.by')}</th></tr></thead>
             <tbody>
               {rows.map(r => (
                 <tr key={r.id}>

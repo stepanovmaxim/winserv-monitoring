@@ -19,7 +19,7 @@ export function LanguageProvider({ children }) {
     try { localStorage.setItem('lang', l); } catch { /* ignore */ }
   }, []);
 
-  const t = useCallback((key) => translate(lang, key), [lang]);
+  const t = useCallback((key, params) => translate(lang, key, params), [lang]);
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Maintenance() {
+  const { t } = useLang();
   const [windows, setWindows] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -45,66 +47,64 @@ export default function Maintenance() {
     load();
   }
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
 
   return (
     <div>
-      <div className="page-header"><h1>Maintenance</h1></div>
+      <div className="page-header"><h1>{t('mnt.title')}</h1></div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3 style={{ marginBottom: 8 }}>Mute alerts</h3>
-        <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
-          Suppress all alerts (including offline) for a server, group, customer, or the whole fleet during planned work.
-        </p>
+        <h3 style={{ marginBottom: 8 }}>{t('mnt.mute')}</h3>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>{t('mnt.desc')}</p>
         <form onSubmit={submit} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 140px' }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Scope</label>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('mnt.scope')}</label>
             <select value={form.scope_type} onChange={e => setForm({ ...form, scope_type: e.target.value, scope_id: '' })}>
-              <option value="server">Server</option>
-              <option value="group">Group</option>
-              <option value="customer">Customer</option>
-              <option value="global">All servers</option>
+              <option value="server">{t('mnt.s.server')}</option>
+              <option value="group">{t('mnt.s.group')}</option>
+              <option value="customer">{t('mnt.s.customer')}</option>
+              <option value="global">{t('mnt.s.global')}</option>
             </select>
           </div>
           {form.scope_type !== 'global' && (
             <div style={{ flex: '1 1 180px' }}>
-              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Target</label>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.target')}</label>
               <select value={form.scope_id} onChange={e => setForm({ ...form, scope_id: e.target.value })} required>
-                <option value="">Select...</option>
-                {targets.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                <option value="">{t('common.select')}</option>
+                {targets.map(tg => <option key={tg.id} value={tg.id}>{tg.label}</option>)}
               </select>
             </div>
           )}
           <div style={{ flex: '0 1 130px' }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Minutes</label>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('mnt.minutes')}</label>
             <input type="number" min="5" value={form.duration_minutes} onChange={e => setForm({ ...form, duration_minutes: e.target.value })} />
           </div>
           <div style={{ flex: '1 1 200px' }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Reason</label>
-            <input value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} placeholder="e.g. patching + reboot" />
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('mnt.reason')}</label>
+            <input value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} placeholder={t('mnt.reasonPh')} />
           </div>
-          <button type="submit">Mute</button>
+          <button type="submit">{t('mnt.muteBtn')}</button>
         </form>
       </div>
 
       <div className="card">
-        <h3 style={{ marginBottom: 16 }}>Windows</h3>
+        <h3 style={{ marginBottom: 16 }}>{t('mnt.windows')}</h3>
         {windows.length === 0 ? (
-          <div className="empty"><p>No maintenance windows</p></div>
+          <div className="empty"><p>{t('mnt.empty')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>State</th><th>Scope</th><th>Target</th><th>From</th><th>To</th><th>Reason</th><th>By</th><th></th></tr></thead>
+            <thead><tr><th>{t('mnt.state')}</th><th>{t('mnt.scope')}</th><th>{t('common.target')}</th><th>{t('mnt.from')}</th><th>{t('mnt.to')}</th><th>{t('mnt.reason')}</th><th>{t('mnt.by')}</th><th></th></tr></thead>
             <tbody>
               {windows.map(w => (
                 <tr key={w.id}>
-                  <td><span className={`badge ${w.active ? 'badge-warning' : 'badge-viewer'}`}>{w.active ? 'ACTIVE' : 'scheduled/ended'}</span></td>
+                  <td><span className={`badge ${w.active ? 'badge-warning' : 'badge-viewer'}`}>{w.active ? t('mnt.active') : t('mnt.scheduled')}</span></td>
                   <td>{w.scope_type}</td>
                   <td>{w.scope_name || '-'}</td>
                   <td style={{ fontSize: 12 }}>{new Date(w.starts_at).toLocaleString()}</td>
                   <td style={{ fontSize: 12 }}>{new Date(w.ends_at).toLocaleString()}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{w.reason || '-'}</td>
                   <td style={{ fontSize: 12 }}>{w.created_by || '-'}</td>
-                  <td><button className="danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => cancel(w.id)}>Cancel</button></td>
+                  <td><button className="danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => cancel(w.id)}>{t('common.cancel')}</button></td>
                 </tr>
               ))}
             </tbody>

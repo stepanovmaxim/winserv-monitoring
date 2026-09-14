@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useLang } from '../context/LanguageContext';
 
 export default function Events() {
+  const { t } = useLang();
   const [servers, setServers] = useState([]);
   const [events, setEvents] = useState([]);
   const [selectedServer, setSelectedServer] = useState('');
@@ -19,14 +21,14 @@ export default function Events() {
   return (
     <div>
       <div className="page-header">
-        <h1>System Events</h1>
+        <h1>{t('events.title')}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={selectedServer} onChange={e => setSelectedServer(e.target.value)}>
-            <option value="">Select server...</option>
+            <option value="">{t('events.pick')}</option>
             {servers.map(s => <option key={s.id} value={s.id}>{s.hostname}</option>)}
           </select>
           <select value={level} onChange={e => setLevel(e.target.value)}>
-            <option value="">All Levels</option>
+            <option value="">{t('events.levels')}</option>
             <option value="Critical">Critical</option>
             <option value="Error">Error</option>
             <option value="Warning">Warning</option>
@@ -36,14 +38,14 @@ export default function Events() {
 
       <div className="card">
         {!selectedServer ? (
-          <div className="empty"><div className="empty-icon">⚠</div><p>Select a server to view its system events</p></div>
+          <div className="empty"><div className="empty-icon">⚠</div><p>{t('events.selectPrompt')}</p></div>
         ) : loading ? (
-          <div className="loading">Loading events...</div>
+          <div className="loading">{t('events.loading')}</div>
         ) : events.length === 0 ? (
-          <div className="empty"><p>No events found</p></div>
+          <div className="empty"><p>{t('events.empty')}</p></div>
         ) : (
           <table>
-            <thead><tr><th>Level</th><th>Source</th><th>Event ID</th><th>Message</th><th>Time</th></tr></thead>
+            <thead><tr><th>{t('events.level')}</th><th>{t('events.source')}</th><th>{t('events.id')}</th><th>{t('events.message')}</th><th>{t('common.time')}</th></tr></thead>
             <tbody>
               {events.map((e, i) => (
                 <tr key={i}>
