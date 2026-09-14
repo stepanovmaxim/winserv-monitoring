@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import { api } from '../api';
 
 export default function Servers() {
   const { user } = useAuth();
+  const { t } = useLang();
   const [searchParams] = useSearchParams();
   const [servers, setServers] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -297,23 +299,23 @@ export default function Servers() {
                     <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Memory &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.memory_threshold} onChange={e => setForm({ ...form, memory_threshold: e.target.value })} /></div>
                     <div style={{ flex: 1 }}><label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Disk &gt;</label><input type="number" min="1" max="100" placeholder="inherit" value={form.disk_threshold} onChange={e => setForm({ ...form, disk_threshold: e.target.value })} /></div>
                   </div>
-                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Инвентаризация ПК</label>
+                  <label style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>{t('srv.inv')}</label>
                   <div className="toggle-wrapper" onClick={() => setForm({ ...form, is_relay: !form.is_relay })} style={{ marginBottom: 8 }}>
                     <div className={`toggle ${form.is_relay ? 'on' : ''}`} />
-                    <span>Ретранслятор инвентаря (читает папку и шлёт данные ПК)</span>
+                    <span>{t('srv.relay')}</span>
                   </div>
                   {form.is_relay && (
                     <div className="form-group">
-                      <label>Локальная папка-дроп на этом хосте</label>
+                      <label>{t('srv.drop')}</label>
                       <input value={form.relay_drop} onChange={e => setForm({ ...form, relay_drop: e.target.value })} placeholder="C:\winserv-inv" />
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Эту папку опубликуйте как SMB-шару (напр. winserv-inv$), куда GPO-скрипт getcfg.ps1 складывает файлы.</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{t('srv.drop.hint')}</div>
                     </div>
                   )}
                 </>
               )}
               <div className="form-actions">
-                <button type="submit">Save</button>
-                <button type="button" className="secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="submit">{t('common.save')}</button>
+                <button type="button" className="secondary" onClick={() => setShowModal(false)}>{t('common.cancel')}</button>
               </div>
             </form>
           </div>

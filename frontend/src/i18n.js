@@ -25,6 +25,13 @@ export const translations = {
     'common.all': 'All',
     'common.close': 'Close',
     'common.none': 'no data',
+    'common.save': 'Save',
+    'common.cancel': 'Cancel',
+
+    'srv.inv': 'PC inventory',
+    'srv.relay': 'Inventory relay (reads the folder and sends PC data)',
+    'srv.drop': 'Local drop folder on this host',
+    'srv.drop.hint': 'Publish this folder as an SMB share (e.g. winserv-inv$) where the GPO script getcfg.ps1 drops files.',
 
     'ws.title': 'Workstations',
     'ws.search': 'Search: name, model, OS, user, OU…',
@@ -101,6 +108,13 @@ export const translations = {
     'common.all': 'Все',
     'common.close': 'Закрыть',
     'common.none': 'нет данных',
+    'common.save': 'Сохранить',
+    'common.cancel': 'Отмена',
+
+    'srv.inv': 'Инвентаризация ПК',
+    'srv.relay': 'Ретранслятор инвентаря (читает папку и шлёт данные ПК)',
+    'srv.drop': 'Локальная папка-дроп на этом хосте',
+    'srv.drop.hint': 'Эту папку опубликуйте как SMB-шару (напр. winserv-inv$), куда GPO-скрипт getcfg.ps1 складывает файлы.',
 
     'ws.title': 'Рабочие станции',
     'ws.search': 'Поиск: имя, модель, ОС, пользователь, OU…',
