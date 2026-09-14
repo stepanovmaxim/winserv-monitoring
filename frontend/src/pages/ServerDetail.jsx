@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLang } from '../context/LanguageContext';
 import { api } from '../api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ServerDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { t } = useLang();
   const [server, setServer] = useState(null);
   const [metrics, setMetrics] = useState([]);
   const [latest, setLatest] = useState(null);
@@ -69,68 +71,64 @@ export default function ServerDetail() {
 
   async function blockIp(ip) {
     if (!ip || ip === '-') return;
-    if (!confirm(`Block ${ip} on ${server.hostname}?`)) return;
+    if (!confirm(t('sd.blockConfirm', { ip, host: server.hostname }))) return;
     await api.queueCommand(Number(id), 'block_ip', ip);
-    alert(`Queued. Applies within ~1 min (agent v2.5+).`);
+    alert(t('sd.blockQueued'));
   }
 
   async function doReboot() {
-    if (!confirm(`Reboot ${server.hostname}? The agent will reboot it within ~1 minute.`)) return;
+    if (!confirm(t('sd.rebootConfirm', { host: server.hostname }))) return;
     await api.queueCommand(Number(id), 'reboot', '');
     loadCommands();
   }
 
   async function doRestartService() {
     if (!svc.trim()) return;
-    if (!confirm(`Restart service "${svc}" on ${server.hostname}?`)) return;
+    if (!confirm(t('sd.restartConfirm', { svc, host: server.hostname }))) return;
     await api.queueCommand(Number(id), 'restart_service', svc.trim());
     setSvc('');
     loadCommands();
   }
 
   async function doForceUpdate() {
-    if (!confirm(`Force the agent on ${server.hostname} to re-download and update now?`)) return;
+    if (!confirm(t('sd.forceConfirm', { host: server.hostname }))) return;
     await api.queueCommand(Number(id), 'force_update', '');
     loadCommands();
   }
 
   async function doKillProcess() {
-    const t = prompt('Process name or PID to terminate on ' + server.hostname + ':');
-    if (!t || !t.trim()) return;
-    await api.queueCommand(Number(id), 'kill_process', t.trim());
-    alert('Queued. The agent applies it within ~1 minute.');
+    const pv = prompt(t('sd.killPrompt', { host: server.hostname }));
+    if (!pv || !pv.trim()) return;
+    await api.queueCommand(Number(id), 'kill_process', pv.trim());
+    alert(t('sd.killQueued'));
     loadCommands();
   }
 
   async function doIsolate() {
-    const raw = prompt(
-      `ISOLATE ${server.hostname}?\n\n` +
-      'All inbound and outbound traffic is blocked except this monitoring server. ' +
-      'Use when a host is compromised or encrypting files.\n\n' +
-      'Auto-release after how many minutes?', '60');
+    const raw = prompt(t('sd.isoPrompt', { host: server.hostname }), '60');
     if (raw == null) return;
     const mins = parseInt(raw);
-    if (!mins || mins < 1) return alert('Enter a number of minutes.');
-    if (!confirm('Confirm isolation of ' + server.hostname + ' for ' + mins + ' minutes. Services on it will stop being reachable.')) return;
+    if (!mins || mins < 1) return alert(t('sd.isoMinErr'));
+    if (!confirm(t('sd.isoConfirm', { host: server.hostname, n: mins }))) return;
     await api.queueCommand(Number(id), 'isolate_host', String(mins));
-    alert('Isolation queued. It lifts itself after ' + mins + ' min even if the agent stops.');
+    alert(t('sd.isoQueued', { n: mins }));
     loadCommands();
   }
 
   async function doUnisolate() {
     await api.queueCommand(Number(id), 'unisolate_host', '');
-    alert('Queued: isolation will be lifted on the next check-in.');
+    alert(t('sd.unisoQueued'));
     loadCommands();
   }
 
   async function doScan(kind) {
     await api.queueCommand(Number(id), 'defender_scan', kind);
-    alert('Queued a ' + kind + ' Defender scan (signatures are updated first).');
+    alert(t('sd.scanQueued', { kind }));
     loadCommands();
   }
 
   async function doUninstall() {
-    if (!confirm(`Uninstall the agent from ${server.hostname}? It stops reporting and the scheduled task + files are removed. To re-add it, redeploy the agent.`)) return;
+    if (!confirm(t('sd.uninstallConfirm', { host: server.hostname }))) return;
     await api.queueCommand(Number(id), 'uninstall_agent', '');
     loadCommands();
   }
@@ -150,8 +148,8 @@ export default function ServerDetail() {
     setShowScript(true);
   }
 
-  if (loading) return <div className="loading">Loading...</div>;
-  if (!server) return <div className="empty">Server not found</div>;
+  if (loading) return <div className="loading">{t('common.loading')}</div>;
+  if (!server) return <div className="empty">{t('sd.notfound')}</div>;
 
   const chartData = metrics.map(m => rollupMode ? ({
     time: new Date(m.collected_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit' }),
@@ -172,23 +170,23 @@ export default function ServerDetail() {
     <div>
       <div className="page-header">
         <div>
-          <Link to="/servers" style={{ fontSize: 13, color: 'var(--text-muted)' }}>← Servers</Link>
+          <Link to="/servers" style={{ fontSize: 13, color: 'var(--text-muted)' }}>← {t('sd.back')}</Link>
           <h1>{server.display_name || server.hostname}</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={hours} onChange={e => setHours(Number(e.target.value))}>
-            <option value={1}>Last hour</option>
-            <option value={6}>Last 6 hours</option>
-            <option value={24}>Last 24 hours</option>
-            <option value={168}>Last 7 days</option>
-            <option value={720}>Last 30 days</option>
+            <option value={1}>{t('sd.last1h')}</option>
+            <option value={6}>{t('sd.last6h')}</option>
+            <option value={24}>{t('sd.last24h')}</option>
+            <option value={168}>{t('sd.last7d')}</option>
+            <option value={720}>{t('sd.last30d')}</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-4" style={{ marginBottom: 24 }}>
         <div className="card">
-          <div className="metric-label">Status</div>
+          <div className="metric-label">{t('sd.status')}</div>
           <div className="metric-value" style={{ fontSize: 16 }}><span className="status"><span className={`status-dot ${server.status}`} />{server.status}</span></div>
         </div>
         <div className="card">
@@ -197,14 +195,14 @@ export default function ServerDetail() {
           <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${Number(latestData.cpu_usage) || 0}%`, background: Number(latestData.cpu_usage) > 90 ? 'var(--danger)' : 'var(--primary)' }} /></div>
         </div>
         <div className="card">
-          <div className="metric-label">Memory</div>
+          <div className="metric-label">{t('sd.memory')}</div>
           <div className="metric-value">{latestData.memory_used_mb != null ? `${Number(latestData.memory_used_mb).toFixed(0)} / ${Number(latestData.memory_total_mb).toFixed(0)} MB` : '-'}</div>
           {latestData.memory_total_mb > 0 && (
             <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latestData.memory_used_mb) / Number(latestData.memory_total_mb)) * 100}%`, background: (Number(latestData.memory_used_mb) / Number(latestData.memory_total_mb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
           )}
         </div>
         <div className="card">
-          <div className="metric-label">Disk Total</div>
+          <div className="metric-label">{t('sd.diskTotal')}</div>
           <div className="metric-value" style={{ fontSize: 22 }}>{latestData.disk_used_gb != null ? `${Number(latestData.disk_used_gb).toFixed(0)} / ${Number(latestData.disk_total_gb).toFixed(0)} GB` : '-'}</div>
           {latestData.disk_total_gb > 0 && (
             <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${(Number(latestData.disk_used_gb) / Number(latestData.disk_total_gb)) * 100}%`, background: (Number(latestData.disk_used_gb) / Number(latestData.disk_total_gb)) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
@@ -216,16 +214,16 @@ export default function ServerDetail() {
         <div className="grid grid-3" style={{ marginBottom: 24 }}>
           {latestDisks.map((d, i) => (
             <div className="card" key={i}>
-              <div className="metric-label">Disk {d.drive}</div>
-              <div className="metric-value" style={{ fontSize: 18 }}>{Number(d.free_gb).toFixed(0)} GB free</div>
+              <div className="metric-label">{t('sd.diskLabel', { d: d.drive })}</div>
+              <div className="metric-value" style={{ fontSize: 18 }}>{t('sd.free', { n: Number(d.free_gb).toFixed(0) })}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{Number(d.used_gb).toFixed(0)} / {Number(d.total_gb).toFixed(0)} GB</div>
               <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${d.total_gb > 0 ? (d.used_gb / d.total_gb) * 100 : 0}%`, background: d.total_gb > 0 && (d.used_gb / d.total_gb) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
               {d.read_bytes_sec != null && (
                 <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-                  <span>Read:</span><span style={{ color: 'var(--text)' }}>{(Number(d.read_bytes_sec) / 1048576).toFixed(1)} MB/s</span>
-                  <span>Write:</span><span style={{ color: 'var(--text)' }}>{(Number(d.write_bytes_sec) / 1048576).toFixed(1)} MB/s</span>
-                  <span>Busy:</span><span style={{ color: Number(d.disk_time_pct) > 80 ? 'var(--danger)' : 'var(--text)' }}>{Number(d.disk_time_pct).toFixed(0)}%</span>
-                  <span>Queue:</span><span style={{ color: 'var(--text)' }}>{Number(d.queue_length).toFixed(1)}</span>
+                  <span>{t('sd.read')}</span><span style={{ color: 'var(--text)' }}>{(Number(d.read_bytes_sec) / 1048576).toFixed(1)} MB/s</span>
+                  <span>{t('sd.write')}</span><span style={{ color: 'var(--text)' }}>{(Number(d.write_bytes_sec) / 1048576).toFixed(1)} MB/s</span>
+                  <span>{t('sd.busy')}</span><span style={{ color: Number(d.disk_time_pct) > 80 ? 'var(--danger)' : 'var(--text)' }}>{Number(d.disk_time_pct).toFixed(0)}%</span>
+                  <span>{t('sd.queue')}</span><span style={{ color: 'var(--text)' }}>{Number(d.queue_length).toFixed(1)}</span>
                 </div>
               )}
             </div>
@@ -234,37 +232,37 @@ export default function ServerDetail() {
       )}
 
       <div className="tabs">
-        <button className={`tab ${tab === 'metrics' ? 'active' : ''}`} onClick={() => setTab('metrics')}>Metrics</button>
-        <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>System Events</button>
-        <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>Info</button>
-        <button className={`tab ${tab === 'health' ? 'active' : ''}`} onClick={() => { setTab('health'); loadHealth(); }}>Health</button>
-        <button className={`tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => { setTab('inventory'); loadInventory(); }}>Inventory</button>
-        <button className={`tab ${tab === 'processes' ? 'active' : ''}`} onClick={() => { setTab('processes'); loadProcesses(); }}>Processes</button>
-        {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>Agent</button>}
-        {user?.role === 'admin' && <button className={`tab ${tab === 'control' ? 'active' : ''}`} onClick={() => { setTab('control'); loadCommands(); }}>Control</button>}
-        {user?.role === 'admin' && <button className={`tab ${tab === 'security' ? 'active' : ''}`} onClick={() => { setTab('security'); loadSecurity(); }}>Security</button>}
+        <button className={`tab ${tab === 'metrics' ? 'active' : ''}`} onClick={() => setTab('metrics')}>{t('sd.tabMetrics')}</button>
+        <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>{t('sd.tabEvents')}</button>
+        <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>{t('sd.tabInfo')}</button>
+        <button className={`tab ${tab === 'health' ? 'active' : ''}`} onClick={() => { setTab('health'); loadHealth(); }}>{t('sd.tabHealth')}</button>
+        <button className={`tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => { setTab('inventory'); loadInventory(); }}>{t('sd.tabInventory')}</button>
+        <button className={`tab ${tab === 'processes' ? 'active' : ''}`} onClick={() => { setTab('processes'); loadProcesses(); }}>{t('sd.tabProcesses')}</button>
+        {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>{t('sd.tabAgent')}</button>}
+        {user?.role === 'admin' && <button className={`tab ${tab === 'control' ? 'active' : ''}`} onClick={() => { setTab('control'); loadCommands(); }}>{t('sd.tabControl')}</button>}
+        {user?.role === 'admin' && <button className={`tab ${tab === 'security' ? 'active' : ''}`} onClick={() => { setTab('security'); loadSecurity(); }}>{t('sd.tabSecurity')}</button>}
       </div>
 
       {tab === 'metrics' && (
         <div>
           {chartData.length === 0 ? (
-            <div className="empty"><p>No metrics data yet</p></div>
+            <div className="empty"><p>{t('sd.noMetrics')}</p></div>
           ) : (
             <>
               <div className="card" style={{ marginBottom: 16 }}>
-                <h3 style={{ marginBottom: 16 }}>CPU Usage %</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('sd.cpuChart')}</h3>
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={chartData}><CartesianGrid stroke="var(--border)" strokeDasharray="3 3" /><XAxis dataKey="time" /><YAxis domain={[0, 100]} /><Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }} /><Line type="monotone" dataKey="cpu" stroke="var(--primary)" dot={false} /></LineChart>
                 </ResponsiveContainer>
               </div>
               <div className="card" style={{ marginBottom: 16 }}>
-                <h3 style={{ marginBottom: 16 }}>Memory Usage %</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('sd.memChart')}</h3>
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={chartData}><CartesianGrid stroke="var(--border)" strokeDasharray="3 3" /><XAxis dataKey="time" /><YAxis domain={[0, 100]} /><Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }} /><Line type="monotone" dataKey="mem" stroke="var(--warning)" dot={false} /></LineChart>
                 </ResponsiveContainer>
               </div>
               <div className="card">
-                <h3 style={{ marginBottom: 16 }}>Disk Usage %</h3>
+                <h3 style={{ marginBottom: 16 }}>{t('sd.diskChart')}</h3>
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={chartData}><CartesianGrid stroke="var(--border)" strokeDasharray="3 3" /><XAxis dataKey="time" /><YAxis domain={[0, 100]} /><Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }} /><Line type="monotone" dataKey="disk" stroke="var(--success)" dot={false} /></LineChart>
                 </ResponsiveContainer>
@@ -277,10 +275,10 @@ export default function ServerDetail() {
       {tab === 'events' && (
         <div className="card">
           {events.length === 0 ? (
-            <div className="empty"><p>No events recorded</p></div>
+            <div className="empty"><p>{t('sd.noEvents')}</p></div>
           ) : (
             <table>
-              <thead><tr><th>Level</th><th>Source</th><th>Event ID</th><th>Message</th><th>Time</th></tr></thead>
+              <thead><tr><th>{t('events.level')}</th><th>{t('events.source')}</th><th>{t('events.id')}</th><th>{t('events.message')}</th><th>{t('common.time')}</th></tr></thead>
               <tbody>
                 {events.map((e, i) => (
                   <tr key={i}>
@@ -300,14 +298,14 @@ export default function ServerDetail() {
       {tab === 'info' && (
         <div className="card">
           <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 24px' }}>
-            <dt style={{ color: 'var(--text-muted)' }}>Reports as:</dt><dd title="The name the agent registers with — identity, not a label">{server.hostname}</dd>
-            <dt style={{ color: 'var(--text-muted)' }}>IP Address:</dt><dd>{server.ip_address || '-'}</dd>
-            <dt style={{ color: 'var(--text-muted)' }}>OS:</dt><dd>{server.os_info || '-'}</dd>
-            <dt style={{ color: 'var(--text-muted)' }}>Customer:</dt><dd>{server.customer_name || '—'}</dd>
-            <dt style={{ color: 'var(--text-muted)' }}>Group:</dt><dd>{server.group_name || '-'}</dd>
-            <dt style={{ color: 'var(--text-muted)' }}>Status:</dt><dd><span className="status"><span className={`status-dot ${server.status}`} />{server.status}</span></dd>
-            <dt style={{ color: 'var(--text-muted)' }}>Last Seen:</dt><dd>{server.last_seen || 'Never'}</dd>
-            <dt style={{ color: 'var(--text-muted)' }}>Registered:</dt><dd>{new Date(server.created_at).toLocaleString()}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.reportsAs')}</dt><dd title={t('sd.reportsAsTitle')}>{server.hostname}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.ip')}</dt><dd>{server.ip_address || '-'}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.os')}</dt><dd>{server.os_info || '-'}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.customer')}</dt><dd>{server.customer_name || '—'}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.group')}</dt><dd>{server.group_name || '-'}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.status')}:</dt><dd><span className="status"><span className={`status-dot ${server.status}`} />{server.status}</span></dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.lastSeen')}</dt><dd>{server.last_seen || t('common.never')}</dd>
+            <dt style={{ color: 'var(--text-muted)' }}>{t('sd.registered')}</dt><dd>{new Date(server.created_at).toLocaleString()}</dd>
           </dl>
         </div>
       )}
@@ -315,28 +313,28 @@ export default function ServerDetail() {
       {tab === 'health' && (
         <div className="card">
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0 }}>Health</h3>
-            {server.pending_reboot ? <span className="badge badge-warning">Reboot pending</span> : <span className="badge badge-viewer">No reboot pending</span>}
-            {server.health_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>updated {new Date(server.health_at).toLocaleString()}</span>}
+            <h3 style={{ margin: 0 }}>{t('sd.health')}</h3>
+            {server.pending_reboot ? <span className="badge badge-warning">{t('sd.rebootPending')}</span> : <span className="badge badge-viewer">{t('sd.noReboot')}</span>}
+            {server.health_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('sd.updated', { t: new Date(server.health_at).toLocaleString() })}</span>}
           </div>
           {!server.health_at ? (
-            <div className="empty"><p>No health data yet — requires agent v2.6+ on this host.</p></div>
+            <div className="empty"><p>{t('sd.noHealth')}</p></div>
           ) : health.length === 0 ? (
-            <div className="empty"><p>✓ All healthy — no stopped services, expiring certs, or failed tasks.</p></div>
+            <div className="empty"><p>{t('sd.allHealthy')}</p></div>
           ) : (
             <table>
-              <thead><tr><th>Type</th><th>Item</th><th>Detail</th></tr></thead>
+              <thead><tr><th>{t('sd.hType')}</th><th>{t('sd.hItem')}</th><th>{t('sd.hDetail')}</th></tr></thead>
               <tbody>
                 {health.map(h => (
                   <tr key={h.id}>
                     <td>
                       <span className={`badge ${h.kind === 'service_stopped' ? 'badge-error' : h.kind === 'cert_expiring' ? 'badge-warning' : 'badge-error'}`}>
-                        {h.kind === 'service_stopped' ? 'Service down' : h.kind === 'cert_expiring' ? 'Cert expiring' : 'Task failed'}
+                        {h.kind === 'service_stopped' ? t('sd.svcDown') : h.kind === 'cert_expiring' ? t('sd.certExp') : t('sd.taskFailed')}
                       </span>
                     </td>
                     <td>{h.name || '-'}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {h.kind === 'cert_expiring' && h.expires_at ? `expires ${new Date(h.expires_at).toLocaleDateString()}` : (h.detail || '-')}
+                      {h.kind === 'cert_expiring' && h.expires_at ? t('sd.expires', { d: new Date(h.expires_at).toLocaleDateString() }) : (h.detail || '-')}
                     </td>
                   </tr>
                 ))}
@@ -349,26 +347,26 @@ export default function ServerDetail() {
       {tab === 'inventory' && (
         <div className="card">
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0 }}>Inventory</h3>
-            {server.inventory_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>updated {new Date(server.inventory_at).toLocaleString()}</span>}
+            <h3 style={{ margin: 0 }}>{t('sd.inventory')}</h3>
+            {server.inventory_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('sd.updated', { t: new Date(server.inventory_at).toLocaleString() })}</span>}
           </div>
           {!inventory ? (
-            <div className="empty"><p>Loading…</p></div>
+            <div className="empty"><p>{t('common.loading')}</p></div>
           ) : !server.inventory_at ? (
-            <div className="empty"><p>No inventory yet — requires agent v2.12+ on this host (collected once a day).</p></div>
+            <div className="empty"><p>{t('sd.noInventory')}</p></div>
           ) : (
             <>
               {inventory.hardware && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 24 }}>
                   {[
-                    ['Manufacturer', inventory.hardware.manufacturer],
-                    ['Model', inventory.hardware.model],
-                    ['Serial', inventory.hardware.serial],
-                    ['OS', `${inventory.hardware.os_caption || ''} ${inventory.hardware.os_build ? '(build ' + inventory.hardware.os_build + ')' : ''}`.trim()],
+                    [t('sd.iManuf'), inventory.hardware.manufacturer],
+                    [t('sd.iModel'), inventory.hardware.model],
+                    [t('sd.iSerial'), inventory.hardware.serial],
+                    [t('sd.iOs'), `${inventory.hardware.os_caption || ''} ${inventory.hardware.os_build ? '(build ' + inventory.hardware.os_build + ')' : ''}`.trim()],
                     ['CPU', inventory.hardware.cpu],
-                    ['Cores / threads', `${inventory.hardware.cpu_cores || '?'} / ${inventory.hardware.cpu_logical || '?'}`],
-                    ['RAM', inventory.hardware.ram_gb ? `${inventory.hardware.ram_gb} GB` : '-'],
-                    ['Disks', (inventory.hardware.disks || []).map(d => `${d.model || 'disk'} ${d.size_gb ? d.size_gb + ' GB' : ''}`.trim()).join('; ') || '-'],
+                    [t('sd.iCores'), `${inventory.hardware.cpu_cores || '?'} / ${inventory.hardware.cpu_logical || '?'}`],
+                    [t('sd.iRam'), inventory.hardware.ram_gb ? `${inventory.hardware.ram_gb} GB` : '-'],
+                    [t('sd.iDisks'), (inventory.hardware.disks || []).map(d => `${d.model || 'disk'} ${d.size_gb ? d.size_gb + ' GB' : ''}`.trim()).join('; ') || '-'],
                   ].map(([k, v]) => (
                     <div key={k} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
                       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text-muted)' }}>{k}</div>
@@ -385,15 +383,15 @@ export default function ServerDetail() {
                 const hf = inventory.hardware.hotfixes || [];
                 return (
                   <div style={{ marginBottom: 24 }}>
-                    <h4 style={{ margin: '0 0 10px' }}>Windows patches</h4>
+                    <h4 style={{ margin: '0 0 10px' }}>{t('sd.patches')}</h4>
                     <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 10 }}>
-                      <span style={{ fontSize: 15 }}>Last installed:</span>
-                      <strong style={{ color: col }}>{lp ? new Date(lp).toLocaleDateString() : 'unknown'}</strong>
-                      {days != null && <span style={{ color: col, fontSize: 13 }}>({days} days ago{days > 35 ? ' — behind on patches' : ''})</span>}
+                      <span style={{ fontSize: 15 }}>{t('sd.lastInstalled')}</span>
+                      <strong style={{ color: col }}>{lp ? new Date(lp).toLocaleDateString() : t('sd.unknown')}</strong>
+                      {days != null && <span style={{ color: col, fontSize: 13 }}>{t('sd.daysAgo', { n: days, behind: days > 35 ? t('sd.behind') : '' })}</span>}
                     </div>
                     {hf.length > 0 && (
                       <details>
-                        <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>Recent hotfixes ({hf.length})</summary>
+                        <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>{t('sd.hotfixes', { n: hf.length })}</summary>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                           {hf.map((h, i) => (
                             <span key={i} style={{ fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px' }} title={h.installed_on || ''}>
@@ -408,15 +406,15 @@ export default function ServerDetail() {
               })()}
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-                <h4 style={{ margin: 0 }}>Installed software ({inventory.software.length})</h4>
-                <input placeholder="Filter…" value={swFilter} onChange={e => setSwFilter(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />
+                <h4 style={{ margin: 0 }}>{t('sd.installedSw', { n: inventory.software.length })}</h4>
+                <input placeholder={t('sd.filter')} value={swFilter} onChange={e => setSwFilter(e.target.value)} style={{ width: 200, marginLeft: 'auto' }} />
               </div>
               {inventory.software.length === 0 ? (
-                <div className="empty"><p>No software list collected.</p></div>
+                <div className="empty"><p>{t('sd.noSw')}</p></div>
               ) : (
                 <div style={{ maxHeight: 480, overflowY: 'auto' }}>
                   <table>
-                    <thead><tr><th>Name</th><th>Version</th><th>Publisher</th></tr></thead>
+                    <thead><tr><th>{t('sd.swName')}</th><th>{t('sd.swVer')}</th><th>{t('sd.swPub')}</th></tr></thead>
                     <tbody>
                       {inventory.software
                         .filter(s => !swFilter || (s.name + ' ' + (s.publisher || '')).toLowerCase().includes(swFilter.toLowerCase()))
@@ -439,23 +437,23 @@ export default function ServerDetail() {
       {tab === 'processes' && (
         <div className="card">
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0 }}>Top processes</h3>
-            {server.processes_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>updated {new Date(server.processes_at).toLocaleString()}</span>}
+            <h3 style={{ margin: 0 }}>{t('sd.topProc')}</h3>
+            {server.processes_at && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('sd.updated', { t: new Date(server.processes_at).toLocaleString() })}</span>}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-              <button className={procSort === 'cpu' ? '' : 'secondary'} style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setProcSort('cpu')}>By CPU</button>
-              <button className={procSort === 'mem' ? '' : 'secondary'} style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setProcSort('mem')}>By RAM</button>
+              <button className={procSort === 'cpu' ? '' : 'secondary'} style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setProcSort('cpu')}>{t('sd.byCpu')}</button>
+              <button className={procSort === 'mem' ? '' : 'secondary'} style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setProcSort('mem')}>{t('sd.byRam')}</button>
               <button className="secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={loadProcesses}>↻</button>
             </div>
           </div>
           {!processes ? (
-            <div className="empty"><p>Loading…</p></div>
+            <div className="empty"><p>{t('common.loading')}</p></div>
           ) : !server.processes_at ? (
-            <div className="empty"><p>No process data yet — requires agent v2.12+ on this host (refreshed every few minutes).</p></div>
+            <div className="empty"><p>{t('sd.noProcData')}</p></div>
           ) : processes.length === 0 ? (
-            <div className="empty"><p>No processes reported.</p></div>
+            <div className="empty"><p>{t('sd.noProc')}</p></div>
           ) : (
             <table>
-              <thead><tr><th>Process</th><th>PID</th><th>CPU %</th><th>RAM (MB)</th></tr></thead>
+              <thead><tr><th>{t('sd.pProc')}</th><th>{t('sd.pPid')}</th><th>{t('sd.pCpu')}</th><th>{t('sd.pRam')}</th></tr></thead>
               <tbody>
                 {[...processes].sort((a, b) => procSort === 'cpu' ? b.cpu_pct - a.cpu_pct : b.mem_mb - a.mem_mb).map((p, i) => (
                   <tr key={i}>
@@ -473,16 +471,16 @@ export default function ServerDetail() {
 
       {tab === 'agent' && (
         <div className="card">
-          <h3>Agent Configuration</h3>
+          <h3>{t('sd.agentConfig')}</h3>
           <div className="form-group" style={{ marginTop: 16 }}>
-            <label>Agent Token</label>
+            <label>{t('sd.agentToken')}</label>
             <div className="script-container" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <code style={{ flex: 1, wordBreak: 'break-all' }}>{token || 'Loading...'}</code>
+              <code style={{ flex: 1, wordBreak: 'break-all' }}>{token || t('common.loading')}</code>
             </div>
           </div>
           <div className="form-actions">
-            {token && <button className="secondary" onClick={regenerateToken}>Regenerate Token</button>}
-            <button onClick={loadScript}>Show Agent Script</button>
+            {token && <button className="secondary" onClick={regenerateToken}>{t('sd.regenToken')}</button>}
+            <button onClick={loadScript}>{t('sd.showScript')}</button>
           </div>
 
           {showScript && (
@@ -495,52 +493,49 @@ export default function ServerDetail() {
 
       {tab === 'control' && (
         <div className="card">
-          <h3>Remote control</h3>
+          <h3>{t('sd.remoteControl')}</h3>
           <p style={{ color: 'var(--text-muted)', margin: '8px 0 16px' }}>
-            Commands are queued and executed by the agent on its next check-in (within ~1 minute).
-            Requires agent v2.3+ on the host.
+            {t('sd.controlNote')}
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 16 }}>
             <div style={{ flex: '1 1 220px' }}>
-              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Service name</label>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('sd.svcName')}</label>
               <input value={svc} onChange={e => setSvc(e.target.value)} placeholder="e.g. MSSQLSERVER, Spooler, W3SVC" />
             </div>
-            <button onClick={doRestartService}>Restart service</button>
-            <button className="secondary" onClick={doForceUpdate}>Force update</button>
-            <button className="danger" onClick={doReboot}>Reboot server</button>
+            <button onClick={doRestartService}>{t('sd.restartSvc')}</button>
+            <button className="secondary" onClick={doForceUpdate}>{t('sd.forceUpdate')}</button>
+            <button className="danger" onClick={doReboot}>{t('sd.reboot')}</button>
           </div>
 
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginBottom: 16 }}>
-            <div style={{ fontSize: 13, marginBottom: 8 }}><b>Incident response</b> <span style={{ color: 'var(--text-muted)' }}>— agent v2.24+</span></div>
+            <div style={{ fontSize: 13, marginBottom: 8 }}><b>{t('sd.incident')}</b> <span style={{ color: 'var(--text-muted)' }}>— agent v2.24+</span></div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button className="secondary" onClick={() => doScan('quick')}>Defender quick scan</button>
-              <button className="secondary" onClick={() => doScan('full')}>Full scan</button>
-              <button className="secondary" onClick={doKillProcess}>Kill process…</button>
-              <button className="danger" onClick={doIsolate}>Isolate host…</button>
-              <button className="secondary" onClick={doUnisolate}>Lift isolation</button>
+              <button className="secondary" onClick={() => doScan('quick')}>{t('sd.quickScan')}</button>
+              <button className="secondary" onClick={() => doScan('full')}>{t('sd.fullScan')}</button>
+              <button className="secondary" onClick={doKillProcess}>{t('sd.killProc')}</button>
+              <button className="danger" onClick={doIsolate}>{t('sd.isolate')}</button>
+              <button className="secondary" onClick={doUnisolate}>{t('sd.liftIso')}</button>
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-              Isolation blocks all traffic except this monitoring server and <b>releases itself automatically</b> after the
-              chosen time — a scheduled task on the host removes the rules even if the agent stops, so a host can never be
-              stranded.
+              {t('sd.isoNote')}
             </div>
           </div>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>Stop monitoring this server — removes the agent (scheduled task + files) from the host.</div>
-            <button className="danger" onClick={doUninstall}>Uninstall agent</button>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>{t('sd.stopMon')}</div>
+            <button className="danger" onClick={doUninstall}>{t('sd.uninstall')}</button>
           </div>
 
-          <h3 style={{ margin: '16px 0 8px' }}>Recent commands</h3>
+          <h3 style={{ margin: '16px 0 8px' }}>{t('sd.recentCmds')}</h3>
           {commands.length === 0 ? (
-            <div className="empty"><p>No commands yet</p></div>
+            <div className="empty"><p>{t('sd.noCmds')}</p></div>
           ) : (
             <table>
-              <thead><tr><th>Time</th><th>Command</th><th>Status</th><th>Result</th><th>By</th></tr></thead>
+              <thead><tr><th>{t('common.time')}</th><th>{t('sd.cCmd')}</th><th>{t('common.status')}</th><th>{t('sd.cResult')}</th><th>{t('audit.by')}</th></tr></thead>
               <tbody>
                 {commands.map(c => (
                   <tr key={c.id}>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(c.created_at).toLocaleString()}</td>
-                    <td>{c.ctype === 'reboot' ? 'reboot' : c.ctype === 'block_ip' ? `block ${c.param}` : c.ctype === 'uninstall_agent' ? 'uninstall agent' : c.ctype === 'force_update' ? 'force update' : `restart ${c.param}`}</td>
+                    <td>{c.ctype === 'reboot' ? t('sd.cmdReboot') : c.ctype === 'block_ip' ? t('sd.cmdBlock', { ip: c.param }) : c.ctype === 'uninstall_agent' ? t('sd.cmdUninstall') : c.ctype === 'force_update' ? t('sd.cmdForce') : t('sd.cmdRestart', { svc: c.param })}</td>
                     <td><span className={`badge ${c.status === 'done' ? 'badge-viewer' : c.status === 'failed' ? 'badge-error' : 'badge-warning'}`}>{c.status}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.result || '-'}</td>
                     <td style={{ fontSize: 12 }}>{c.requested_by || '-'}</td>
@@ -554,24 +549,24 @@ export default function ServerDetail() {
 
       {tab === 'security' && (
         <div className="card">
-          <h3 style={{ marginBottom: 8 }}>Recent logons</h3>
+          <h3 style={{ marginBottom: 8 }}>{t('sd.recentLogons')}</h3>
           <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
-            Failed (4625) and RDP (4624) logons from the Security log. Requires agent v2.5+.
+            {t('sd.logonsNote')}
           </p>
           {secEvents.length === 0 ? (
-            <div className="empty"><p>No security events recorded</p></div>
+            <div className="empty"><p>{t('sd.noSecEvents')}</p></div>
           ) : (
             <table>
-              <thead><tr><th>Result</th><th>Account</th><th>Source IP</th><th>Type</th><th>Time</th><th></th></tr></thead>
+              <thead><tr><th>{t('sd.sResult')}</th><th>{t('sd.sAccount')}</th><th>{t('sd.sSourceIp')}</th><th>{t('sd.sType')}</th><th>{t('common.time')}</th><th></th></tr></thead>
               <tbody>
                 {secEvents.map(e => (
                   <tr key={e.id}>
-                    <td><span className={`badge ${e.event === 'fail' ? 'badge-error' : 'badge-viewer'}`}>{e.event === 'fail' ? 'FAIL' : 'OK'}</span></td>
+                    <td><span className={`badge ${e.event === 'fail' ? 'badge-error' : 'badge-viewer'}`}>{e.event === 'fail' ? t('sd.fail') : t('sd.ok')}</span></td>
                     <td>{e.account || '-'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{e.ip || '-'}</td>
                     <td style={{ fontSize: 12 }}>{e.logon_type === '10' ? 'RDP' : e.logon_type}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(e.recorded_at || e.created_at).toLocaleString()}</td>
-                    <td>{e.event === 'fail' && e.ip && e.ip !== '-' && <button className="danger" style={{ padding: '2px 10px', fontSize: 12 }} onClick={() => blockIp(e.ip)}>Block</button>}</td>
+                    <td>{e.event === 'fail' && e.ip && e.ip !== '-' && <button className="danger" style={{ padding: '2px 10px', fontSize: 12 }} onClick={() => blockIp(e.ip)}>{t('sd.block')}</button>}</td>
                   </tr>
                 ))}
               </tbody>
