@@ -1,10 +1,43 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 const { generateUniversalScript } = require('./agent');
 const { requireUnrestricted } = require('../services/scopeService');
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
+
+// The getcfg collector and its GPO startup wrapper live in the repo's tools/
+// folder (pulled to the server alongside the app). The panel serves them so an
+// operator never has to find the files on disk.
+const TOOLS_DIR = path.join(__dirname, '..', '..', '..', 'tools');
+
+// One UNC path, sanitised: only the characters a Windows share path can hold, so
+// nothing an operator types can inject extra commands into the generated .cmd.
+function cleanUnc(v, fallback) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return fallback;
+  if (!/^[\\A-Za-z0-9 ._$:/-]+$/.test(s)) return fallback;
+  return s;
+}
+
+// Build the GPO startup wrapper for the paths the operator entered. It forces
+// -ExecutionPolicy Bypass (a plain "PowerShell Scripts" GPO entry does not, so
+// the .ps1 would never run on a default-Restricted client) and pins both the
+// script path and the drop share.
+function generateGetcfgLauncher(scriptPath, dropShare) {
+  const sp = cleanUnc(scriptPath, '\\\\your-domain\\NETLOGON\\getcfg.ps1');
+  const dr = cleanUnc(dropShare, '\\\\DC01\\winserv-inv$');
+  return [
+    '@echo off',
+    'REM WinServ getcfg - GPO startup wrapper. Point a Computer > Startup >',
+    'REM "Scripts" (NOT "PowerShell Scripts") entry at this file.',
+    'REM Forces ExecutionPolicy Bypass so the .ps1 runs under the default policy.',
+    'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + sp + '" -DropShare "' + dr + '"',
+    'exit /b 0',
+  ].join('\r\n');
+}
 
 function generateDeployerScript(serverUrl, regKey) {
   const agentPs = generateUniversalScript(serverUrl, regKey, process.env.FALLBACK_URL || '');
@@ -393,5 +426,25 @@ router.get('/launcher', requireAuth, requireAdmin, requireUnrestricted, (req, re
   res.send(generateLauncherCmd());
 });
 
+// PC inventory collector (getcfg.ps1), served verbatim from tools/.
+router.get('/getcfg', requireAuth, requireAdmin, requireUnrestricted, (req, res) => {
+  try {
+    const script = fs.readFileSync(path.join(TOOLS_DIR, 'getcfg.ps1'), 'utf-8');
+    res.type('text/plain; charset=utf-8');
+    res.send(script);
+  } catch (err) {
+    console.error('[Deploy] getcfg.ps1 read failed:', err.message);
+    res.status(500).type('text/plain').send('getcfg.ps1 not found on the server');
+  }
+});
+
+// GPO startup wrapper, generated for the operator's NETLOGON path + drop share.
+router.get('/getcfg-launcher', requireAuth, requireAdmin, requireUnrestricted, (req, res) => {
+  res.type('text/plain; charset=utf-8');
+  res.send(generateGetcfgLauncher(req.query.script, req.query.drop));
+});
+
 module.exports = router;
 module.exports.generateDeployerScript = generateDeployerScript;
+module.exports.generateGetcfgLauncher = generateGetcfgLauncher;
+module.exports.cleanUnc = cleanUnc;

@@ -7,6 +7,8 @@ export default function Deploy() {
   const [copied, setCopied] = useState(false);
   const [linuxCmd, setLinuxCmd] = useState('');
   const [linuxCopied, setLinuxCopied] = useState(false);
+  const [getcfgScript, setGetcfgScript] = useState('\\\\your-domain\\NETLOGON\\getcfg.ps1');
+  const [getcfgDrop, setGetcfgDrop] = useState('\\\\DC01\\winserv-inv$');
 
   async function loadLinuxCmd() {
     const d = await api.getLinuxOneLiner();
@@ -80,6 +82,34 @@ export default function Deploy() {
       <div className="card" style={{ marginBottom: 24 }}>
         <h3>{t('dep.manualH')}</h3>
         <p style={{ color: 'var(--text-muted)', margin: '12px 0 0' }}>{t('dep.manualP')}</p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h3>{t('dep.pc.title')}</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '12px 0' }}>{t('dep.pc.desc')}</p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div style={{ flex: '1 1 280px' }}>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('dep.pc.netlogon')}</label>
+            <input value={getcfgScript} onChange={e => setGetcfgScript(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 13 }} />
+          </div>
+          <div style={{ flex: '1 1 240px' }}>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('dep.pc.drop')}</label>
+            <input value={getcfgDrop} onChange={e => setGetcfgDrop(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 13 }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+          <button onClick={() => download('/api/deploy/getcfg', 'getcfg.ps1')}>{t('dep.pc.dlPs1')}</button>
+          <button className="secondary" onClick={() => download(`/api/deploy/getcfg-launcher?script=${encodeURIComponent(getcfgScript)}&drop=${encodeURIComponent(getcfgDrop)}`, 'getcfg-startup.cmd')}>{t('dep.pc.dlCmd')}</button>
+        </div>
+        <b style={{ fontSize: 14 }}>{t('dep.pc.stepsTitle')}</b>
+        <ol style={{ color: 'var(--text-muted)', paddingLeft: 20, lineHeight: 1.9, marginTop: 8 }}>
+          <li>{t('dep.pc.s1')}</li>
+          <li>{t('dep.pc.s2')}</li>
+          <li>{t('dep.pc.s3')}</li>
+          <li>{t('dep.pc.s4')}</li>
+          <li>{t('dep.pc.s5')}</li>
+        </ol>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 0' }}>{t('dep.pc.note')}</p>
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
