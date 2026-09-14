@@ -197,10 +197,44 @@ $payload = [pscustomobject]@{
 
 $json = $payload | ConvertTo-Json -Depth 6 -Compress
 
+# Interactive run (a person testing from a console) speaks up; a GPO run under
+# SYSTEM has no one to talk to, so there it only writes to the event log. This is
+# what lets "run it by hand and show me the output" actually diagnose a failure.
+$interactive = [Environment]::UserInteractive
+function Say($msg, $bad = $false) {
+  if ($interactive) {
+    $color = 'Green'; if ($bad) { $color = 'Red' }
+    Write-Host $msg -ForegroundColor $color
+  }
+  try {
+    if (-not [System.Diagnostics.EventLog]::SourceExists('WinServGetCfg')) {
+      New-EventLog -LogName Application -Source 'WinServGetCfg' -ErrorAction SilentlyContinue
+    }
+    $type = 'Information'; if ($bad) { $type = 'Warning' }
+    Write-EventLog -LogName Application -Source 'WinServGetCfg' -EntryType $type -EventId 1 -Message $msg -ErrorAction SilentlyContinue
+  } catch {}
+}
+
+if ($interactive) {
+  Write-Host "getcfg: $($payload.hostname) | uid=$uid | serial=$($payload.serial) | disks=$($disks.Count) monitors=$($monitors.Count) software=$($software.Count)"
+  Write-Host "getcfg: writing to $DropShare"
+}
+
 # --- write to the drop share, atomically ------------------------------------
 # File is named by uid (falls back to hostname) so re-runs replace, not pile up.
 $fileBase = if ($uid) { $uid } else { $env:COMPUTERNAME }
 $fileBase = ($fileBase -replace '[^A-Za-z0-9._-]', '_')
+
+# Fail loudly (when interactive) if the share is not even reachable - by far the
+# most common cause of "nothing appears": wrong path, or the run account (SYSTEM
+# = the machine account for a startup script, the user for a logon script) has
+# no write permission on the share.
+if (-not (Test-Path $DropShare)) {
+  Say "getcfg: drop share not reachable: $DropShare - check the path and that the run account has Change rights" $true
+  if ($interactive) { Write-Host "HINT: startup script runs as SYSTEM (grant 'Domain Computers'); logon script runs as the user (grant 'Domain Users')." -ForegroundColor Yellow }
+  exit 0
+}
+
 $dest = Join-Path $DropShare ($fileBase + '.json')
 $tmp  = Join-Path $DropShare ($fileBase + '.' + [System.Guid]::NewGuid().ToString('N') + '.tmp')
 
@@ -211,15 +245,10 @@ try {
   # Move is atomic within a share; overwrite any previous file for this machine.
   if (Test-Path $dest) { Remove-Item $dest -Force -ErrorAction SilentlyContinue }
   [System.IO.File]::Move($tmp, $dest)
+  $bytes = $json.Length
+  Say "getcfg: wrote $dest, $bytes bytes"
 } catch {
-  # Startup-context failures are silent by design (no user to see them); leave a
-  # trace in the local event log for troubleshooting without failing the GPO.
   try { Remove-Item $tmp -Force -ErrorAction SilentlyContinue } catch {}
-  try {
-    if (-not [System.Diagnostics.EventLog]::SourceExists('WinServGetCfg')) {
-      New-EventLog -LogName Application -Source 'WinServGetCfg' -ErrorAction SilentlyContinue
-    }
-    Write-EventLog -LogName Application -Source 'WinServGetCfg' -EntryType Warning -EventId 1 -Message "getcfg could not write to $dest : $($_.Exception.Message)" -ErrorAction SilentlyContinue
-  } catch {}
+  Say "getcfg: could not write to $dest : $($_.Exception.Message)" $true
   exit 0
 }
