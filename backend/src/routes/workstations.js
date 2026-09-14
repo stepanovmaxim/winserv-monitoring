@@ -56,14 +56,19 @@ async function upsertWorkstation(w, relayHost) {
   const serial = s(w.serial, 120).trim();
   if (!uid && !hostname) return { saved: false };
 
-  const existingByUid = uid
-    ? await db.queryOne('SELECT id, hostname, serial FROM workstations WHERE agent_uid = $1', [uid])
+  // Exact identity is the pair (uid, serial); anyByUid catches a clone off the
+  // same image (same uid, different serial). See lib/workstationIdentity.
+  const exactByUidSerial = uid
+    ? await db.queryOne("SELECT id, hostname, serial, clone_of FROM workstations WHERE agent_uid = $1 AND COALESCE(serial,'') = $2", [uid, serial])
     : null;
-  const existingByHost = (!existingByUid && hostname)
-    ? await db.queryOne('SELECT id, hostname, serial FROM workstations WHERE LOWER(hostname) = LOWER($1) AND agent_uid IS NULL', [hostname])
+  const anyByUid = (uid && !exactByUidSerial)
+    ? await db.queryOne('SELECT id, hostname, serial, clone_of FROM workstations WHERE agent_uid = $1 ORDER BY id LIMIT 1', [uid])
+    : null;
+  const existingByHost = (!exactByUidSerial && !anyByUid && hostname)
+    ? await db.queryOne('SELECT id, hostname, serial, clone_of FROM workstations WHERE LOWER(hostname) = LOWER($1) AND agent_uid IS NULL', [hostname])
     : null;
 
-  const pick = resolveWorkstation({ existingByUid, existingByHost, hostname, uid, serial });
+  const pick = resolveWorkstation({ exactByUidSerial, anyByUid, existingByHost, hostname, uid, serial });
 
   const disks = Array.isArray(w.disks) ? w.disks.slice(0, 32).map(d => ({
     model: s(d.model, 120), size_gb: num(d.size_gb), free_gb: num(d.free_gb),

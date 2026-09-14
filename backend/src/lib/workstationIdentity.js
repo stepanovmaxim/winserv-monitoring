@@ -10,30 +10,42 @@
 // every machine cloned from it. So the uid alone is not enough to tell "the same
 // PC, renamed" from "a different PC off the same image".
 //
-// The BIOS serial breaks the tie: it is per-physical-machine and a clone keeps
-// its own. So:
-//   - uid matches, serial matches (or either side is blank)  -> same machine,
-//     a hostname change is just a rename
-//   - uid matches but the serials plainly differ             -> a clone; give it
-//     its own record and point clone_of at the machine it was imaged from
-//   - no uid match -> fall back to hostname, else it is new
+// The BIOS serial breaks the tie - it is per-physical-machine - so the true key
+// is the PAIR (uid, serial). The caller passes two lookups:
+//   - exactByUidSerial: a row whose uid AND serial both match this report
+//   - anyByUid:         any row already holding this uid (same or different serial)
 //
-// Pure and unit-tested. `existingByUid` is the row already holding this uid (or
-// null); `existingByHost` is a row with this hostname when there is no uid match.
-function resolveWorkstation({ existingByUid, existingByHost, hostname, uid, serial }) {
+// Resolution:
+//   - exact (uid+serial) match      -> same machine; a hostname change is a rename
+//   - uid matches, serial differs    -> a clone off the same image; its own record,
+//                                        clone_of points at the machine it came from
+//   - no uid match                   -> fall back to hostname, else new
+//
+// Keying on the pair (not the uid alone) is also what stops a clone multiplying:
+// on its next report it matches itself exactly and updates, rather than being
+// seen as "a different serial" again and again.
+//
+// Pure and unit-tested.
+function resolveWorkstation({ exactByUidSerial, anyByUid, existingByHost, hostname, uid, serial }) {
   const name = norm(hostname);
   const id = norm(uid);
   const sn = norm(serial);
 
-  if (id && existingByUid) {
-    const existingSn = norm(existingByUid.serial);
-    const serialsDiffer = sn && existingSn && sn.toLowerCase() !== existingSn.toLowerCase();
-    if (serialsDiffer) {
-      // Same image, different hardware: a clone. New record, remember its origin.
-      return { workstationId: null, action: 'clone', cloneOf: existingByUid.id, renamedFrom: null };
+  if (id && exactByUidSerial) {
+    const renamed = name && exactByUidSerial.hostname && exactByUidSerial.hostname.toLowerCase() !== name.toLowerCase();
+    return { workstationId: exactByUidSerial.id, action: 'update', cloneOf: null, renamedFrom: renamed ? exactByUidSerial.hostname : null };
+  }
+
+  // A uid we have seen, but not with this serial. Only a clone when both serials
+  // are actually known - a blank on either side means we cannot tell them apart,
+  // so treat it as the same machine and update the row we have.
+  if (id && anyByUid) {
+    const existingSn = norm(anyByUid.serial);
+    if (sn && existingSn) {
+      return { workstationId: null, action: 'clone', cloneOf: anyByUid.clone_of || anyByUid.id, renamedFrom: null };
     }
-    const renamed = name && existingByUid.hostname && existingByUid.hostname.toLowerCase() !== name.toLowerCase();
-    return { workstationId: existingByUid.id, action: 'update', cloneOf: null, renamedFrom: renamed ? existingByUid.hostname : null };
+    const renamed = name && anyByUid.hostname && anyByUid.hostname.toLowerCase() !== name.toLowerCase();
+    return { workstationId: anyByUid.id, action: 'update', cloneOf: null, renamedFrom: renamed ? anyByUid.hostname : null };
   }
 
   if (existingByHost) {

@@ -588,7 +588,14 @@ async function initSchema() {
       first_seen TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_ws_uid ON workstations(agent_uid) WHERE agent_uid IS NOT NULL;
+    -- Unique on the PAIR (uid, serial), not uid alone: a non-sysprepped clone
+    -- shares the uid but has its own serial, so the pair keeps them as separate
+    -- rows. COALESCE folds two indistinguishable blank-serial machines into one.
+    -- The earlier build shipped a UNIQUE index on uid alone; drop it so a clone
+    -- can be stored (CREATE IF NOT EXISTS would not replace the unique variant).
+    DROP INDEX IF EXISTS idx_ws_uid;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ws_uid_serial ON workstations(agent_uid, (COALESCE(serial,''))) WHERE agent_uid IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_ws_uid ON workstations(agent_uid) WHERE agent_uid IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_ws_customer ON workstations(customer_id);
     CREATE INDEX IF NOT EXISTS idx_ws_hostname ON workstations(LOWER(hostname));
 

@@ -12,9 +12,9 @@ test('a brand new PC is created', () => {
   assert.equal(r.workstationId, null);
 });
 
-test('the same PC reporting again updates its record', () => {
+test('the same PC (uid+serial) reporting again updates its record', () => {
   const r = resolveWorkstation({
-    existingByUid: { id: 5, hostname: 'PC-001', serial: 'SN1' },
+    exactByUidSerial: { id: 5, hostname: 'PC-001', serial: 'SN1' },
     hostname: 'PC-001', uid: UID, serial: 'SN1',
   });
   assert.equal(r.action, 'update');
@@ -24,7 +24,7 @@ test('the same PC reporting again updates its record', () => {
 
 test('a rename keeps the record and reports the old name', () => {
   const r = resolveWorkstation({
-    existingByUid: { id: 5, hostname: 'PC-001', serial: 'SN1' },
+    exactByUidSerial: { id: 5, hostname: 'PC-001', serial: 'SN1' },
     hostname: 'BUH-01', uid: UID, serial: 'SN1',
   });
   assert.equal(r.action, 'update');
@@ -35,7 +35,7 @@ test('a rename keeps the record and reports the old name', () => {
 // The desktop-specific hazard: a non-sysprepped image shares one MachineGuid.
 test('a clone off the same image gets its own record and a clone_of pointer', () => {
   const r = resolveWorkstation({
-    existingByUid: { id: 5, hostname: 'PC-001', serial: 'SN1' },
+    anyByUid: { id: 5, hostname: 'PC-001', serial: 'SN1', clone_of: null },
     hostname: 'PC-050', uid: UID, serial: 'SN2',
   });
   assert.equal(r.action, 'clone');
@@ -43,16 +43,31 @@ test('a clone off the same image gets its own record and a clone_of pointer', ()
   assert.equal(r.workstationId, null);
 });
 
-test('a blank serial on either side is not treated as a clone (cannot tell)', () => {
-  const r1 = resolveWorkstation({ existingByUid: { id: 5, hostname: 'PC-001', serial: '' }, hostname: 'PC-050', uid: UID, serial: 'SN2' });
-  assert.equal(r1.action, 'update');
-  const r2 = resolveWorkstation({ existingByUid: { id: 5, hostname: 'PC-001', serial: 'SN1' }, hostname: 'PC-050', uid: UID, serial: '' });
-  assert.equal(r2.action, 'update');
+// A clone must not multiply: its next report matches itself exactly.
+test('a clone reporting again updates itself, not a third record', () => {
+  const r = resolveWorkstation({
+    exactByUidSerial: { id: 6, hostname: 'PC-050', serial: 'SN2' },
+    anyByUid: { id: 5, hostname: 'PC-001', serial: 'SN1', clone_of: null },
+    hostname: 'PC-050', uid: UID, serial: 'SN2',
+  });
+  assert.equal(r.action, 'update');
+  assert.equal(r.workstationId, 6);
 });
 
-test('serial comparison ignores case', () => {
-  const r = resolveWorkstation({ existingByUid: { id: 5, hostname: 'PC-001', serial: 'abc123' }, hostname: 'PC-001', uid: UID, serial: 'ABC123' });
-  assert.equal(r.action, 'update');
+test('a clone of a clone points at the original root', () => {
+  const r = resolveWorkstation({
+    anyByUid: { id: 6, hostname: 'PC-050', serial: 'SN2', clone_of: 5 },
+    hostname: 'PC-051', uid: UID, serial: 'SN3',
+  });
+  assert.equal(r.action, 'clone');
+  assert.equal(r.cloneOf, 5);
+});
+
+test('a blank serial on either side is not treated as a clone (cannot tell)', () => {
+  const r1 = resolveWorkstation({ anyByUid: { id: 5, hostname: 'PC-001', serial: '' }, hostname: 'PC-050', uid: UID, serial: 'SN2' });
+  assert.equal(r1.action, 'update');
+  const r2 = resolveWorkstation({ anyByUid: { id: 5, hostname: 'PC-001', serial: 'SN1' }, hostname: 'PC-050', uid: UID, serial: '' });
+  assert.equal(r2.action, 'update');
 });
 
 test('no uid falls back to hostname', () => {
