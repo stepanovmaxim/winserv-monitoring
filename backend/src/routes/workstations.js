@@ -146,7 +146,7 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
   const scoped = await customerFilter(req.user, 'w.customer_id', 1);
   const rows = await db.queryAll(
     `SELECT w.id, w.hostname, w.ad_domain, w.ad_ou, w.manufacturer, w.model, w.os_caption,
-        w.os_build, w.cpu, w.ram_gb, w.ip, w.last_user, w.last_boot, w.last_patch_date,
+        w.os_build, w.cpu, w.ram_gb, w.disks_json, w.ip, w.last_user, w.last_boot, w.last_patch_date,
         w.clone_of, w.relay_host, w.collected_at, w.customer_id, c.name AS customer_name
      FROM workstations w LEFT JOIN customers c ON c.id = w.customer_id
      WHERE 1=1${scoped.sql} ORDER BY w.hostname LIMIT 2000`,

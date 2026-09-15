@@ -11,6 +11,24 @@ function parseJson(v, fallback) {
   try { return JSON.parse(v || '[]'); } catch { return fallback; }
 }
 
+// Sum used/total across the machine's real volumes (getcfg reports logical
+// drives as media="Volume" with size_gb + free_gb). Returns null when unknown.
+function diskUsage(w) {
+  let disks = w.disks_json;
+  if (typeof disks === 'string') { try { disks = JSON.parse(disks || '[]'); } catch { disks = []; } }
+  if (!Array.isArray(disks)) return null;
+  let total = 0, free = 0, seen = false;
+  for (const d of disks) {
+    if (d.media !== 'Volume') continue;
+    const sz = Number(d.size_gb);
+    if (!(sz > 0)) continue;
+    total += sz; free += Number(d.free_gb) || 0; seen = true;
+  }
+  if (!seen) return null;
+  const used = Math.max(0, total - free);
+  return { used: Math.round(used), total: Math.round(total), pct: total > 0 ? Math.round(used / total * 100) : 0 };
+}
+
 // CSV-escape one value and quote it. Newlines/quotes/commas are all handled.
 function csvCell(v) {
   const s = v == null ? '' : String(v);
@@ -60,13 +78,16 @@ export default function Workstations() {
 
   const exportCsv = () => {
     const headers = [t('ws.col.name'), t('ws.domain'), 'OU', t('ws.col.customer'), t('ws.f.vendor'),
-      t('ws.col.model'), t('ws.col.os'), 'Build', 'CPU', 'RAM (GB)', 'IP', t('ws.col.user'),
+      t('ws.col.model'), t('ws.col.os'), 'Build', 'CPU', 'RAM (GB)', 'HDD used (GB)', 'HDD total (GB)', 'IP', t('ws.col.user'),
       t('ws.f.boot'), t('ws.col.patch'), t('ws.col.collected')];
-    const body = filtered.map(w => [
-      w.hostname, w.ad_domain, w.ad_ou, w.customer_name, w.manufacturer, w.model,
-      w.os_caption, w.os_build, w.cpu, w.ram_gb, w.ip, w.last_user,
-      w.last_boot ? fmtDate(w.last_boot) : '', w.last_patch_date, w.collected_at ? fmtDate(w.collected_at) : '',
-    ]);
+    const body = filtered.map(w => {
+      const d = diskUsage(w);
+      return [
+        w.hostname, w.ad_domain, w.ad_ou, w.customer_name, w.manufacturer, w.model,
+        w.os_caption, w.os_build, w.cpu, w.ram_gb, d ? d.used : '', d ? d.total : '', w.ip, w.last_user,
+        w.last_boot ? fmtDate(w.last_boot) : '', w.last_patch_date, w.collected_at ? fmtDate(w.collected_at) : '',
+      ];
+    });
     const tag = domain ? domain : 'all';
     const date = new Date().toISOString().slice(0, 10);
     downloadCsv(`workstations-${tag}-${date}.csv`, headers, body);
@@ -108,7 +129,7 @@ export default function Workstations() {
             <table>
               <thead><tr>
                 <th>{t('ws.col.name')}</th><th>{t('ws.domain')}</th><th>{t('ws.col.customer')}</th>
-                <th>{t('ws.col.model')}</th><th>{t('ws.col.os')}</th><th>{t('ws.col.cpuram')}</th>
+                <th>{t('ws.col.model')}</th><th>{t('ws.col.os')}</th><th>{t('ws.col.ram')}</th><th>{t('ws.col.hdd')}</th>
                 <th>{t('ws.col.user')}</th><th>{t('ws.col.ip')}</th><th>{t('ws.col.patch')}</th><th>{t('ws.col.collected')}</th>
               </tr></thead>
               <tbody>
@@ -123,7 +144,8 @@ export default function Workstations() {
                     <td>{w.customer_name || <span style={{ color: 'var(--warning)' }}>—</span>}</td>
                     <td title={w.manufacturer}>{w.model || '-'}</td>
                     <td>{w.os_caption ? `${w.os_caption}${w.os_build ? ' (' + w.os_build + ')' : ''}` : '-'}</td>
-                    <td>{w.cpu_logical ? `${w.cpu_logical} ${t('ws.cores')}` : ''}{w.ram_gb ? ` / ${w.ram_gb} GB` : '-'}</td>
+                    <td title={w.cpu || ''}>{w.ram_gb ? `${w.ram_gb} GB` : '-'}</td>
+                    <td>{(() => { const d = diskUsage(w); if (!d) return '-'; return <span style={d.pct >= 90 ? { color: 'var(--danger)', fontWeight: 600 } : undefined} title={`${d.pct}%`}>{d.used} / {d.total} GB</span>; })()}</td>
                     <td>{w.last_user || '-'}</td>
                     <td>{w.ip || '-'}</td>
                     <td>{w.last_patch_date || '-'}</td>
