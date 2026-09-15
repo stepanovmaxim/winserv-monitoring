@@ -23,7 +23,12 @@ if (process.env.GOOGLE_CLIENT_ID) {
         const { id, displayName, emails, photos } = profile;
         const email = emails[0].value;
         const avatar = photos?.[0]?.value || '';
-        const role = email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'viewer';
+        // A brand-new Google sign-in must NOT get access. Only the configured
+        // primary admin is auto-admin; everyone else lands as 'pending' and sees
+        // nothing until an existing admin promotes them on the Users page.
+        // Previously new accounts defaulted to 'viewer', so anyone who could sign
+        // in with Google immediately saw the whole fleet.
+        const role = email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'admin' : 'pending';
 
         let user = await db.queryOne('SELECT * FROM users WHERE google_id = $1', [id]);
 
