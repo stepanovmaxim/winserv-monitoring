@@ -1,4 +1,5 @@
 const express = require('express');
+const db = require('../db');
 const { verifyToken } = require('../auth');
 const { addClient } = require('../services/sseService');
 const { getScope } = require('../services/scopeService');
@@ -7,12 +8,16 @@ const router = express.Router();
 
 // EventSource cannot set Authorization headers, so the JWT arrives as ?token=.
 router.get('/', async (req, res) => {
-  let user;
+  let payload;
   try {
-    user = verifyToken(req.query.token || '');
+    payload = verifyToken(req.query.token || '');
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }
+  // Role from the DB, not the token — a demoted account cannot keep a live
+  // stream open on a stale 7-day token.
+  const user = await db.queryOne('SELECT id, email, role FROM users WHERE id = $1', [payload.id]);
+  if (!user) return res.status(401).json({ error: 'Account not found' });
   if (user.role !== 'admin' && user.role !== 'viewer') {
     return res.status(403).json({ error: 'Account not approved' });
   }
