@@ -77,13 +77,25 @@ if (-not $ip -and $nic -and $nic.IPAddress) { $ip = $nic.IPAddress[0] }
 $mac = TryGet { $nic.MACAddress } ''
 
 # --- current / last user ----------------------------------------------------
-# A logon script runs as the user; a startup script as SYSTEM, where the console
-# user is on Win32_ComputerSystem.UserName.
+# A logon script runs AS the user; a startup script runs as SYSTEM AT BOOT,
+# before anyone has logged in - so $env:USERNAME is the machine account and
+# Win32_ComputerSystem.UserName is empty (no console session yet). That left
+# last_user blank on almost every PC. The reliable source in the startup context
+# is the last interactive logon recorded by LogonUI in the registry, which is
+# populated even before login and is exactly "who uses this PC".
 $lastUser = ''
 if ($env:USERNAME -and $env:USERNAME -ne "$env:COMPUTERNAME`$" -and $env:USERNAME -notmatch '^(SYSTEM|.*\$)$') {
   $lastUser = "$env:USERDOMAIN\$env:USERNAME"
-} else {
-  $lastUser = TryGet { $cs.UserName } ''
+}
+if (-not $lastUser) { $lastUser = TryGet { "$($cs.UserName)" } '' }
+if (-not $lastUser) {
+  $lastUser = TryGet {
+    $k = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI' -ErrorAction Stop
+    $u = "$($k.LastLoggedOnSAMUser)"
+    if (-not $u) { $u = "$($k.LastLoggedOnUser)" }
+    # LogonUI stores the display form (e.g. .\user or DOMAIN\user); keep as-is.
+    $u
+  } ''
 }
 
 # --- disks: size, free, media, SMART health ---------------------------------
