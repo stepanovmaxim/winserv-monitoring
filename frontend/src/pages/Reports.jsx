@@ -11,6 +11,17 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [fleet, setFleet] = useState([]);
   const [onlySoon, setOnlySoon] = useState(true);
+  const [customers, setCustomers] = useState([]);
+  const [rptCustomer, setRptCustomer] = useState('');
+  // Default to the month that just ended - that is the one a report is for.
+  const [rptMonth, setRptMonth] = useState(() => {
+    const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
+    return d.toISOString().slice(0, 7);
+  });
+
+  useEffect(() => {
+    api.getCustomers().then(c => { setCustomers(c); if (c.length) setRptCustomer(String(c[0].id)); }).catch(() => setCustomers([]));
+  }, []);
 
   useEffect(() => { api.getServers().then(setFleet).catch(() => setFleet([])); }, []);
 
@@ -61,6 +72,24 @@ export default function Reports() {
             <option value={90}>{t('reports.last90')}</option>
           </select>
           <button className="secondary" onClick={exportCsv}>{t('common.export')}</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0 }}>📄 {t('rpt.card.title')}</h3>
+        <p style={{ color: 'var(--text-muted)', margin: '6px 0 12px' }}>{t('rpt.card.desc')}</p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('rpt.card.customer')}</label>
+            <select value={rptCustomer} onChange={e => setRptCustomer(e.target.value)} style={{ minWidth: 200 }}>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('rpt.month')}</label>
+            <input type="month" value={rptMonth} onChange={e => setRptMonth(e.target.value)} />
+          </div>
+          <button disabled={!rptCustomer} onClick={() => window.open(`/report/customer/${rptCustomer}?month=${rptMonth}`, '_blank')}>{t('rpt.card.open')}</button>
         </div>
       </div>
 

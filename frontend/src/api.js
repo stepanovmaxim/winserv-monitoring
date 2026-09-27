@@ -206,6 +206,9 @@ export const api = {
   getAgentVersion() {
     return request('/api/agent/version');
   },
+  getCustomerReport(id, month) {
+    return request(`/api/reports/customer/${id}${month ? '?month=' + encodeURIComponent(month) : ''}`);
+  },
   getUptimeReport(days = 30) {
     return request(`/api/reports/uptime?days=${days}`);
   },

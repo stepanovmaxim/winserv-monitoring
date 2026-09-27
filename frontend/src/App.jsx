@@ -16,6 +16,7 @@ import Reports from './pages/Reports';
 import Security from './pages/Security';
 import Checks from './pages/Checks';
 import Workstations from './pages/Workstations';
+import CustomerReport from './pages/CustomerReport';
 import Alerts from './pages/Alerts';
 import StatusPage from './pages/StatusPage';
 
@@ -46,6 +47,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/auth-callback" element={<Login />} />
       <Route path="/status/:token" element={<StatusPage />} />
+      <Route path="/report/customer/:id" element={<Protected><CustomerReport /></Protected>} />
       <Route element={<Protected><Layout /></Protected>}>
         <Route path="/" element={<Navigate to="/servers" />} />
         <Route path="/servers" element={<Servers />} />
