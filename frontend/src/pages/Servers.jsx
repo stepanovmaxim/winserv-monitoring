@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { api } from '../api';
+import { soonestFill, fcColor } from '../forecast';
 
 export default function Servers() {
   const { user } = useAuth();
@@ -235,7 +236,7 @@ export default function Servers() {
                   <td>{s.group_name || '-'}</td>
                   <td>{s.last_cpu != null ? `${Number(s.last_cpu).toFixed(0)}%` : '-'}</td>
                   <td>{s.last_mem_used != null && s.last_mem_total > 0 ? `${Math.round(Number(s.last_mem_used) / Number(s.last_mem_total) * 100)}%` : '-'}</td>
-                  <td>{(() => { const w = worstDisk(s); if (!w) return '-'; return <span title={w.drive ? t('srv.fullest', { d: w.drive }) : ''} style={w.pct >= 90 ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{w.pct}%{w.drive ? ` ${w.drive}` : ''}</span>; })()}</td>
+                  <td>{(() => { const w = worstDisk(s); if (!w) return '-'; return <span title={w.drive ? t('srv.fullest', { d: w.drive }) : ''} style={w.pct >= 90 ? { color: 'var(--danger)', fontWeight: 600 } : undefined}>{w.pct}%{w.drive ? ` ${w.drive}` : ''}</span>; })()}{(() => { const fc = soonestFill(s); if (!fc) return null; return <span title={t('fc.badgeTitle', { drive: fc.drive, d: Math.round(fc.days), r: fc.rate })} style={{ marginLeft: 6, fontSize: 12, color: fcColor(fc.days), whiteSpace: 'nowrap' }}>⏳ {t('fc.daysN', { d: Math.round(fc.days) })}</span>; })()}</td>
                   <td>
                     {s.agent_version
                       ? <span className={`badge ${latestAgent && s.agent_version !== latestAgent ? 'badge-warning' : 'badge-viewer'}`}>v{s.agent_version}{latestAgent && s.agent_version !== latestAgent ? ' ⤴' : ''}</span>

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { api } from '../api';
+import { parseForecasts, forecastLine } from '../forecast';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ServerDetail() {
@@ -218,6 +219,7 @@ export default function ServerDetail() {
               <div className="metric-value" style={{ fontSize: 18 }}>{t('sd.free', { n: Number(d.free_gb).toFixed(0) })}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{Number(d.used_gb).toFixed(0)} / {Number(d.total_gb).toFixed(0)} GB</div>
               <div className="metric-bar"><div className="metric-bar-fill" style={{ width: `${d.total_gb > 0 ? (d.used_gb / d.total_gb) * 100 : 0}%`, background: d.total_gb > 0 && (d.used_gb / d.total_gb) > 0.9 ? 'var(--danger)' : 'var(--primary)' }} /></div>
+              {(() => { const fl = forecastLine(t, parseForecasts(server.forecasts).find(f => f.drive === d.drive)); if (!fl) return null; return <div style={{ fontSize: 12, marginTop: 8, color: fl.color }}>{t('fc.label')} {fl.text}</div>; })()}
               {d.read_bytes_sec != null && (
                 <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
                   <span>{t('sd.read')}</span><span style={{ color: 'var(--text)' }}>{(Number(d.read_bytes_sec) / 1048576).toFixed(1)} MB/s</span>

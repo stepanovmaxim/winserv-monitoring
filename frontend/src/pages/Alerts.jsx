@@ -10,7 +10,7 @@ const SEV_KEY = {
 };
 const KIND_ICON = {
   threshold: '📊', offline: '🔌', online: '✅', flapping: '🔁',
-  service: '🧩', cert: '🔐', security: '🛡', check: '📡',
+  service: '🧩', cert: '🔐', security: '🛡', check: '📡', forecast: '⏳',
 };
 
 export default function Alerts() {
