@@ -615,6 +615,26 @@ async function initSchema() {
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS is_relay INTEGER DEFAULT 0`);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS relay_drop TEXT DEFAULT ''`);
 
+  // Disk fill forecast per volume, recomputed hourly from the metrics history
+  // (see services/diskForecastService). Served straight from here: the fit over
+  // a fortnight of samples is too heavy to run per page load.
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS disk_forecasts (
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      drive TEXT NOT NULL,
+      status TEXT DEFAULT 'insufficient',
+      total_gb DOUBLE PRECISION,
+      used_gb DOUBLE PRECISION,
+      free_gb DOUBLE PRECISION,
+      rate_gb_day DOUBLE PRECISION,
+      days_to_full DOUBLE PRECISION,
+      r2 DOUBLE PRECISION,
+      points INTEGER DEFAULT 0,
+      computed_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (server_id, drive)
+    );
+  `);
+
   console.log('PostgreSQL schema initialized');
 }
 

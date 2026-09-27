@@ -35,6 +35,7 @@ const workstationRoutes = require('./routes/workstations');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
 const { rollupMetrics } = require('./services/rollupService');
+const { runForecasts } = require('./services/diskForecastService');
 const { heartbeat } = require('./services/sseService');
 const { maybeSendDigest } = require('./services/digestService');
 const { runScheduledActions } = require('./services/scheduleService');
@@ -169,6 +170,11 @@ async function start() {
   // Roll minute metrics into hourly buckets shortly after boot, then hourly.
   setTimeout(rollupMetrics, 90000);
   setInterval(rollupMetrics, 60 * 60 * 1000);
+
+  // Disk fill forecast: refit every volume hourly from the metrics history and
+  // alert when one is on course to fill within two weeks.
+  setTimeout(runForecasts, 150000);
+  setInterval(runForecasts, 60 * 60 * 1000);
 
   // Keep SSE connections alive through nginx/Cloudflare idle timeouts.
   setInterval(heartbeat, 25000);
