@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LanguageContext';
 import { api } from '../api';
 import { parseForecasts, forecastLine } from '../forecast';
+import SmartDisks from '../components/SmartDisks';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ServerDetail() {
@@ -232,6 +233,8 @@ export default function ServerDetail() {
           ))}
         </div>
       )}
+
+      <SmartDisks serverId={id} />
 
       <div className="tabs">
         <button className={`tab ${tab === 'metrics' ? 'active' : ''}`} onClick={() => setTab('metrics')}>{t('sd.tabMetrics')}</button>

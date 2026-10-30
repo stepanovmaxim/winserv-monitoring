@@ -66,7 +66,7 @@ router.get('/customer/:id', requireAuth, requireApproved, async (req, res) => {
   const nameOf = (s) => s.display_name || s.hostname;
   const byId = new Map(srv.map(s => [s.id, s]));
 
-  const [up, offline, sevRows, kindRows, topAlerts, fails, topIps, blocks, threats, av, hw, disks, ws] = await Promise.all([
+  const [up, offline, sevRows, kindRows, topAlerts, fails, topIps, blocks, threats, av, hw, disks, ws, smart] = await Promise.all([
     db.queryAll(`SELECT server_id, COALESCE(SUM(sample_count),0)::int AS samples, MIN(bucket) AS first
                  FROM metrics_hourly WHERE server_id = ANY($1) AND bucket >= $2 AND bucket < $3 GROUP BY server_id`, [ids, ...P]),
     db.queryAll(`SELECT server_id, COUNT(*)::int AS n FROM alerts
@@ -92,6 +92,8 @@ router.get('/customer/:id', requireAuth, requireApproved, async (req, res) => {
     db.queryAll(`SELECT server_id, last_patch_date FROM server_hardware WHERE server_id = ANY($1)`, [ids]),
     db.queryAll(`SELECT * FROM disk_forecasts WHERE server_id = ANY($1) ORDER BY server_id, drive`, [ids]),
     db.queryAll(`SELECT os_caption, last_patch_date, collected_at FROM workstations WHERE customer_id = $1`, [customerId]),
+    db.queryAll(`SELECT server_id, model, serial, level, reasons, wear, temperature FROM disk_smart
+                 WHERE server_id = ANY($1) AND level > 0 ORDER BY level DESC`, [ids]),
   ]);
 
   const upBy = new Map(up.map(r => [r.server_id, r]));
@@ -172,6 +174,8 @@ router.get('/customer/:id', requireAuth, requireApproved, async (req, res) => {
     threats: threatList,
     antivirus,
     disks: diskList,
+    // Physical disks with a SMART problem, state on the report date.
+    smart: smart.map(d => ({ host: nameOf(byId.get(d.server_id) || {}), model: d.model, serial: d.serial, level: d.level, reasons: d.reasons })),
     workstations,
   };
   report.recommendations = buildRecommendations(report);

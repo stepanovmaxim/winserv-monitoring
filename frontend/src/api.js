@@ -86,6 +86,9 @@ export const api = {
   getServerHealth(serverId) {
     return request(`/api/health-report/${serverId}`);
   },
+  getSmart(serverId) {
+    return request(`/api/health-report/smart/${serverId}`);
+  },
 
   // External checks (agentless ping/tcp/http/tls)
   getChecks() {

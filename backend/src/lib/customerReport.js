@@ -64,6 +64,9 @@ function buildRecommendations(r) {
       out.push({ code: 'diskfull', severity: 'warning', host: d.host, drive: d.drive, value: Math.round(d.used / d.total * 100) });
     }
   }
+  for (const d of r.smart || []) {
+    out.push({ code: d.level >= 2 ? 'smartfail' : 'smart', severity: d.level >= 2 ? 'critical' : 'warning', host: d.host, drive: d.model, value: d.serial });
+  }
   for (const a of r.antivirus || []) {
     if (a.third_party) continue;
     if (!a.available || !a.av_enabled || !a.realtime_enabled) out.push({ code: 'av', severity: 'critical', host: a.host });

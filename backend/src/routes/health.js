@@ -10,6 +10,8 @@ const { parseIgnore, isIgnoredService } = require('../services/serviceFilter');
 const { logAlert } = require('../services/alertLog');
 const { shouldAlertShadowDrop } = require('../lib/ransomPolicy');
 const { scoreServer } = require('../lib/securityScore');
+const { normalizeDisk, assessDisk, smartTransition } = require('../lib/diskSmart');
+const { serverLabel } = require('../lib/serverLabel');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
@@ -45,7 +47,7 @@ router.post('/', async (req, res) => {
   certs = (Array.isArray(certs) ? certs : []).slice(0, 500);
   tasks = (Array.isArray(tasks) ? tasks : []).slice(0, 500);
 
-  const server = await db.queryOne('SELECT id, hostname, group_id, customer_id, health_at FROM servers WHERE id = $1', [serverId]);
+  const server = await db.queryOne('SELECT id, hostname, display_name, group_id, customer_id, health_at FROM servers WHERE id = $1', [serverId]);
   if (!server) return res.status(404).json({ error: 'server not found' });
   const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
   const muted = await isMuted(server);
@@ -101,6 +103,10 @@ router.post('/', async (req, res) => {
         [JSON.stringify(req.body.audit).slice(0, 4000), server.id]);
     }
   } catch (e) { console.error('[Audit]', e.message); }
+
+  // --- Physical disk health (SMART) ---
+  try { await ingestSmart(server, req.body.smart, config, muted); }
+  catch (e) { console.error('[SMART]', e.message); }
 
   // --- Ransomware early warning ---
   try { await ingestRansomware(server, req.body.ransomware, config, muted); }
@@ -274,6 +280,73 @@ router.get('/audit/fleet', requireAuth, requireApproved, async (req, res) => {
   res.json(out);
 });
 
+// Physical disk health. The agent sends smart = { ok, disks: [...] }; ok=false
+// means the collector failed or timed out, and then the stored snapshot is left
+// alone - an empty list from a failed query must not read as "all disks gone".
+const SMART_REASON = {
+  predict: 'failure predicted by SMART',
+  unhealthy: 'health status Unhealthy',
+  opstatus: 'operational status',
+  degraded: 'health status Warning',
+  wear: 'endurance used',
+  hot: 'temperature',
+};
+function smartReasonText(d, codes) {
+  return codes.map(c => {
+    if (c === 'wear') return `${SMART_REASON.wear} ${d.wear}%`;
+    if (c === 'hot') return `${SMART_REASON.hot} ${d.temp}°C`;
+    if (c === 'opstatus') return `${SMART_REASON.opstatus} "${d.op_status}"`;
+    return SMART_REASON[c] || c;
+  }).join(', ');
+}
+
+async function ingestSmart(server, smart, config, muted) {
+  if (!smart || typeof smart !== 'object' || !smart.ok) return;
+  const disks = (Array.isArray(smart.disks) ? smart.disks : []).slice(0, 64).map(normalizeDisk).filter(Boolean);
+  const prevRows = await db.queryAll('SELECT * FROM disk_smart WHERE server_id = $1', [server.id]);
+  const prevBy = new Map(prevRows.map(r => [r.disk_key, r]));
+  const label = serverLabel(server);
+  const alerts = [];
+  const seen = new Set();
+
+  for (const d of disks) {
+    if (seen.has(d.key)) continue;
+    seen.add(d.key);
+    const prev = prevBy.get(d.key);
+    const prevForErrors = prev ? { read_unc: prev.read_errors_unc, write_unc: prev.write_errors_unc } : null;
+    const a = assessDisk(d, prevForErrors);
+    await db.query(
+      `INSERT INTO disk_smart (server_id, disk_key, model, serial, media, bus, size_gb, health, op_status, predict_failure,
+         temperature, temperature_max, wear, power_on_hours, read_errors_unc, write_errors_unc, raid, level, reasons, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
+       ON CONFLICT (server_id, disk_key) DO UPDATE SET model=$3, serial=$4, media=$5, bus=$6, size_gb=$7, health=$8,
+         op_status=$9, predict_failure=$10, temperature=$11, temperature_max=$12, wear=$13, power_on_hours=$14,
+         read_errors_unc=$15, write_errors_unc=$16, raid=$17, level=$18, reasons=$19, updated_at=NOW()`,
+      [server.id, d.key, d.model, d.serial, d.media, d.bus, d.size_gb, d.health, d.op_status, d.predict_failure ? 1 : 0,
+       d.temp, d.temp_max, d.wear, d.power_on_hours, d.read_unc, d.write_unc, d.raid ? 1 : 0, a.level, a.reasons.join(',')]
+    );
+    // The level is stored per disk, so a problem is announced once when it
+    // appears (including on the very first snapshot), not on every report.
+    const what = smartTransition(prev ? prev.level : 0, a);
+    if (!what) continue;
+    const name = `${d.model || 'disk'}${d.serial ? ' (S/N ' + d.serial + ')' : ''}`;
+    if (what === 'recovered') alerts.push({ severity: 'info', msg: `<b>Disk health OK</b> on ${label}: ${name}` });
+    else if (what === 'errors') alerts.push({ severity: 'warning', msg: `<b>Disk errors</b> on ${label}: ${name} — ${a.newErrors} new uncorrectable read/write error(s)` });
+    else alerts.push({ severity: what, msg: `<b>${what === 'critical' ? 'DISK FAILING' : 'Disk health warning'}</b> on ${label}: ${name} — ${smartReasonText(d, a.reasons)}` });
+  }
+
+  // A physical disk that vanished from a successful snapshot has either been
+  // removed or died outright - a dead drive often stops answering altogether.
+  for (const r of prevRows) {
+    if (seen.has(r.disk_key)) continue;
+    await db.query('DELETE FROM disk_smart WHERE server_id = $1 AND disk_key = $2', [server.id, r.disk_key]);
+    alerts.push({ severity: 'warning', msg: `<b>Disk no longer detected</b> on ${label}: ${r.model || 'disk'}${r.serial ? ' (S/N ' + r.serial + ')' : ''} — removed, or stopped responding` });
+  }
+
+  if (!config || !config.notify_disk) return;
+  for (const a of alerts) notify(a.msg, muted, { severity: a.severity, kind: 'smart', server_id: server.id, customer_id: server.customer_id });
+}
+
 // Fleet ransomware view.
 router.get('/ransomware/fleet', requireAuth, requireApproved, async (req, res) => {
   const scoped = await customerFilter(req.user, 's.customer_id', 1);
@@ -319,6 +392,15 @@ router.get('/defender/threats', requireAuth, requireApproved, async (req, res) =
      WHERE t.detected_at > NOW() - INTERVAL '30 days'${scoped.sql}
      ORDER BY t.detected_at DESC LIMIT 200`,
     scoped.params
+  );
+  res.json(rows);
+});
+
+// Physical disks of one server, worst first.
+router.get('/smart/:serverId', requireAuth, requireApproved, requireServerAccess('serverId'), async (req, res) => {
+  const rows = await db.queryAll(
+    'SELECT * FROM disk_smart WHERE server_id = $1 ORDER BY level DESC, model, disk_key',
+    [req.params.serverId]
   );
   res.json(rows);
 });

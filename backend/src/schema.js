@@ -635,6 +635,34 @@ async function initSchema() {
     );
   `);
 
+  // Physical disk health (SMART) per drive, replaced on every health report.
+  // Virtual and USB disks are filtered out by the backend (lib/diskSmart).
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS disk_smart (
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      disk_key TEXT NOT NULL,
+      model TEXT DEFAULT '',
+      serial TEXT DEFAULT '',
+      media TEXT,
+      bus TEXT,
+      size_gb INTEGER,
+      health TEXT DEFAULT 'unknown',
+      op_status TEXT DEFAULT '',
+      predict_failure INTEGER DEFAULT 0,
+      temperature INTEGER,
+      temperature_max INTEGER,
+      wear INTEGER,
+      power_on_hours INTEGER,
+      read_errors_unc BIGINT,
+      write_errors_unc BIGINT,
+      raid INTEGER DEFAULT 0,
+      level INTEGER DEFAULT 0,
+      reasons TEXT DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (server_id, disk_key)
+    );
+  `);
+
   console.log('PostgreSQL schema initialized');
 }
 

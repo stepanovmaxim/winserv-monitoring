@@ -101,3 +101,11 @@ test('recommendations: a healthy customer gets none', () => {
   });
   assert.deepEqual(recs, []);
 });
+
+test('SMART problems become disk replacement recommendations', () => {
+  const recs = buildRecommendations({ smart: [
+    { host: 'FS01', model: 'WDC WD40', serial: 'W1', level: 2 },
+    { host: 'DB01', model: 'ST4000', serial: 'Z9', level: 1 },
+  ] });
+  assert.deepStrictEqual(recs.map(r => [r.code, r.severity, r.host]), [['smartfail', 'critical', 'FS01'], ['smart', 'warning', 'DB01']]);
+});
