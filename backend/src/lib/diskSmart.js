@@ -51,6 +51,9 @@ function normalizeDisk(raw) {
   let tempMax = num(raw.temp_max);
   if (tempMax !== null && (tempMax <= 0 || tempMax > 150)) tempMax = null;
 
+  // Behind a hardware RAID controller Windows sees only the logical drive: the
+  // controller fills the counters with placeholders (wear 0), not real SMART.
+  const raid = bus === 'raid';
   return {
     // The serial survives a re-cabling or a renumbered DeviceId; fall back only when it is absent.
     key: (serial || `${id}:${model}`).slice(0, 120),
@@ -62,14 +65,13 @@ function normalizeDisk(raw) {
     health: key(HEALTH, raw.health) || 'unknown',
     op_status: opStatus,
     predict_failure: raw.predict_failure === true || raw.predict_failure === 1 || raw.predict_failure === 'true',
-    temp,
-    temp_max: tempMax,
-    wear: wear !== null && wear >= 0 && wear <= 200 ? wear : null,
-    power_on_hours: num(raw.power_on_hours),
-    read_unc: num(raw.read_unc),
-    write_unc: num(raw.write_unc),
-    // Behind a hardware RAID controller Windows sees only the logical drive: no SMART.
-    raid: bus === 'raid',
+    temp: raid ? null : temp,
+    temp_max: raid ? null : tempMax,
+    wear: !raid && wear !== null && wear >= 0 && wear <= 200 ? wear : null,
+    power_on_hours: raid ? null : num(raw.power_on_hours),
+    read_unc: raid ? null : num(raw.read_unc),
+    write_unc: raid ? null : num(raw.write_unc),
+    raid,
   };
 }
 

@@ -28,7 +28,9 @@ test('drops virtual, iSCSI and USB disks', () => {
 });
 
 test('flags RAID logical drives and infers SSD for NVMe', () => {
-  assert.strictEqual(normalizeDisk({ ...ssd, bus: 'RAID', model: 'DELL PERC H730 SCSI Disk Device' }).raid, true);
+  const r = normalizeDisk({ ...ssd, bus: 'RAID', model: 'Intel RMS3CC080', wear: 0 });
+  assert.strictEqual(r.raid, true);
+  assert.strictEqual(r.wear, null); // controller placeholder, not SMART
   assert.strictEqual(normalizeDisk({ ...ssd, bus: 'NVMe', media: 0 }).media, 'ssd');
 });
 
