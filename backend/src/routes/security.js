@@ -8,6 +8,7 @@ const { logAlert } = require('../services/alertLog');
 const { runAutoban, queueBlock, queueUnblock, canBan } = require('../services/banService');
 const { PROTECTED, isPrivateOrReserved } = require('../lib/ipGuard');
 const { logonKind } = require('../lib/logonKind');
+const { repairAccount } = require('../lib/accountName');
 const { serverLabel } = require('../lib/serverLabel');
 const { serviceOwner } = require('../lib/serviceRanges');
 const { customerFilter, canSeeServer, requireServerAccess } = require('../services/scopeService');
@@ -49,7 +50,7 @@ router.post('/', async (req, res) => {
          SELECT 1 FROM security_events
          WHERE server_id = $1 AND event = $2 AND account = $3 AND ip = $4 AND recorded_at = $6
        )`,
-      [serverId, type, ev.account || '', ev.ip || '', String(ev.logon_type || ''), ev.recorded_at || null]
+      [serverId, type, repairAccount(ev.account), ev.ip || '', String(ev.logon_type || ''), ev.recorded_at || null]
     );
     if (r.rowCount > 0) inserted++;
   }
