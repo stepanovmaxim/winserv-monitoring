@@ -542,7 +542,7 @@ async function initSchema() {
 
   // Allow the manual "block IP" command type.
   await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
-  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan','send_diag'))`);
+  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan','send_diag','wu_scan','install_updates'))`);
 
   // Domain PC inventory ("getcfg"). Workstations are NOT servers: they are not
   // monitored, alerted on, or given commands - this is a configuration snapshot
@@ -636,9 +636,9 @@ async function initSchema() {
   `);
 
   // Windows Update: what each host has pending (replaced on every scan) and
-  // the install jobs requested from the panel.
-  await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
-  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan','send_diag','wu_scan','install_updates'))`);
+  // the install jobs requested from the panel. Its command types live in the
+  // single server_commands_ctype_check above: a second, narrower copy of that
+  // constraint is re-applied on every start and fails once newer rows exist.
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS wu_scan_at TIMESTAMPTZ`);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS wu_error TEXT DEFAULT ''`);
   await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS wu_error_at TIMESTAMPTZ`);
