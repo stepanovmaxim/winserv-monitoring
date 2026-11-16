@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.58';
+const AGENT_VERSION = '2.59';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   const __lines = [
@@ -1139,8 +1139,13 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    # cost every run 45 seconds (ESKHV02). So: security first, a bounded',
     '    # list, compact JSON - and a file that still cannot be sent is given up',
     '    # on (a new scan comes daily; an install result gets many more tries).',
-    '    if ($kind -eq "scan" -and $o.updates -and @($o.updates).Count -gt 150) {',
-    '      $o.updates = @($o.updates | Sort-Object { -not $_.security } | Select-Object -First 150)',
+    '    # Even 150 entries (33 KB) would not leave that host, while 15 KB bodies',
+    '    # do, so every retry sends a shorter list rather than the same one again.',
+    '    $cap = 150',
+    '    $prev = 0; try { $prev = [int](Get-Content "$f.tries" -ErrorAction Stop) } catch {}',
+    '    if ($prev -eq 1) { $cap = 40 } elseif ($prev -ge 2) { $cap = 12 }',
+    '    if ($kind -eq "scan" -and $o.updates -and @($o.updates).Count -gt $cap) {',
+    '      $o.updates = @($o.updates | Sort-Object { -not $_.security } | Select-Object -First $cap)',
     '    }',
     '    $b = @{ token = $Token; hostname = $FullHostname }',
     '    $b[$kind] = $o',
