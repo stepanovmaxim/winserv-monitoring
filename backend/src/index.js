@@ -160,7 +160,9 @@ async function start() {
     res.status(err.status || 500).json({ error: 'Internal server error' });
   });
 
-  app.listen(PORT, () => {
+  // Behind the tunnel and nginx only localhost needs the port; set BIND_HOST=127.0.0.1
+  // there so the API is not also reachable in plain HTTP on the public address.
+  app.listen(PORT, process.env.BIND_HOST || '0.0.0.0', () => {
     console.log(`WinServ Monitoring API running on port ${PORT}`);
   });
 
