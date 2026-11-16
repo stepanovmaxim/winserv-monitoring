@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.57';
+const AGENT_VERSION = '2.58';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   const __lines = [
@@ -1134,10 +1134,27 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '    $o = $null',
     '    try { $o = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $o = $null }',
     '    if ($null -eq $o) { Remove-Item $f -Force -ErrorAction SilentlyContinue; Write-Log "WU: unreadable $kind file dropped"; continue }',
+    '    # A host with hundreds of pending updates produced a list too large to',
+    '    # push through its uplink inside the send timeout, and the retry then',
+    '    # cost every run 45 seconds (ESKHV02). So: security first, a bounded',
+    '    # list, compact JSON - and a file that still cannot be sent is given up',
+    '    # on (a new scan comes daily; an install result gets many more tries).',
+    '    if ($kind -eq "scan" -and $o.updates -and @($o.updates).Count -gt 150) {',
+    '      $o.updates = @($o.updates | Sort-Object { -not $_.security } | Select-Object -First 150)',
+    '    }',
     '    $b = @{ token = $Token; hostname = $FullHostname }',
     '    $b[$kind] = $o',
-    '    $r = Send-Body $UpdatesUrl ($b | ConvertTo-Json -Depth 8)',
-    '    if ($r) { Remove-Item $f -Force -ErrorAction SilentlyContinue; Write-Log "WU: $kind sent" }',
+    '    $json = $b | ConvertTo-Json -Depth 8 -Compress',
+    '    $r = Send-Body $UpdatesUrl $json',
+    '    if ($r) { Remove-Item $f, "$f.tries" -Force -ErrorAction SilentlyContinue; Write-Log "WU: $kind sent ($($json.Length) chars)"; continue }',
+    '    $tries = 0; try { $tries = [int](Get-Content "$f.tries" -ErrorAction Stop) } catch {}',
+    '    $tries++',
+    '    $max = 3; if ($kind -eq "result") { $max = 30 }',
+    '    Write-Log "WU: $kind upload failed ($($json.Length) chars, attempt $tries of $max)"',
+    '    if ($tries -ge $max) { Remove-Item $f, "$f.tries" -Force -ErrorAction SilentlyContinue }',
+    '    else { "$tries" | Out-File "$f.tries" -Encoding ASCII }',
+    '    # One failed upload per run is enough; do not also spend the timeouts on the next file.',
+    '    break',
     '  }',
     '}',
     '',
