@@ -12,16 +12,17 @@ const { shouldAlertShadowDrop } = require('../lib/ransomPolicy');
 const { scoreServer } = require('../lib/securityScore');
 const { normalizeDisk, assessDisk, smartTransition } = require('../lib/diskSmart');
 const { serverLabel } = require('../lib/serverLabel');
+const { dispatchAlert } = require('../services/alertDispatch');
 
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
 const router = express.Router();
 const certAlerted = new Map();
 
+// meta.groupKey folds a daily reminder of the same unresolved problem into the
+// first message for a week (see services/alertDispatch).
 function notify(text, muted, meta = {}) {
   if (muted) return;
-  sendTelegramMessage(text).catch(() => {});
-  sendWebhookAlert(text);
-  logAlert({ message: text, ...meta });
+  dispatchAlert({ text, groupHours: 168, ...meta });
 }
 
 // Agent deep-health report (services, certs, failed tasks, pending reboot).
@@ -86,7 +87,7 @@ router.post('/', async (req, res) => {
         const key = serverId + ':' + (c.subject || '');
         if (Date.now() - (certAlerted.get(key) || 0) > 24 * 60 * 60 * 1000) {
           certAlerted.set(key, Date.now());
-          notify(`<b>Certificate expiring</b> on ${server.hostname}: ${c.subject} (${c.expires})`, muted, { severity: 'warning', kind: 'cert', server_id: server.id, customer_id: server.customer_id });
+          notify(`<b>Certificate expiring</b> on ${server.hostname}: ${c.subject} (${c.expires})`, muted, { severity: 'warning', kind: 'cert', server_id: server.id, customer_id: server.customer_id, groupKey: `cert:${key}` });
         }
       }
     }
@@ -171,24 +172,25 @@ async function ingestDefender(server, d, config, muted) {
   const sigMax = parseInt(config.defender_signature_days) || 3;
   const scanMax = parseInt(config.defender_scan_days) || 14;
   const k = (s) => `${server.id}:${s}`;
-  const meta = { kind: 'antivirus', server_id: server.id, customer_id: server.customer_id };
+  const base = { kind: 'antivirus', server_id: server.id, customer_id: server.customer_id };
+  const g = (tag) => ({ ...base, groupKey: `av:${k(tag)}` });
 
   if (!d.av_enabled && onceADay(k('av')))
-    notify(`<b>ANTIVIRUS OFF</b> on ${server.hostname}: Microsoft Defender is disabled`, muted, { severity: 'critical', ...meta });
+    notify(`<b>ANTIVIRUS OFF</b> on ${server.hostname}: Microsoft Defender is disabled`, muted, { severity: 'critical', ...g('av') });
   else if (!d.realtime_enabled && onceADay(k('rtp')))
-    notify(`<b>Real-time protection OFF</b> on ${server.hostname}`, muted, { severity: 'critical', ...meta });
+    notify(`<b>Real-time protection OFF</b> on ${server.hostname}`, muted, { severity: 'critical', ...g('rtp') });
 
   const sigAge = age(d.signature_age_days);
   if (sigAge !== null && sigAge > sigMax && onceADay(k('sig')))
-    notify(`<b>Antivirus signatures stale</b> on ${server.hostname}: ${sigAge} days old (>${sigMax})`, muted, { severity: 'warning', ...meta });
+    notify(`<b>Antivirus signatures stale</b> on ${server.hostname}: ${sigAge} days old (>${sigMax})`, muted, { severity: 'warning', ...g('sig') });
 
   const quick = age(d.quick_scan_age_days), full = age(d.full_scan_age_days);
   const scanned = [quick, full].filter(v => v !== null);
   const bestScan = scanned.length ? Math.min(...scanned) : null;
   if (bestScan === null && onceADay(k('noscan')))
-    notify(`<b>Antivirus never scanned</b> on ${server.hostname}: no quick or full scan on record`, muted, { severity: 'warning', ...meta });
+    notify(`<b>Antivirus never scanned</b> on ${server.hostname}: no quick or full scan on record`, muted, { severity: 'warning', ...g('noscan') });
   else if (bestScan !== null && bestScan > scanMax && onceADay(k('scan')))
-    notify(`<b>Antivirus scan overdue</b> on ${server.hostname}: last scan ${bestScan} days ago (>${scanMax})`, muted, { severity: 'warning', ...meta });
+    notify(`<b>Antivirus scan overdue</b> on ${server.hostname}: last scan ${bestScan} days ago (>${scanMax})`, muted, { severity: 'warning', ...g('scan') });
 }
 
 // Ransomware signals. A tripped canary means files are being rewritten right

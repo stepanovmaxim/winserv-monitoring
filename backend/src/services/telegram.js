@@ -8,17 +8,19 @@ const RATE_MS = 2500;
 async function processQueue() {
   if (processing || queue.length === 0) return;
   processing = true;
-  const { text, resolve, reject } = queue.shift();
+  const { text, editId, resolve, reject } = queue.shift();
 
   try {
     const config = await db.queryOne('SELECT * FROM telegram_config WHERE enabled = 1 LIMIT 1');
     if (!config || !config.bot_token || !config.chat_id) throw new Error('Telegram not configured');
 
-    const url = `https://api.telegram.org/bot${config.bot_token}/sendMessage`;
+    const url = `https://api.telegram.org/bot${config.bot_token}/${editId ? 'editMessageText' : 'sendMessage'}`;
     const response = await nodeFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: config.chat_id, text, parse_mode: 'HTML', disable_notification: false }),
+      body: JSON.stringify(editId
+        ? { chat_id: config.chat_id, message_id: editId, text, parse_mode: 'HTML' }
+        : { chat_id: config.chat_id, text, parse_mode: 'HTML', disable_notification: false }),
     });
     const data = await response.json();
     if (!data.ok) {
@@ -30,7 +32,7 @@ async function processQueue() {
       console.error('[Telegram] API error:', data.description);
       throw new Error(data.description || 'Telegram API error');
     }
-    console.log('[Telegram] Message sent');
+    console.log(editId ? '[Telegram] Message updated' : '[Telegram] Message sent');
     resolve(data);
   } catch (err) {
     console.error('[Telegram] Send failed:', err.message);
@@ -48,4 +50,13 @@ function sendTelegramMessage(text) {
   });
 }
 
-module.exports = { sendTelegramMessage };
+// Rewrite a message this bot sent earlier (used to fold repeated alerts into
+// one). Goes through the same queue, so it shares the rate limit.
+function editTelegramMessage(messageId, text) {
+  return new Promise((resolve, reject) => {
+    queue.push({ text, editId: messageId, resolve, reject });
+    processQueue();
+  });
+}
+
+module.exports = { sendTelegramMessage, editTelegramMessage };

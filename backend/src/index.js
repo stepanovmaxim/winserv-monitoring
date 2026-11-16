@@ -32,6 +32,8 @@ const processRoutes = require('./routes/processes');
 const eventTriggerRoutes = require('./routes/eventTriggers');
 const streamRoutes = require('./routes/stream');
 const workstationRoutes = require('./routes/workstations');
+const updateRoutes = require('./routes/updates');
+const { runUpdateJobs } = require('./services/updateService');
 const { checkOfflineServers, loadAlertState } = require('./services/alertService');
 const { purgeOldData } = require('./services/retentionService');
 const { rollupMetrics } = require('./services/rollupService');
@@ -123,6 +125,7 @@ async function start() {
   app.use('/api/inventory-report', ingestLimiter, inventoryRoutes);
   app.use('/api/process-report', ingestLimiter, processRoutes);
   app.use('/api/workstations', workstationRoutes);
+  app.use('/api/updates', updateRoutes);
   app.use('/api/event-triggers', eventTriggerRoutes);
   app.use('/api/checks', checkRoutes);
   app.use('/api/alerts', alertRoutes);
@@ -191,6 +194,8 @@ async function start() {
 
   // Lift expired IP bans (queue unblock_ip when a ban's TTL passes).
   setInterval(expireBans, 60 * 1000);
+  // Start scheduled Windows update installs, give up on stale ones.
+  setInterval(runUpdateJobs, 30 * 1000);
 
   // Fleet-wide auto-ban sweep: catches sprays spread thin across many servers,
   // which per-server counting never sees.

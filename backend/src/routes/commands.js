@@ -4,6 +4,7 @@ const { requireServerAccess, canSeeServer } = require('../services/scopeService'
 const db = require('../db');
 const { logAction } = require('../services/auditService');
 const { canBan } = require('../services/banService');
+const { failJob } = require('../services/updateService');
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ router.get('/:serverId', requireAuth, requireAdmin, requireServerAccess(), async
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { server_id, ctype, param } = req.body;
   if (!server_id) return res.status(400).json({ error: 'server_id required' });
-  if (!['reboot', 'restart_service', 'block_ip', 'unblock_ip', 'uninstall_agent', 'force_update', 'kill_process', 'isolate_host', 'unisolate_host', 'defender_scan', 'send_diag'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
+  if (!['reboot', 'restart_service', 'block_ip', 'unblock_ip', 'uninstall_agent', 'force_update', 'kill_process', 'isolate_host', 'unisolate_host', 'defender_scan', 'send_diag', 'wu_scan'].includes(ctype)) return res.status(400).json({ error: 'invalid ctype' });
   if (ctype === 'restart_service' && !param) return res.status(400).json({ error: 'service name required' });
   if (ctype === 'kill_process' && !param) return res.status(400).json({ error: 'process name or pid required' });
   if ((ctype === 'block_ip' || ctype === 'unblock_ip') && !param) return res.status(400).json({ error: 'ip required' });
@@ -56,6 +57,16 @@ router.post('/:id/report', async (req, res) => {
     // status line. Every other command reports a short sentence anyway.
     [success ? 'done' : 'failed', String(result || '').slice(0, 20000), req.params.id, agent.server_id]
   );
+  // An update install only STARTS here; its outcome arrives later through
+  // /api/updates. A host that could not even start it fails the job now.
+  const job = await db.queryOne(
+    "SELECT * FROM update_jobs WHERE command_id = $1 AND server_id = $2 AND status = 'queued'",
+    [req.params.id, agent.server_id]
+  );
+  if (job) {
+    if (success) await db.query("UPDATE update_jobs SET status = 'running', started_at = NOW() WHERE id = $1", [job.id]);
+    else await failJob({ ...job, command_id: null }, String(result || 'the host could not start the install'));
+  }
   res.json({ success: true });
 });
 

@@ -23,7 +23,7 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
      LEFT JOIN customers cu ON cu.id = a.customer_id
      LEFT JOIN checks ck ON ck.id = a.check_id
      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY a.created_at DESC LIMIT ${limit}`,
+     ORDER BY COALESCE(a.last_at, a.created_at) DESC LIMIT ${limit}`,
     params
   );
   res.json(rows);

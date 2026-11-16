@@ -230,6 +230,7 @@ export default function Servers() {
                     <Link to={`/servers/${s.id}`} title={s.display_name ? t('srv.reportsAsTitle', { h: s.hostname }) : undefined}>{s.display_name || s.hostname}</Link>
                     {s.health_issues > 0 && <span title={t('srv.healthIssues')} style={{ marginLeft: 6, color: 'var(--danger)', fontSize: 12 }}>⚠{s.health_issues}</span>}
                     {s.pending_reboot ? <span title={t('srv.rebootPending')} style={{ marginLeft: 4 }}>🔄</span> : null}
+                    {s.wu_security > 0 ? <span title={t('wu.badgeTitle', { n: s.wu_security })} style={{ marginLeft: 6, fontSize: 12, color: 'var(--warning)', whiteSpace: 'nowrap' }}>⬆ {s.wu_security}</span> : null}
                     {s.update_error ? <span title={t('srv.updateFailedTitle', { e: s.update_error })} style={{ marginLeft: 4, color: 'var(--danger)', fontSize: 12 }}>⬆✕</span> : null}
                   </td>
                   <td>{s.customer_name || <span style={{ color: 'var(--warning)' }}>—</span>}</td>

@@ -635,6 +635,58 @@ async function initSchema() {
     );
   `);
 
+  // Windows Update: what each host has pending (replaced on every scan) and
+  // the install jobs requested from the panel.
+  await db.exec(`ALTER TABLE server_commands DROP CONSTRAINT IF EXISTS server_commands_ctype_check`);
+  await db.exec(`ALTER TABLE server_commands ADD CONSTRAINT server_commands_ctype_check CHECK (ctype IN ('reboot','restart_service','block_ip','uninstall_agent','force_update','unblock_ip','kill_process','isolate_host','unisolate_host','defender_scan','send_diag','wu_scan','install_updates'))`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS wu_scan_at TIMESTAMPTZ`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS wu_error TEXT DEFAULT ''`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS wu_error_at TIMESTAMPTZ`);
+  await db.exec(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS wu_reboot_required INTEGER DEFAULT 0`);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS windows_updates (
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      update_id TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      kb TEXT DEFAULT '',
+      severity TEXT DEFAULT '',
+      categories TEXT DEFAULT '',
+      size_mb DOUBLE PRECISION,
+      downloaded INTEGER DEFAULT 0,
+      security INTEGER DEFAULT 0,
+      preview INTEGER DEFAULT 0,
+      upgrade INTEGER DEFAULT 0,
+      PRIMARY KEY (server_id, update_id)
+    );
+    CREATE TABLE IF NOT EXISTS update_jobs (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      scope TEXT NOT NULL,
+      ids_json TEXT DEFAULT '[]',
+      reboot INTEGER DEFAULT 0,
+      run_at TIMESTAMPTZ NOT NULL,
+      status TEXT DEFAULT 'scheduled' CHECK(status IN ('scheduled','queued','running','done','failed','cancelled')),
+      command_id INTEGER,
+      window_id INTEGER,
+      summary TEXT DEFAULT '',
+      result_json TEXT,
+      created_by TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      queued_at TIMESTAMPTZ,
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_update_jobs_open ON update_jobs(status, run_at);
+  `);
+
+  // Repeating alerts folded into one row: a counter, the time of the latest
+  // occurrence and the Telegram message that gets edited instead of resent.
+  await db.exec(`ALTER TABLE alerts ADD COLUMN IF NOT EXISTS group_key TEXT`);
+  await db.exec(`ALTER TABLE alerts ADD COLUMN IF NOT EXISTS repeat_count INTEGER DEFAULT 1`);
+  await db.exec(`ALTER TABLE alerts ADD COLUMN IF NOT EXISTS last_at TIMESTAMPTZ`);
+  await db.exec(`ALTER TABLE alerts ADD COLUMN IF NOT EXISTS tg_message_id BIGINT`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS idx_alerts_group ON alerts(group_key, created_at DESC) WHERE group_key IS NOT NULL`);
+
   // Physical disk health (SMART) per drive, replaced on every health report.
   // Virtual and USB disks are filtered out by the backend (lib/diskSmart).
   await db.exec(`

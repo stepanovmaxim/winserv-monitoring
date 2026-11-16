@@ -227,12 +227,13 @@ function ReportBody({ r, t, locale, fmtDate, fmtDateTime }) {
       <h2>{t('rpt.s.updates')}</h2>
       <p className="note">{t('rpt.updatesNote')}</p>
       <table>
-        <thead><tr><th>{t('rpt.col.server')}</th><th>{t('rpt.col.lastUpdate')}</th><th>{t('rpt.col.status')}</th></tr></thead>
+        <thead><tr><th>{t('rpt.col.server')}</th><th>{t('rpt.col.lastUpdate')}</th><th>{t('rpt.col.status')}</th><th>{t('rpt.col.pendingSec')}</th></tr></thead>
         <tbody>{r.servers.filter(x => x.patch).map(x => (
           <tr key={x.id}>
             <td>{x.name}</td>
             <td>{x.patch.days != null ? t('rpt.daysAgo', { n: x.patch.days }) : '—'}</td>
             <td style={{ color: patchColor[x.patch.status], fontWeight: 600 }}>{t('rpt.p.' + x.patch.status)}</td>
+            <td style={x.pendingSecurity > 0 ? { color: C.warn, fontWeight: 600 } : undefined}>{x.pendingSecurity ?? '—'}</td>
           </tr>
         ))}</tbody>
       </table>

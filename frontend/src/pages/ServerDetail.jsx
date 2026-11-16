@@ -5,6 +5,7 @@ import { useLang } from '../context/LanguageContext';
 import { api } from '../api';
 import { parseForecasts, forecastLine } from '../forecast';
 import SmartDisks from '../components/SmartDisks';
+import WinUpdates from '../components/WinUpdates';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ServerDetail() {
@@ -241,6 +242,7 @@ export default function ServerDetail() {
         <button className={`tab ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>{t('sd.tabEvents')}</button>
         <button className={`tab ${tab === 'info' ? 'active' : ''}`} onClick={() => setTab('info')}>{t('sd.tabInfo')}</button>
         <button className={`tab ${tab === 'health' ? 'active' : ''}`} onClick={() => { setTab('health'); loadHealth(); }}>{t('sd.tabHealth')}</button>
+        {server.platform !== 'linux' && <button className={`tab ${tab === 'updates' ? 'active' : ''}`} onClick={() => setTab('updates')}>{t('sd.tabUpdates')}{server.wu_security > 0 ? ` (${server.wu_security})` : ''}</button>}
         <button className={`tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => { setTab('inventory'); loadInventory(); }}>{t('sd.tabInventory')}</button>
         <button className={`tab ${tab === 'processes' ? 'active' : ''}`} onClick={() => { setTab('processes'); loadProcesses(); }}>{t('sd.tabProcesses')}</button>
         {user?.role === 'admin' && <button className={`tab ${tab === 'agent' ? 'active' : ''}`} onClick={() => { setTab('agent'); loadToken(); }}>{t('sd.tabAgent')}</button>}
@@ -348,6 +350,8 @@ export default function ServerDetail() {
           )}
         </div>
       )}
+
+      {tab === 'updates' && <WinUpdates serverId={id} hostname={server.display_name || server.hostname} isAdmin={user?.role === 'admin'} />}
 
       {tab === 'inventory' && (
         <div className="card">

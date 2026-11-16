@@ -9,6 +9,7 @@ const { runAutoban, queueBlock, queueUnblock, canBan } = require('../services/ba
 const { PROTECTED, isPrivateOrReserved } = require('../lib/ipGuard');
 const { logonKind } = require('../lib/logonKind');
 const { repairAccount } = require('../lib/accountName');
+const { dispatchAlert } = require('../services/alertDispatch');
 const { serverLabel } = require('../lib/serverLabel');
 const { serviceOwner } = require('../lib/serviceRanges');
 const { customerFilter, canSeeServer, requireServerAccess } = require('../services/scopeService');
@@ -114,9 +115,10 @@ async function detectBruteforce(serverId) {
           msg = `<b>${kind} brute-force</b> on ${serverLabel(server)}: ${r.n} failed logons for ${acct} from ${r.ip} in the last hour`;
           severity = 'critical';
         }
-        sendTelegramMessage(msg).catch(() => {});
-        sendWebhookAlert(msg);
-        logAlert({ severity, kind: 'security', message: msg, server_id: server.id, customer_id: server.customer_id });
+        // The same source hammering the same server is one incident: repeats
+        // within a day update the first message instead of sending another.
+        dispatchAlert({ text: msg, severity, kind: 'security', server_id: server.id, customer_id: server.customer_id,
+          groupKey: `brute:${server.id}:${r.ip}`, groupHours: 24 });
       }
     }
 

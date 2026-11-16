@@ -58,7 +58,7 @@ router.get('/customer/:id', requireAuth, requireApproved, async (req, res) => {
   const P = [start.toISOString(), end.toISOString()];
 
   const srv = await db.queryAll(
-    `SELECT id, hostname, display_name, os_info, platform, status, agent_version, last_seen, audit_json
+    `SELECT id, hostname, display_name, os_info, platform, status, agent_version, last_seen, audit_json, wu_scan_at
      FROM servers WHERE customer_id = $1 ORDER BY COALESCE(display_name, hostname)`,
     [customerId]
   );
@@ -66,7 +66,7 @@ router.get('/customer/:id', requireAuth, requireApproved, async (req, res) => {
   const nameOf = (s) => s.display_name || s.hostname;
   const byId = new Map(srv.map(s => [s.id, s]));
 
-  const [up, offline, sevRows, kindRows, topAlerts, fails, topIps, blocks, threats, av, hw, disks, ws, smart] = await Promise.all([
+  const [up, offline, sevRows, kindRows, topAlerts, fails, topIps, blocks, threats, av, hw, disks, ws, smart, wu] = await Promise.all([
     db.queryAll(`SELECT server_id, COALESCE(SUM(sample_count),0)::int AS samples, MIN(bucket) AS first
                  FROM metrics_hourly WHERE server_id = ANY($1) AND bucket >= $2 AND bucket < $3 GROUP BY server_id`, [ids, ...P]),
     db.queryAll(`SELECT server_id, COUNT(*)::int AS n FROM alerts
@@ -94,11 +94,14 @@ router.get('/customer/:id', requireAuth, requireApproved, async (req, res) => {
     db.queryAll(`SELECT os_caption, last_patch_date, collected_at FROM workstations WHERE customer_id = $1`, [customerId]),
     db.queryAll(`SELECT server_id, model, serial, level, reasons, wear, temperature FROM disk_smart
                  WHERE server_id = ANY($1) AND level > 0 ORDER BY level DESC`, [ids]),
+    db.queryAll(`SELECT server_id, COUNT(*)::int AS n FROM windows_updates
+                 WHERE server_id = ANY($1) AND security = 1 AND preview = 0 GROUP BY server_id`, [ids]),
   ]);
 
   const upBy = new Map(up.map(r => [r.server_id, r]));
   const offBy = new Map(offline.map(r => [r.server_id, r.n]));
   const hwBy = new Map(hw.map(r => [r.server_id, r]));
+  const wuBy = new Map(wu.map(r => [r.server_id, r.n]));
 
   const servers = srv.map(s => {
     const u = upBy.get(s.id);
@@ -114,6 +117,8 @@ router.get('/customer/:id', requireAuth, requireApproved, async (req, res) => {
       offline: offBy.get(s.id) || 0,
       patch: s.platform === 'linux' ? null : patchStatus(hwBy.get(s.id)?.last_patch_date, now),
       score: s.platform === 'linux' ? null : scoreServer(audit).score,
+      // Security updates the host itself reports as not installed; null = never scanned.
+      pendingSecurity: s.wu_scan_at ? (wuBy.get(s.id) || 0) : null,
     };
   });
 

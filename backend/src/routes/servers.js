@@ -20,7 +20,8 @@ router.get('/', requireAuth, requireApproved, async (req, res) => {
       (SELECT COALESCE(json_agg(json_build_object('drive', f.drive, 'status', f.status, 'days', f.days_to_full,
         'rate', f.rate_gb_day, 'r2', f.r2, 'free', f.free_gb, 'total', f.total_gb) ORDER BY f.drive), '[]'::json)
         FROM disk_forecasts f WHERE f.server_id = s.id) as forecasts,
-      (SELECT MAX(level) FROM disk_smart d WHERE d.server_id = s.id) as smart_level
+      (SELECT MAX(level) FROM disk_smart d WHERE d.server_id = s.id) as smart_level,
+      (SELECT COUNT(*)::int FROM windows_updates w WHERE w.server_id = s.id AND w.security = 1 AND w.preview = 0) as wu_security
     FROM servers s
     LEFT JOIN server_groups g ON s.group_id = g.id
     LEFT JOIN customers c ON s.customer_id = c.id
@@ -121,7 +122,8 @@ router.get('/:id', requireAuth, requireApproved, requireServerAccess('id'), asyn
       (SELECT COALESCE(json_agg(json_build_object('drive', f.drive, 'status', f.status, 'days', f.days_to_full,
         'rate', f.rate_gb_day, 'r2', f.r2, 'free', f.free_gb, 'total', f.total_gb) ORDER BY f.drive), '[]'::json)
         FROM disk_forecasts f WHERE f.server_id = s.id) as forecasts,
-      (SELECT MAX(level) FROM disk_smart d WHERE d.server_id = s.id) as smart_level
+      (SELECT MAX(level) FROM disk_smart d WHERE d.server_id = s.id) as smart_level,
+      (SELECT COUNT(*)::int FROM windows_updates w WHERE w.server_id = s.id AND w.security = 1 AND w.preview = 0) as wu_security
     FROM servers s
     LEFT JOIN server_groups g ON s.group_id = g.id
     LEFT JOIN customers c ON s.customer_id = c.id

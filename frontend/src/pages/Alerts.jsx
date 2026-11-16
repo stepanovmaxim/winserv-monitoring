@@ -10,7 +10,7 @@ const SEV_KEY = {
 };
 const KIND_ICON = {
   threshold: '📊', offline: '🔌', online: '✅', flapping: '🔁',
-  service: '🧩', cert: '🔐', security: '🛡', check: '📡', forecast: '⏳', smart: '💽',
+  service: '🧩', cert: '🔐', security: '🛡', check: '📡', forecast: '⏳', smart: '💽', updates: '⬆',
 };
 
 export default function Alerts() {
@@ -99,11 +99,11 @@ export default function Alerts() {
                 const sev = SEV_KEY[a.severity] || SEV_KEY.info;
                 return (
                   <tr key={a.id} style={a.acknowledged_at ? { opacity: 0.55 } : {}}>
-                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }} title={new Date(a.created_at).toLocaleString()}>{new Date(a.created_at).toLocaleString()}</td>
+                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }} title={new Date(a.created_at).toLocaleString()}>{new Date(a.last_at || a.created_at).toLocaleString()}</td>
                     <td><span style={{ color: sev.color, fontWeight: 600, fontSize: 12 }}>● {t(sev.key)}</span></td>
                     <td style={{ fontSize: 12 }}>{KIND_ICON[a.kind] || '•'} {a.kind || '—'}</td>
                     <td style={{ fontSize: 13 }}>{target(a)}</td>
-                    <td style={{ fontSize: 13, maxWidth: 380 }}>{a.message}</td>
+                    <td style={{ fontSize: 13, maxWidth: 380 }}>{a.message}{a.repeat_count > 1 && <span className="badge" style={{ marginLeft: 6 }} title={t('al.repeatTitle', { n: a.repeat_count, since: new Date(a.created_at).toLocaleString() })}>🔁 ×{a.repeat_count}</span>}</td>
                     <td style={{ fontSize: 12 }}>
                       {a.acknowledged_at
                         ? <span style={{ color: 'var(--text-muted)' }} title={`${a.acknowledged_by || ''} @ ${new Date(a.acknowledged_at).toLocaleString()}`}>✓ {t('al.acked')}</span>

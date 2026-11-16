@@ -90,6 +90,20 @@ export const api = {
     return request(`/api/health-report/smart/${serverId}`);
   },
 
+  // Windows updates
+  getUpdates(serverId) {
+    return request(`/api/updates/${serverId}`);
+  },
+  scanUpdates(serverId) {
+    return request(`/api/updates/${serverId}/scan`, { method: 'POST' });
+  },
+  installUpdates(serverId, data) {
+    return request(`/api/updates/${serverId}/install`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  cancelUpdateJob(jobId) {
+    return request(`/api/updates/jobs/${jobId}/cancel`, { method: 'POST' });
+  },
+
   // External checks (agentless ping/tcp/http/tls)
   getChecks() {
     return request('/api/checks');
