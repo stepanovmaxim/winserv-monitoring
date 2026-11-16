@@ -25,6 +25,7 @@ test('normalizes an update and rejects junk', () => {
   assert.strictEqual(normalizeUpdate({ ...raw, title: '' }), null);
   assert.strictEqual(normalizeUpdate(null), null);
   assert.strictEqual(normalizeUpdate({ ...raw, kb: 'see article' }).kb, '');
+  assert.strictEqual(normalizeUpdate({ ...raw, title: 'Предварительная версия накопительного обновления (KB1)' }).preview, true);
 });
 
 test('bulk scopes never include previews or feature upgrades', () => {

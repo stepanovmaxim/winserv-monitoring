@@ -34,7 +34,8 @@ function normalizeUpdate(raw) {
     size_mb: Number.isFinite(size) && size >= 0 ? Math.round(size * 10) / 10 : null,
     downloaded: !!raw.downloaded,
     security: !!raw.security,
-    preview: !!raw.preview,
+    // Belt and braces: agent builds before 2.57 only knew the English wording.
+    preview: !!raw.preview || /preview|предварительн/i.test(title),
     upgrade: !!raw.upgrade,
   };
 }

@@ -7,7 +7,7 @@ const { LINUX_AGENT_VERSION, generateLinuxScript, generateLinuxInstaller } = req
 
 const router = express.Router();
 const REGISTRATION_KEY = process.env.REGISTRATION_KEY || 'winserv-reg-key-change-me';
-const AGENT_VERSION = '2.56';
+const AGENT_VERSION = '2.57';
 
 function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
   const __lines = [
@@ -981,13 +981,17 @@ function generateUniversalScript(serverUrl, regKey, fallbackUrl) {
     '  $sec = $false',
     '  if ($sev) { $sec = $true }',
     '  foreach ($c in $catIds) { if ($SecurityCats -contains $c) { $sec = $true } }',
-    '  $size = 0; try { $size = [math]::Round(([double]$u.MaxDownloadSize) / 1MB, 1) } catch {}',
+    '  # MaxDownloadSize of a cumulative update counts every express file (18 GB',
+    '  # for a 2019 rollup); the minimum is what a normal install really fetches.',
+    '  $size = 0; try { $b = [double]$u.MinDownloadSize; if ($b -le 0) { $b = [double]$u.MaxDownloadSize }; $size = [math]::Round($b / 1MB, 1) } catch {}',
     '  $title = "$($u.Title)"',
     '  return @{',
     '    id = "$($u.Identity.UpdateID)"; title = $title; kb = $kb; severity = $sev',
     '    categories = ($cats -join ", "); size_mb = $size; downloaded = [bool]$u.IsDownloaded',
     '    security = $sec',
-    '    preview = [bool]($title -match "Preview")',
+    '    # Titles are localised; the second alternative is the Russian wording,',
+    '    # written as escapes so this file stays plain ASCII.',
+    '    preview = [bool]($title -match "Preview|\\u041f\\u0440\\u0435\\u0434\\u0432\\u0430\\u0440\\u0438\\u0442\\u0435\\u043b\\u044c\\u043d")',
     '    upgrade = [bool]($catIds -contains $UpgradeCat)',
     '  }',
     '}',
